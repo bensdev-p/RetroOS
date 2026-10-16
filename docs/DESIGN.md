@@ -21,7 +21,7 @@ The short version of the architecture:
 
 | Layer | Choice |
 |---|---|
-| Kernel + firmware | Raspberry Pi kernel 6.12 LTS (`linux-image-rpi-2712` / `-v8`), Pi firmware, from archive.raspberrypi.com |
+| Kernel + firmware | Raspberry Pi kernel (6.18 at M1; `linux-image-rpi-2712` / `-v8`), Pi firmware, from archive.raspberrypi.com |
 | Userland base | Debian 13 "trixie" arm64, *minimal* (no desktop task, no X server by default) |
 | Image builder | `mmdebstrap` + hooks + `genimage`, run inside a pinned container; one command: `make image` |
 | Init | systemd, cut to a small custom target |
@@ -122,7 +122,7 @@ source on Pi hardware. The RAM cost of systemd is affordable inside the budget
  │ on-demand (D-Bus activated, exit when idle): polkit · PackageKit · udisks2           │
  │ retro-post (boot screen, runs once)                                                  │
  ├──────────────────────────────────────────────────────────────────────────────────────┤
- │ Linux 6.12 (RPi) · vc4/v3d DRM · brcmfmac · hci_uart/btbcm · snd · xhci · hid…       │
+ │ Linux 6.18 (RPi) · vc4/v3d DRM · brcmfmac · hci_uart/btbcm · snd · xhci · hid…       │
  │ Pi firmware / EEPROM bootloader                                                      │
  └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -201,7 +201,7 @@ compatibility. Writing our own PID 1 adds nothing user-visible. (D-003)
 ### 5.1 First boot
 
 First boot runs **SETUP.EXE**, a full-screen text wizard in the RetroDOS style
-(rendered by retro-greeter): language/keyboard → create user (name, password;
+(`retro-setup`, a text program shown by Station; see D-017): language/keyboard → create user (name, password;
 added to `admin`) → computer name → time zone → Wi-Fi (optional) → default
 startup mode (RetroDOS / Desktop) → autologin yes/no. It also expands the root
 partition and regenerates SSH host keys (SSH itself is off by default).
@@ -209,7 +209,7 @@ partition and regenerates SSH host keys (SSH itself is off by default).
 ### 5.2 Login
 
 `greetd` (small Rust login daemon, proven, PAM-based) runs **retro-greeter**,
-our own KMS dumb-buffer greeter:
+a text program shown full-screen by Station + retro-console (D-017):
 
 ```
  RetroOS 1.0                                         Phosphor Computer Company
@@ -360,7 +360,7 @@ Faithful details: `Bad command or file name`, `Abort, Retry, Fail?` on a yanked
 USB stick during `COPY`, `F3` repeats last command (DOSKEY built in, plus
 up/down history and Tab completion), `/?` on every command, `/P` `/W` on `DIR`,
 `MEM` shows a real breakdown (conventional = RAM, "upper" = zram, by-process
-table with `/C`), `VER` prints `RetroDOS Version 1.0 (Linux 6.12.y aarch64)`.
+table with `/C`), `VER` prints `RetroDOS Version 1.0  (6.18.y aarch64)`.
 
 **Batch files**: `.BAT` interpreter supporting `ECHO [OFF]`, `@`, `REM`, `SET`,
 `%VAR%`, `%1..%9`, `SHIFT`, `IF [NOT] EXIST/ERRORLEVEL/==`, `GOTO`, labels,
@@ -699,11 +699,12 @@ RetroOS/
 │   ├── retro-sys/            # D-Bus wrappers: iwd, bluez, pipewire, packagekit, udisks2, logind, timedated…
 │   ├── retro-dosfs/          # drive-letter & DOS path mapping, 8.3 aliases
 │   ├── retro-post/           # boot screen + chime
-│   ├── retro-greeter/        # greetd greeter + first-boot SETUP
+│   ├── retro-login/          # retro-greeter (greetd greeter) + retro-setup (first boot)
+│   ├── retro-tui/            # cell/key layer for RetroOS text programs
 │   ├── retro-session/        # session supervisor
 │   ├── station/              # compositor (text + desktop personalities, X11 WM, broker)
 │   ├── retro-console/        # terminal client (text mode + DOS Prompt window)
-│   ├── command/              # RetroDOS shell + batch interpreter
+│   ├── retrodos/             # RetroDOS shell (binary `retrodos`) + batch interpreter
 │   ├── retro-tui/            # shared TUI widgets/theme on ratatui
 │   ├── tui-apps/             # edit, filer, control, wifi, bt, mixer, library, about
 │   ├── retro-ui/             # GUI toolkit
