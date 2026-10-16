@@ -9,3 +9,6 @@ license.workspace = true
 retro-gfx.workspace = true
 libc = "0.2"
 drm = "0.15.0"
+
+[lints]
+workspace = true

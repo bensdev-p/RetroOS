@@ -186,7 +186,7 @@ impl View<'_> {
         let s: String = text[from..].iter().collect();
         let _ = write!(self.out, "{s}\x1b[J");
         let end = text.len();
-        if (self.start_col + end) % self.cols == 0 && end > from {
+        if (self.start_col + end).is_multiple_of(self.cols) && end > from {
             // Leave the pending-wrap state so our row arithmetic stays true.
             let _ = write!(self.out, " \r\x1b[K");
         }

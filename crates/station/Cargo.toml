@@ -28,3 +28,6 @@ features = [
     "wayland_frontend",
     "desktop",
 ]
+
+[lints]
+workspace = true

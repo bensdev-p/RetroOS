@@ -631,7 +631,7 @@ fn derived(f: &mut Font) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+
     use crate::font::phosphor_mono;
 
     fn art(ch: char) -> String {

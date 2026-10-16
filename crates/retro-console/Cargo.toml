@@ -10,3 +10,6 @@ retro-gfx.workspace = true
 libc = "0.2"
 alacritty_terminal = "0.26.0"
 smithay-client-toolkit = { version = "0.21.1", default-features = false, features = ["calloop", "xkbcommon"] }
+
+[lints]
+workspace = true

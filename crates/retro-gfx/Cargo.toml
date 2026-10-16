@@ -10,3 +10,6 @@ png = { workspace = true, optional = true }
 
 [features]
 default = ["png"]
+
+[lints]
+workspace = true

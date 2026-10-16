@@ -100,16 +100,6 @@ rm -f "$B"/initramfs* "$B"/initrd*
 cp "$RETRO_ROOT/config/boot/config.txt" "$B/config.txt"
 cp "$RETRO_ROOT/config/boot/cmdline.txt" "$B/cmdline.txt"
 
-echo ">> customize: QEMU kernel packages"
-mkdir -p "$RETRO_WORK/qemu-debs"
-(
-    cd "$RETRO_WORK/qemu-debs"
-    pkgs=$(grep -v '^#' "$RETRO_ROOT/build/packages/qemu.list")
-    # The meta package and the kernel image it points at.
-    deps=$(apt-cache depends $pkgs 2>/dev/null | awk '/Depends: linux-image-[0-9]/ {print $2}')
-    apt-get download $pkgs $deps >/dev/null
-)
-
 echo ">> customize: cleanup"
 rm -rf "$R"/var/cache/apt/*.bin "$R"/var/lib/apt/lists/* "$R"/var/log/*.log "$R"/var/log/apt/* \
        "$R"/usr/share/doc/*/changelog* "$R"/usr/share/man "$R"/tmp/* "$R"/var/tmp/*

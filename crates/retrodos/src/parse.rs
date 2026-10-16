@@ -249,9 +249,9 @@ fn looks_like_posix_path(w: &str) -> bool {
     if w.starts_with("./") || w.starts_with("../") || w.starts_with("~/") {
         return true;
     }
-    if w.starts_with('/') {
-        let first = w[1..].split('/').next().unwrap_or("");
-        return w[1..].contains('/') || (first.len() > 1 && std::path::Path::new(w).exists());
+    if let Some(rest) = w.strip_prefix('/') {
+        let first = rest.split('/').next().unwrap_or("");
+        return rest.contains('/') || (first.len() > 1 && std::path::Path::new(w).exists());
     }
     false
 }

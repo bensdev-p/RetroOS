@@ -364,8 +364,7 @@ fn list_dir(
                 && !std::fs::symlink_metadata(dir.join(&e.name))
                     .map(|m| m.is_symlink())
                     .unwrap_or(false)
-            {
-                if !list_dir(
+                && !list_dir(
                     sh,
                     &dir.join(&e.name),
                     pattern,
@@ -375,9 +374,9 @@ fn list_dir(
                     tot,
                     any,
                     false,
-                ) {
-                    return false;
-                }
+                )
+            {
+                return false;
             }
         }
     }
@@ -402,9 +401,8 @@ fn tree(sh: &mut Shell, a: &Args, io: &mut Io) -> i32 {
     }
     let _ = writeln!(io.out, "{}", sh.dos.display(&root));
     let ascii = a.has("A");
-    let mut pager = Pager::new(false);
     let mut count = 0;
-    walk_tree(&root, "", a.has("F"), ascii, io, &mut pager, &mut count);
+    walk_tree(&root, "", a.has("F"), ascii, io, &mut count);
     if count == 0 {
         let _ = writeln!(io.out, "No subdirectories exist");
     }
@@ -417,7 +415,6 @@ fn walk_tree(
     files: bool,
     ascii: bool,
     io: &mut Io,
-    pager: &mut Pager,
     count: &mut u32,
 ) -> bool {
     let (tee, ell, bar) = if ascii {
@@ -447,7 +444,7 @@ fn walk_tree(
             *count += 1;
             let _ = writeln!(io.out, "{prefix}{}{name}", if last { ell } else { tee });
             let next = format!("{prefix}{}", if last { "    " } else { bar });
-            if !walk_tree(&dir.join(&name), &next, files, ascii, io, pager, count) {
+            if !walk_tree(&dir.join(&name), &next, files, ascii, io, count) {
                 return false;
             }
         } else {

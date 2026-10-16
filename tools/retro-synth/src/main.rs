@@ -182,7 +182,8 @@ fn main() {
     };
     let out = std::path::PathBuf::from(out);
     std::fs::create_dir_all(&out).expect("create output dir");
-    let sounds: [(&str, fn() -> Vec<i16>); 7] = [
+    type Patch = fn() -> Vec<i16>;
+    let sounds: [(&str, Patch); 7] = [
         ("startup", startup),
         ("shutdown", shutdown),
         ("beep", beep),

@@ -22,3 +22,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[workspace.lints.clippy]
+# Drawing primitives take (x, y, w, h, colours…) by design.
+too_many_arguments = "allow"

@@ -100,6 +100,6 @@ pub fn processes() -> Vec<Proc> {
             }
         }
     }
-    v.sort_by(|a, b| b.rss.cmp(&a.rss));
+    v.sort_by_key(|p| std::cmp::Reverse(p.rss));
     v
 }
