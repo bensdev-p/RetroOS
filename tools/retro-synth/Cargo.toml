@@ -1,0 +1,9 @@
+[package]
+name = "retro-synth"
+description = "Synthesises the RetroOS UI sounds (startup chime, beeps, alerts) as WAV files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]

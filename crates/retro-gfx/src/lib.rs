@@ -5,9 +5,11 @@
 //! types: an XRGB8888 [`Surface`], the [`palette`], and bitmap [`font`]s.
 
 pub mod font;
+pub mod grid;
 pub mod palette;
 mod surface;
 
 pub use font::{Font, Glyph};
+pub use grid::{Cell, Grid};
 pub use palette::{Rgb, Scheme};
 pub use surface::{Canvas, Surface};

@@ -1,0 +1,11 @@
+[package]
+name = "retro-post"
+description = "Phosphor BIOS: the RetroOS boot screen, startup chime and Startup Menu"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+retro-gfx.workspace = true
+retro-kms.workspace = true
+libc = "0.2"

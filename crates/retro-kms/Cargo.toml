@@ -1,0 +1,11 @@
+[package]
+name = "retro-kms"
+description = "Minimal KMS dumb-buffer display and evdev key input for pre-compositor screens"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+retro-gfx.workspace = true
+libc = "0.2"
+drm = "0.15.0"
