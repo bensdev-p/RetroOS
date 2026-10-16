@@ -16,7 +16,7 @@ StandardInput=tty-fail
 StandardOutput=journal
 StandardError=journal
 Environment=XDG_SESSION_TYPE=wayland
-ExecStart=/usr/bin/station --exec "retro-console --exec retro-setup"
+ExecStart=/usr/bin/station --exec "retro-console --once --exec retro-setup"
 TimeoutStartSec=infinity
 
 [Install]

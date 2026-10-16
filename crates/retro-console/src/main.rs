@@ -5,7 +5,10 @@
 //! and an inverse-block mouse cursor. In text mode Station shows it full
 //! screen; in the Desktop it is the "DOS Prompt" window.
 //!
-//!   retro-console [--exec PROGRAM [ARGS…]]     (default program: retrodos)
+//!   retro-console [--once] [--exec PROGRAM [ARGS…]]     (default program: retrodos)
+//!
+//! Without --once the program is restarted when it exits (RetroDOS); with
+//! --once the console exits with the program's status (login screen, Setup).
 
 mod keys;
 mod pty;
@@ -68,6 +71,9 @@ struct App {
     respawns: Vec<Instant>,
     exit: bool,
     title: String,
+    /// --once: leave when the program exits (login screen, Setup) instead of restarting it.
+    once: bool,
+    exit_code: i32,
 }
 
 impl App {
@@ -132,6 +138,11 @@ impl App {
     fn shell_gone(&mut self) -> PostAction {
         let code = self.pty.as_ref().and_then(|p| p.try_wait());
         self.pty = None;
+        if self.once {
+            self.exit = true;
+            self.exit_code = code.unwrap_or(0);
+            return PostAction::Remove;
+        }
         let now = Instant::now();
         self.respawns
             .retain(|t| now.duration_since(*t) < Duration::from_secs(10));
@@ -610,6 +621,7 @@ fn terminfo_name() -> String {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let once = args.iter().take_while(|a| *a != "--exec").any(|a| a == "--once");
     let argv = match args.iter().position(|a| a == "--exec") {
         Some(i) if i + 1 < args.len() => args[i + 1..].to_vec(),
         _ => vec!["retrodos".to_string()],
@@ -660,6 +672,8 @@ fn main() {
         respawns: Vec::new(),
         exit: false,
         title: "RetroDOS".into(),
+        once,
+        exit_code: 0,
     };
 
     // Cursor blink: 2 Hz, 50% duty (docs/STYLE.md §3).
@@ -687,4 +701,5 @@ fn main() {
         app.draw(&qh);
         let _ = conn.flush();
     }
+    std::process::exit(app.exit_code);
 }

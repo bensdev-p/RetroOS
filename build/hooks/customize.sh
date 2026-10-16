@@ -61,6 +61,7 @@ XKBVARIANT=""
 XKBOPTIONS=""
 BACKSPACE="guess"
 EOF
+echo "LANG=C.UTF-8" > "$R/etc/default/locale"
 echo "Etc/UTC" > "$R/etc/timezone"
 ln -sf /usr/share/zoneinfo/Etc/UTC "$R/etc/localtime"
 # First boot creates the machine id.

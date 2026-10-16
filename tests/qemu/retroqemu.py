@@ -93,6 +93,7 @@ class Qemu:
         os.makedirs(workdir, exist_ok=True)
         self.qmp_path = os.path.join(workdir, "qmp.sock")
         self.serial_path = os.path.join(workdir, "serial.log")
+        self.boot = 0
         self.mem, self.smp, self.size = mem_mb, smp, (width, height)
         self.extra_append = extra_append
         self.proc = None
@@ -101,13 +102,14 @@ class Qemu:
         self.reader = None
         self.shots = 0
 
-    def start(self, font_json):
+    def start(self, font_json, keep_disk=False):
         self.reader = ScreenReader(font_json)
         disk = os.path.join(self.work, "root.qcow2")
-        if os.path.exists(disk):
+        if os.path.exists(disk) and not keep_disk:
             os.remove(disk)
-        subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", "-F", "raw", "-b",
-                        os.path.join(self.dir, "root.ext4"), disk, "8G"], check=True)
+        if not os.path.exists(disk):
+            subprocess.run(["qemu-img", "create", "-q", "-f", "qcow2", "-F", "raw", "-b",
+                            os.path.join(self.dir, "root.ext4"), disk, "8G"], check=True)
         with open(os.path.join(self.dir, "cmdline")) as f:
             append = f.read().strip()
         # Journal to the serial console so the harness can see RetroOS markers.
@@ -126,6 +128,12 @@ class Qemu:
                "-device", "virtio-rng-pci",
                "-display", "none", "-serial", f"file:{self.serial_path}",
                "-qmp", f"unix:{self.qmp_path},server=on,wait=off", "-no-reboot"]
+        self.boot += 1
+        if self.boot > 1:
+            self.serial_path = os.path.join(self.work, f"serial-boot{self.boot}.log")
+            cmd[cmd.index("-serial") + 1] = f"file:{self.serial_path}"
+        if os.path.exists(self.qmp_path):
+            os.remove(self.qmp_path)
         self.t0 = time.time()
         self.proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=open(os.path.join(self.work, "qemu.err"), "w"))
         for _ in range(100):

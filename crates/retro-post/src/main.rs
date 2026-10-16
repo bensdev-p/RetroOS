@@ -408,7 +408,7 @@ fn wait_for_display() -> Option<Display> {
     loop {
         match Display::open() {
             Ok(d) => return Some(d),
-            Err(e) if start.elapsed() > Duration::from_secs(8) => {
+            Err(e) if start.elapsed() > Duration::from_secs(20) => {
                 eprintln!("retro-post: no display ({e}); continuing boot");
                 return None;
             }

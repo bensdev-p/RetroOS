@@ -259,6 +259,8 @@ impl Setup {
         let groups: Vec<&str> = [
             "admin",
             "sudo",
+            "adm",
+            "systemd-journal",
             "audio",
             "video",
             "render",

@@ -13,12 +13,14 @@ kmod
 greetd
 login
 sudo
+polkitd
 tzdata
 # --- networking (Ethernet via networkd, Wi-Fi via iwd)
 iwd
 wireless-regdb
 nftables
 iproute2
+netbase
 iputils-ping
 ca-certificates
 # --- what Station and the console need at run time
