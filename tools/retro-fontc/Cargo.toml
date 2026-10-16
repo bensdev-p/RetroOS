@@ -1,0 +1,10 @@
+[package]
+name = "retro-fontc"
+description = "RetroOS font compiler: glyph sheets (PNG) and PSF2 console fonts"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+retro-gfx.workspace = true

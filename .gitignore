@@ -1,0 +1,6 @@
+/target
+/out
+/work
+*.img
+*.img.xz
+__pycache__/

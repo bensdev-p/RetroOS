@@ -1,0 +1,12 @@
+[package]
+name = "retro-gfx"
+description = "Pixel surfaces, the Phosphor16 palette and bitmap fonts for RetroOS"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+png = { workspace = true, optional = true }
+
+[features]
+default = ["png"]

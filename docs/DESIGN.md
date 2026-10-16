@@ -877,10 +877,10 @@ in `docs/BUDGET.md`.
 
 ---
 
-## 19. Open questions for you (none blocking; defaults chosen)
+## 19. Resolved questions (2026-10-16)
 
-1. **Branding**: "Phosphor Computer Company" / RetroDOS / RetroOS Desktop — keep, or prefer a different in-universe name? (Default: keep.)
-2. **Default startup mode** on a fresh image: RetroDOS (default) or Desktop?
-3. **Preinstalled browser**: Firefox (default, matches your `RUN FIREFOX` example) with Chromium one-click; or both preinstalled (+~350 MB image)?
-4. **Hardware access**: do you have a Pi 5 (and Pi 4) to run the hardware checklist at each milestone? I'll write the checklist either way.
-5. **CI**: OK to add GitHub Actions workflows (incl. arm64 runners) to this repo?
+1. **Branding**: keep Phosphor Computer Company / RetroDOS / RetroOS Desktop.
+2. **Default startup mode**: RetroDOS (text mode).
+3. **Preinstalled browser**: Firefox only; Chromium one-click in the Software Library.
+4. **Hardware**: a Raspberry Pi 5 is available for the hardware checklist. Pi 4 support stays in scope but is verified opportunistically.
+5. **CI**: GitHub Actions approved, including arm64 runners.
