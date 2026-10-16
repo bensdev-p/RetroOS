@@ -1,0 +1,39 @@
+# RetroOS base system (Debian 13 "trixie", arm64). One package per line.
+# --- init, devices, logging
+systemd
+systemd-sysv
+udev
+dbus-broker
+libpam-systemd
+systemd-timesyncd
+systemd-resolved
+systemd-zram-generator
+kmod
+# --- login and administration
+greetd
+sudo
+# --- networking (Ethernet via networkd, Wi-Fi via iwd)
+iwd
+wireless-regdb
+nftables
+iproute2
+iputils-ping
+ca-certificates
+# --- what Station and the console need at run time
+libseat1
+libinput10
+libxkbcommon0
+xkb-data
+libgbm1
+libpixman-1-0
+# --- sound (the startup chime plays through ALSA before PipeWire exists)
+alsa-utils
+# --- disks and power-user basics
+fdisk
+e2fsprogs
+dosfstools
+less
+procps
+zstd
+# --- RetroOS itself
+retroos

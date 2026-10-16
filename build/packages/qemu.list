@@ -1,0 +1,2 @@
+# Extra packages for the QEMU test image only (generic arm64 kernel).
+linux-image-arm64

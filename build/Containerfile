@@ -1,0 +1,22 @@
+# The pinned RetroOS build environment (Debian 13 "trixie").
+# `make container` builds the image inside it; any Linux host with Docker or
+# Podman works, x86_64 or arm64 (foreign-arch maintainer scripts run through
+# qemu-user-static, which needs binfmt_misc and therefore --privileged).
+FROM debian:trixie-20260928-slim
+
+ARG RUST_VERSION=1.97.0
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN dpkg --add-architecture arm64 && apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl git make xz-utils zstd python3 python3-pil \
+        mmdebstrap qemu-user-static binfmt-support qemu-system-arm qemu-utils \
+        dosfstools mtools e2fsprogs fdisk dpkg-dev \
+        gcc gcc-aarch64-linux-gnu libc6-dev-arm64-cross pkg-config \
+        libxkbcommon-dev libinput-dev libudev-dev libseat-dev libgbm-dev libdrm-dev libpixman-1-dev \
+        libxkbcommon-dev:arm64 libinput-dev:arm64 libudev-dev:arm64 libseat-dev:arm64 \
+        libgbm-dev:arm64 libdrm-dev:arm64 libpixman-1-dev:arm64 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain ${RUST_VERSION} \
+        --target aarch64-unknown-linux-gnu
+ENV PATH=/root/.cargo/bin:$PATH

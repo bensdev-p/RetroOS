@@ -1,0 +1,12 @@
+#!/bin/sh
+# Grow the root partition and file system to the end of the disk, once.
+set -e
+root=$(findmnt -n -o SOURCE /)
+disk=/dev/$(lsblk -n -o PKNAME "$root" | head -1)
+part=$(cat /sys/class/block/$(basename "$root")/partition)
+mkdir -p /var/lib/retroos
+if echo ", +" | sfdisk --no-reread --no-tell-kernel -N "$part" "$disk" >/dev/null 2>&1; then
+    partx -u "$disk" || true
+    resize2fs "$root" >/dev/null 2>&1 || true
+fi
+touch /var/lib/retroos/grown

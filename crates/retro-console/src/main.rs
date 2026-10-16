@@ -602,17 +602,10 @@ impl ProvidesRegistryState for App {
 delegate_registry!(App);
 smithay_client_toolkit::delegate_dispatch2!(App);
 
+/// TERM for programs in the console. We emulate xterm faithfully, and an
+/// xterm TERM keeps ssh and remote tools working (docs/DECISIONS.md D-016).
 fn terminfo_name() -> String {
-    for dir in [
-        "/usr/share/terminfo/r/retro",
-        "/lib/terminfo/r/retro",
-        "/etc/terminfo/r/retro",
-    ] {
-        if std::path::Path::new(dir).exists() {
-            return "retro".into();
-        }
-    }
-    "xterm-256color".into()
+    std::env::var("RETROOS_TERM").unwrap_or_else(|_| "xterm-256color".into())
 }
 
 fn main() {

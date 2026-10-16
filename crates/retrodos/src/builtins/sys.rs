@@ -223,7 +223,7 @@ pub const COLOR: Builtin = Builtin {
     usage: "COLOR [scheme | attr]\n\n  scheme  CLASSIC, PAPER, AMBER, GREEN or CONTRAST.\n  attr    Two hex digits: the first is the background, the second the\n          foreground.  Each digit can be any of these values:\n\n    0 = Black    4 = Brick    8 = Slate    C = Coral\n    1 = Cobalt   5 = Plum     9 = Sky      D = Orchid\n    2 = Fern     6 = Ochre    A = Lime     E = Lemon\n    3 = Teal     7 = Silver   B = Aqua     F = White\n\nType COLOR without an argument to restore the scheme's default colors.\nExample: \"COLOR 1E\" gives Lemon on Cobalt.",
     run: |_, a, io| {
         let arg = a.words.first().map(|s| s.to_ascii_uppercase());
-        let retro = std::env::var("TERM").map(|t| t.starts_with("retro")).unwrap_or(false);
+        let retro = std::env::var_os("RETROOS_CONSOLE").is_some();
         match arg.as_deref() {
             None => {
                 let _ = write!(io.out, "\x1b]7701;attr=default\x07\x1b[0m");
@@ -293,7 +293,11 @@ pub const UNIX: Builtin = Builtin {
     usage: "UNIX [command line]\n\nWithout a command line, starts your POSIX shell (bash). Type EXIT to return\nto RetroDOS. With a command line, runs it with the POSIX shell and returns.\nExample: UNIX ls -la | less",
     run: |sh, a, io| {
         let shell = user_shell();
-        let raw = a.raw.trim();
+        let mut raw = a.raw.trim();
+        // UNIX "a > b; c" passes the quoted text to the POSIX shell untouched.
+        if raw.len() >= 2 && raw.starts_with('"') && raw.ends_with('"') {
+            raw = &raw[1..raw.len() - 1];
+        }
         let mut cmd = sh.command(&shell, &[]);
         if raw.is_empty() {
             let _ = writeln!(io.out, "\nStarting the POSIX shell. Type EXIT to return to RetroDOS.\n");

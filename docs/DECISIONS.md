@@ -67,3 +67,30 @@ Status: **Proposed** until the design is approved; then **Accepted**.
 
 ### D-015 · 2026-10-16 · All fonts, icons, cursors and sounds are original and built from text/code sources — Proposed
 - **Rationale**: cohesive alternate-history identity, no licensing ambiguity, diff-reviewable assets, reproducible builds. GNU Unifont used only as a fallback for glyphs we haven't drawn.
+
+---
+
+## Decisions made during Milestone 1
+
+### D-016 · 2026-10-16 · The console advertises TERM=xterm-256color, not a custom `retro` terminfo — Accepted
+- **Alternatives**: ship a `retro` terminfo entry (DESIGN.md §7.1 originally).
+- **Rationale**: retro-console emulates xterm faithfully (alacritty_terminal), and a custom TERM breaks ssh and any remote host without the entry. RetroDOS detects the RetroOS console through `$RETROOS_CONSOLE` instead. `RETROOS_TERM` overrides for experiments.
+
+### D-017 · 2026-10-16 · Login screen and first-boot Setup are text programs inside Station — Accepted
+- **Alternatives**: a separate KMS dumb-buffer greeter (DESIGN.md §5.2 originally).
+- **Rationale**: one input stack (libinput + xkb keymaps, so non-US passwords work), one renderer, one look. greetd runs `station --exec "retro-console --exec retro-greeter"`; first-boot Setup runs the same way as a root systemd service with a logind session (PAMName=login, TTYPath=/dev/tty1).
+- **Consequences**: the login screen costs one Station start (~0.1 s); only `retro-post` (which runs before any session exists) draws on KMS directly.
+
+### D-018 · 2026-10-16 · Debian packages come from snapshot.debian.org, pinned by timestamp — Accepted
+- **Rationale**: this was already the reproducibility plan (DESIGN.md §13.3), and it is also the only Debian mirror reachable from the development environment. The built image itself points at the normal mirrors (deb.debian.org, security.debian.org, archive.raspberrypi.com).
+- **Consequences**: `build/lock/snapshot` names the timestamp; keyrings are committed under `build/keyrings` with their source package hashes in `build/lock/keyrings.lock`.
+
+### D-019 · 2026-10-16 · Disk layout addressed by a fixed MBR signature, no initramfs on the Pi — Accepted
+- **Rationale**: `root=PARTUUID=52455452-02` works without an initramfs (LABEL= does not), and the RPi kernels have SD/ext4/vfat built in, saving ~0.5–1 s of boot. The signature spells "RETR".
+- **Consequences**: images are deterministic in layout; the first boot grows partition 2 to fill the card (`retro-firstboot.service`).
+
+### D-020 · 2026-10-16 · Kernel is whatever the Raspberry Pi archive ships for trixie (currently 6.18) — Accepted
+- **Rationale**: DESIGN.md said 6.12 LTS, but the RPi trixie archive has moved to 6.18 (`linux-image-rpi-2712` 1:6.18.50). Tracking the vendor kernel is what gives working Wi-Fi/BT/V3D.
+
+### D-021 · 2026-10-16 · Build-time assets come from code, not hand-made binary files — Accepted
+- **Rationale**: sounds are synthesised by `tools/retro-synth` (patches are Rust functions rather than `.synth` text files, which bought nothing over code), the font is a text glyph source compiled at build time, and GNU Unifont's `.hex` is extracted from its Debian package (pinned) as the console's fallback for undrawn glyphs — 3.7 MB instead of the 58 MB `unifont` packages.

@@ -1,0 +1,3 @@
+# Source packages of build/keyrings/*, verified by sha256 when they were imported.
+debian-archive-keyring_2025.1_all.deb             9ea7778e443144ca490668737a8ab22dd3e748bb99e805e22ec055abeb3c7fac  snapshot.debian.org/archive/debian/20261015T000000Z
+raspberrypi-archive-keyring_2025.1+rpt1_all.deb   2e727149d7acb8cc7f604e66d0049161039c8aa1eaf1175e54f9e69d963d60e4  archive.raspberrypi.com/debian

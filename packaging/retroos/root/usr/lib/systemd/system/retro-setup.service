@@ -1,0 +1,23 @@
+[Unit]
+Description=RetroOS first-boot Setup
+ConditionPathExists=!/var/lib/retroos/setup-done
+After=retro-post.service retro-firstboot.service systemd-user-sessions.service systemd-logind.service
+Before=greetd.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=oneshot
+User=root
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+Environment=XDG_SESSION_TYPE=wayland
+ExecStart=/usr/bin/station --exec "retro-console --exec retro-setup"
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=graphical.target

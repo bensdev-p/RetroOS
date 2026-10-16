@@ -3,6 +3,7 @@
 //!   retro-fontc sheet <out.png> [scale]   glyph sheet of every own glyph
 //!   retro-fontc psf <out.psf>             PSF2 console font (CP437 order)
 //!   retro-fontc sample <out.png> <text>   render a text sample (Classic scheme)
+//!   retro-fontc json <out.json>           glyph bitmaps for the QEMU screen reader
 
 use retro_gfx::font::{phosphor_mono, CP437};
 use retro_gfx::palette::{self, Scheme};
@@ -18,6 +19,7 @@ fn main() {
         }
         Some("psf") if args.len() == 3 => std::fs::write(&args[2], font.to_psf2(&CP437)),
         Some("sample") if args.len() >= 4 => sample(&args[2], &args[3..].join(" ")),
+        Some("json") if args.len() == 3 => std::fs::write(&args[2], json()),
         _ => {
             eprintln!("usage: retro-fontc sheet <out.png> [scale] | psf <out.psf> | sample <out.png> <text>");
             std::process::exit(2);
@@ -27,6 +29,21 @@ fn main() {
         eprintln!("retro-fontc: {e}");
         std::process::exit(1);
     }
+}
+
+/// {"U+0041": [16 row bitmasks], ...} for the test harness's screen reader.
+fn json() -> String {
+    let font = phosphor_mono();
+    let mut parts = Vec::new();
+    for c in font.chars() {
+        let g = font.own_glyph(c).unwrap();
+        if g.width != 8 {
+            continue;
+        }
+        let rows: Vec<String> = g.rows.iter().map(|r| (r >> 8).to_string()).collect();
+        parts.push(format!("\"{}\":[{}]", c as u32, rows.join(",")));
+    }
+    format!("{{{}}}", parts.join(","))
 }
 
 fn sheet(out: &str, scale: u32) -> std::io::Result<()> {

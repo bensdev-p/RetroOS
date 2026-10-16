@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Lint, unit and host tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libinput-dev libudev-dev libseat-dev libgbm-dev libdrm-dev libpixman-1-dev python3-pil
+      - uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets
+      - run: cargo test --workspace
+      - name: Headless Station end-to-end
+        run: |
+          cargo build -p station -p retro-console -p retrodos -p retro-login
+          python3 tests/host/station.py target/debug out/test-host
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-test-screens
+          path: out/test-host
+
+  image:
+    name: Build image and boot it in QEMU
+    runs-on: ubuntu-24.04-arm
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            mmdebstrap dosfstools mtools e2fsprogs fdisk dpkg-dev xz-utils qemu-system-arm qemu-utils \
+            libxkbcommon-dev libinput-dev libudev-dev libseat-dev libgbm-dev libdrm-dev libpixman-1-dev python3-pil
+      - uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: Build image
+        run: sudo env "PATH=$PATH" CARGO_HOME="$HOME/.cargo" RUSTUP_HOME="$HOME/.rustup" make image.xz
+      - name: Boot test (QEMU)
+        run: sudo env "PATH=$PATH" python3 tests/qemu/test_m1.py out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retroos-image
+          path: |
+            out/*.img.xz
+            out/*.sha256
+            out/manifest.txt
+            out/test-m1/*.png
+            out/test-m1/report.json
+            out/test-m1/serial.log

@@ -1,0 +1,7 @@
+# RetroOS login screen. Setup rewrites this file (automatic login).
+[terminal]
+vt = 1
+
+[default_session]
+command = "retro-login-screen"
+user = "_greetd"

@@ -1,0 +1,24 @@
+[Unit]
+Description=Phosphor BIOS (RetroOS boot screen)
+Documentation=file:///usr/share/doc/retroos/README.md
+DefaultDependencies=no
+After=systemd-udev-trigger.service systemd-tmpfiles-setup-dev.service
+Wants=systemd-udev-trigger.service
+Before=retro-setup.service greetd.service
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/retroos/retro-post
+TimeoutStartSec=120
+# Hardening: it only needs the display, input devices, sound and /run/retroos.
+ProtectSystem=strict
+ReadWritePaths=/run /etc/retroos
+ProtectHome=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=64M
+
+[Install]
+WantedBy=sysinit.target

@@ -1,0 +1,7 @@
+[Unit]
+Description=RetroOS Safe Mode with networking (POSIX shell)
+Requires=multi-user.target getty@tty1.service
+Wants=systemd-networkd.service iwd.service systemd-resolved.service
+Conflicts=greetd.service retro-setup.service
+After=multi-user.target
+AllowIsolate=yes

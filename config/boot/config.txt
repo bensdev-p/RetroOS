@@ -1,0 +1,21 @@
+# RetroOS — Raspberry Pi firmware settings.
+# https://www.raspberrypi.com/documentation/computers/config_txt.html
+arm_64bit=1
+disable_splash=1
+disable_overscan=1
+boot_delay=0
+camera_auto_detect=0
+display_auto_detect=0
+auto_initramfs=0
+max_framebuffers=2
+dtoverlay=vc4-kms-v3d
+dtparam=audio=on
+
+[pi4]
+kernel=kernel8.img
+arm_boost=1
+
+[pi5]
+kernel=kernel_2712.img
+
+[all]

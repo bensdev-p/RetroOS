@@ -1,0 +1,7 @@
+# Raspberry Pi kernel, firmware and archive key (archive.raspberrypi.com).
+raspberrypi-archive-keyring
+raspi-firmware
+linux-image-rpi-2712
+linux-image-rpi-v8
+firmware-brcm80211
+bluez-firmware

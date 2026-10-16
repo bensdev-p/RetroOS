@@ -1,0 +1,2 @@
+# Members of the admin group may run any command (ADMIN in RetroDOS).
+%admin ALL=(ALL:ALL) ALL

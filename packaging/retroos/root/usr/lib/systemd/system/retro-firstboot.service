@@ -1,0 +1,13 @@
+[Unit]
+Description=RetroOS first boot: grow the root file system to fill the card
+ConditionPathExists=!/var/lib/retroos/grown
+DefaultDependencies=no
+After=local-fs.target
+Before=retro-setup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/retroos/grow-rootfs
+
+[Install]
+WantedBy=multi-user.target

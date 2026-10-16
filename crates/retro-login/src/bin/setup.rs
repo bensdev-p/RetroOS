@@ -331,7 +331,7 @@ impl Setup {
                 "\n[initial_session]\ncommand = \"retro-session\"\nuser = \"{user}\"\n"
             ));
         }
-        self.write("/etc/greetd/config.toml", &greetd)?;
+        self.write("/etc/greetd/retroos.toml", &greetd)?;
         if Path::new("/usr/bin/ssh-keygen").exists() {
             let _ = self.run(&["ssh-keygen", "-A"], None);
         }
