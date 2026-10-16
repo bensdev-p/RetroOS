@@ -1,0 +1,12 @@
+[package]
+name = "retro-console"
+description = "The RetroOS text console: a Wayland terminal that renders RetroDOS in Phosphor Mono"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+retro-gfx.workspace = true
+libc = "0.2"
+alacritty_terminal = "0.26.0"
+smithay-client-toolkit = { version = "0.21.1", default-features = false, features = ["calloop", "xkbcommon"] }

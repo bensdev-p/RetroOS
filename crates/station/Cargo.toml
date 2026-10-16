@@ -1,0 +1,30 @@
+[package]
+name = "station"
+description = "Station: the RetroOS Wayland compositor (RetroDOS text personality and Desktop personality)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "station"
+path = "src/main.rs"
+
+[dependencies]
+retro-gfx.workspace = true
+libc = "0.2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dependencies.smithay]
+version = "0.7.0"
+default-features = false
+features = [
+    "backend_drm",
+    "backend_gbm",
+    "backend_libinput",
+    "backend_udev",
+    "backend_session_libseat",
+    "renderer_pixman",
+    "wayland_frontend",
+    "desktop",
+]
