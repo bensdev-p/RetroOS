@@ -1,0 +1,10 @@
+[package]
+name = "retro-dosfs"
+description = "DOS drive letters, paths, wildcards and 8.3 aliases over a POSIX filesystem"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[dev-dependencies]

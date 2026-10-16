@@ -50,6 +50,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libc"
+version = "0.2.190"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
+
+[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -83,6 +89,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-dosfs"
+version = "0.1.0"
+
+[[package]]
 name = "retro-fontc"
 version = "0.1.0"
 dependencies = [
@@ -94,6 +104,14 @@ name = "retro-gfx"
 version = "0.1.0"
 dependencies = [
  "png",
+]
+
+[[package]]
+name = "retrodos"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "retro-dosfs",
 ]
 
 [[package]]

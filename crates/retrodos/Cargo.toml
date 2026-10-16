@@ -1,0 +1,14 @@
+[package]
+name = "retrodos"
+description = "RetroDOS COMMAND: the DOS-style command shell of RetroOS"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "retrodos"
+path = "src/main.rs"
+
+[dependencies]
+retro-dosfs.workspace = true
+libc = "0.2"
