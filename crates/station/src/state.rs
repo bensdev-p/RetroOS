@@ -58,6 +58,8 @@ pub struct Station {
     pub scale: i32,
 
     pub pointer_location: Point<f64, Logical>,
+    /// The mouse has moved at least once (the pointer stays hidden until then).
+    pub pointer_moved: bool,
     pub cursor_status: CursorImageStatus,
     /// Something changed on screen; render at the next opportunity.
     pub dirty: bool,
@@ -157,6 +159,7 @@ impl Station {
             output: None,
             scale: 1,
             pointer_location: (0.0, 0.0).into(),
+            pointer_moved: false,
             cursor_status: CursorImageStatus::default_named(),
             dirty: true,
             children: Vec::new(),

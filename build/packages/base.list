@@ -11,7 +11,9 @@ systemd-zram-generator
 kmod
 # --- login and administration
 greetd
+login
 sudo
+tzdata
 # --- networking (Ethernet via networkd, Wi-Fi via iwd)
 iwd
 wireless-regdb

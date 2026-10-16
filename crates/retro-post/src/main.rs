@@ -403,12 +403,12 @@ fn apply(choice: Choice) {
 }
 
 fn wait_for_display() -> Option<Display> {
-    // The DRM device may still be probing this early in boot.
+    // The GPU driver is a module and may still be loading this early in boot.
     let start = Instant::now();
     loop {
         match Display::open() {
             Ok(d) => return Some(d),
-            Err(e) if start.elapsed() > Duration::from_secs(3) => {
+            Err(e) if start.elapsed() > Duration::from_secs(8) => {
                 eprintln!("retro-post: no display ({e}); continuing boot");
                 return None;
             }

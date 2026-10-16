@@ -253,7 +253,7 @@ pub fn render(st: &mut Station) {
         cursor_status: &st.cursor_status,
         pointer: st.pointer_location,
         scale: st.scale,
-        show_pointer: ud.pointer_seen,
+        show_pointer: ud.pointer_seen && st.pointer_moved,
     };
     let elements = render::build(&mut ud.renderer, &scene, &mut ud.cursor);
     match ud.compositor.render_frame(

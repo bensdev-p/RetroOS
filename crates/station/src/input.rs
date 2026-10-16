@@ -163,6 +163,7 @@ impl Station {
 
     pub fn pointer_motion(&mut self, loc: Point<f64, Logical>, time: u32) {
         self.pointer_location = loc;
+        self.pointer_moved = true;
         let under = self.surface_under(loc);
         if let Some(ptr) = self.seat.get_pointer() {
             ptr.motion(

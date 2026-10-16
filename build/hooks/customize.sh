@@ -101,6 +101,6 @@ cp "$RETRO_ROOT/config/boot/config.txt" "$B/config.txt"
 cp "$RETRO_ROOT/config/boot/cmdline.txt" "$B/cmdline.txt"
 
 echo ">> customize: cleanup"
-rm -rf "$R"/var/cache/apt/*.bin "$R"/var/lib/apt/lists/* "$R"/var/log/*.log "$R"/var/log/apt/* \
+rm -rf "$R"/var/cache/apt/*.bin "$R"/var/cache/apt/archives/*.deb "$R"/var/cache/apt/archives/partial/* "$R"/var/lib/apt/lists/* "$R"/var/log/*.log "$R"/var/log/apt/* \
        "$R"/usr/share/doc/*/changelog* "$R"/usr/share/man "$R"/tmp/* "$R"/var/tmp/*
 mkdir -p "$R/usr/share/man"
