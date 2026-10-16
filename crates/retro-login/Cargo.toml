@@ -1,0 +1,19 @@
+[package]
+name = "retro-login"
+description = "RetroOS login screen (a greetd greeter) and first-boot Setup"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "retro-greeter"
+path = "src/bin/greeter.rs"
+
+[[bin]]
+name = "retro-setup"
+path = "src/bin/setup.rs"
+
+[dependencies]
+retro-tui = { path = "../retro-tui" }
+serde_json = "1"
+libc = "0.2"

@@ -23,7 +23,7 @@ def main():
     env.pop("WAYLAND_DISPLAY", None)
     log = open(os.path.join(outdir, "station.log"), "w")
     p = subprocess.Popen([os.path.join(bindir, "station"), "--headless", "1920x1080",
-                          "--exec", "retro-console", "--test-ipc"], env=env, cwd=home,
+                          "--exec", os.environ.get("STATION_EXEC", "retro-console"), "--test-ipc"], env=env, cwd=home,
                          stdout=log, stderr=subprocess.STDOUT)
     sock_path = None
     for _ in range(100):

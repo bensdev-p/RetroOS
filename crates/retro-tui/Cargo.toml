@@ -1,0 +1,9 @@
+[package]
+name = "retro-tui"
+description = "Minimal full-screen text UI layer for RetroOS programs (cells, Phosphor16 colours, keys)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+libc = "0.2"

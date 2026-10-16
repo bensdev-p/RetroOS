@@ -55,6 +55,7 @@ static BUILTINS: &[Builtin] = &[
     sys::COMMAND,
     sys::SHUTDOWN,
     sys::RESTART,
+    sys::LOGOFF,
     sys::EXIT,
     env::ECHO,
     env::SET,

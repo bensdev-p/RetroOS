@@ -394,6 +394,28 @@ pub const RESTART: Builtin = Builtin {
     },
 };
 
+pub const LOGOFF: Builtin = Builtin {
+    names: &["LOGOFF", "LOGOUT"],
+    summary: "Ends your session and returns to the login screen.",
+    usage: "LOGOFF [/Y]\n\n  /Y   Does not ask for confirmation.",
+    run: |_, a, io| {
+        if !a.has("Y") && term::ask("End your session (Y/N)? ", "YN") != 'Y' {
+            return 0;
+        }
+        let id = std::env::var("XDG_SESSION_ID").unwrap_or_default();
+        let ok = std::process::Command::new("loginctl")
+            .args(["terminate-session", &id])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ok {
+            0
+        } else {
+            err(io, "Unable to end the session from here.")
+        }
+    },
+};
+
 pub const EXIT: Builtin = Builtin {
     names: &["EXIT"],
     summary: "Quits the RetroDOS command interpreter.",
