@@ -621,7 +621,10 @@ fn terminfo_name() -> String {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let once = args.iter().take_while(|a| *a != "--exec").any(|a| a == "--once");
+    let once = args
+        .iter()
+        .take_while(|a| *a != "--exec")
+        .any(|a| a == "--once");
     let argv = match args.iter().position(|a| a == "--exec") {
         Some(i) if i + 1 < args.len() => args[i + 1..].to_vec(),
         _ => vec!["retrodos".to_string()],
