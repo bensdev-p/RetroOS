@@ -37,7 +37,7 @@ qemu:
 	  -append "$$(cat $(OUT)/qemu/cmdline)" \
 	  -drive file=$(OUT)/qemu/root.ext4,if=virtio,format=raw,snapshot=on \
 	  -device virtio-gpu-pci,xres=1280,yres=800 -device virtio-keyboard-pci -device virtio-tablet-pci \
-	  -netdev user,id=n0 -device virtio-net-pci,netdev=n0 -device virtio-rng-pci \
+	  -netdev user,id=n0 -device virtio-net-pci,netdev=n0,romfile= -device virtio-rng-pci \
 	  -display vnc=:1 -serial mon:stdio
 
 test: test-host

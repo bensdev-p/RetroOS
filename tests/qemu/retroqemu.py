@@ -132,7 +132,7 @@ class Qemu:
                "-drive", f"file={disk},if=virtio,format=qcow2",
                "-device", f"virtio-gpu-pci,xres={self.size[0]},yres={self.size[1]}",
                "-device", "virtio-keyboard-pci", "-device", "virtio-tablet-pci",
-               "-netdev", "user,id=n0", "-device", "virtio-net-pci,netdev=n0",
+               "-netdev", "user,id=n0", "-device", "virtio-net-pci,netdev=n0,romfile=",
                "-device", "virtio-rng-pci",
                "-display", "none", "-serial", f"file:{self.serial_path}",
                "-qmp", f"unix:{self.qmp_path},server=on,wait=off", "-no-reboot"]
