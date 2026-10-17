@@ -28,7 +28,11 @@ use smithay_client_toolkit::reexports::client::globals::registry_queue_init;
 use smithay_client_toolkit::reexports::client::protocol::{
     wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface,
 };
+use smithay_client_toolkit::reexports::client::Proxy;
 use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
+use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::{
+    wp_viewport::WpViewport, wp_viewporter::WpViewporter,
+};
 use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
 use smithay_client_toolkit::seat::keyboard::{
     KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers,
@@ -54,6 +58,9 @@ struct App {
     pool: SlotPool,
     buffer: Option<Buffer>,
     window: Window,
+    /// wp_viewporter: we send a 1× buffer and Station enlarges it (compact mode).
+    viewport: Option<WpViewport>,
+    _viewporter: Option<WpViewporter>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     pointer: Option<wl_pointer::WlPointer>,
     loop_handle: LoopHandle<'static, App>,
@@ -202,10 +209,11 @@ impl App {
         if !self.configured || self.frame_pending {
             return;
         }
-        let (w, h) = self.phys();
         let Some(screen) = self.screen.as_mut() else {
             return;
         };
+        // The buffer is the screen's canvas: physical size, or 1/zoom of it.
+        let (w, h) = (screen.canvas.width, screen.canvas.height);
         let changed = screen.render();
         if !changed && self.buffer.is_some() && !self.needs_draw {
             return;
@@ -233,7 +241,15 @@ impl App {
             dst.copy_from_slice(&src.to_le_bytes());
         }
         let surface = self.window.wl_surface();
-        surface.set_buffer_scale(self.scale);
+        match &self.viewport {
+            Some(vp) => {
+                let z = screen.zoom as f64;
+                surface.set_buffer_scale(1);
+                vp.set_source(0.0, 0.0, screen.phys.0 as f64 / z, screen.phys.1 as f64 / z);
+                vp.set_destination(self.logical.0 as i32, self.logical.1 as i32);
+            }
+            None => surface.set_buffer_scale(self.scale),
+        }
         surface.damage_buffer(0, 0, w as i32, h as i32);
         surface.frame(qh, FrameCallbackData(surface.clone()));
         buffer.attach_to(surface).expect("attach");
@@ -248,7 +264,7 @@ impl App {
         }
         match self.screen.as_mut() {
             None => {
-                self.screen = Some(Screen::new(w, h));
+                self.screen = Some(Screen::with_mode(w, h, self.viewport.is_some()));
                 self.start_shell();
             }
             Some(s) => {
@@ -618,6 +634,13 @@ impl ProvidesRegistryState for App {
 }
 
 delegate_registry!(App);
+
+/// User data for objects that send no events we care about (viewporter).
+struct NoEvents;
+
+impl<I: Proxy> smithay_client_toolkit::dispatch2::Dispatch2<I, App> for NoEvents {
+    fn event(&self, _: &mut App, _: &I, _: I::Event, _: &Connection, _: &QueueHandle<App>) {}
+}
 smithay_client_toolkit::delegate_dispatch2!(App);
 
 /// TERM for programs in the console. We emulate xterm faithfully, and an
@@ -656,7 +679,14 @@ fn main() {
     window.set_title("RetroDOS");
     window.set_app_id("retroos.console");
     window.commit();
-    let pool = SlotPool::new(1920 * 1080 * 4, &shm).expect("shm pool");
+    let viewporter = globals
+        .bind::<WpViewporter, _, _>(&qh, 1..=1, NoEvents)
+        .ok();
+    let viewport = viewporter
+        .as_ref()
+        .map(|v| v.get_viewport(window.wl_surface(), &qh, NoEvents));
+    // Grows on demand; at 1080p in compact mode a frame is 2 MB.
+    let pool = SlotPool::new(1 << 21, &shm).expect("shm pool");
 
     let mut app = App {
         registry: RegistryState::new(&globals),
@@ -666,6 +696,8 @@ fn main() {
         pool,
         buffer: None,
         window,
+        viewport,
+        _viewporter: viewporter,
         keyboard: None,
         pointer: None,
         loop_handle: event_loop.handle(),

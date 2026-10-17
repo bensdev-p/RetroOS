@@ -19,7 +19,7 @@ use smithay::backend::input::InputEvent;
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::pixman::PixmanRenderer;
-use smithay::backend::renderer::ImportDma;
+use smithay::backend::renderer::{ImportDma, Renderer as _, TextureFilter};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::backend::udev::UdevBackend;
@@ -119,6 +119,7 @@ fn open_gles(
     let context = EGLContext::new(&display).map_err(|e| format!("egl context: {e}"))?;
     // SAFETY: the context is current only on this thread.
     let mut renderer = unsafe { GlesRenderer::new(context) }.map_err(|e| format!("gles: {e}"))?;
+    let _ = renderer.upscale_filter(TextureFilter::Nearest);
     let name = renderer
         .with_context(|gl| unsafe {
             let p = gl.GetString(smithay::backend::renderer::gles::ffi::RENDERER);
@@ -259,7 +260,9 @@ fn open_device(
     let gpu = match gpu {
         Some(g) => g,
         None => {
-            let renderer = PixmanRenderer::new().map_err(|e| format!("pixman: {e:?}"))?;
+            let mut renderer = PixmanRenderer::new().map_err(|e| format!("pixman: {e:?}"))?;
+            // Integer enlargement must stay pixel-sharp (the console's 1× buffer).
+            let _ = renderer.upscale_filter(TextureFilter::Nearest);
             let compositor = dumb_compositor(&output, new_surface(&mut drm)?, &fd, &renderer)?;
             Gpu::Pixman {
                 renderer,

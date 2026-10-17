@@ -150,10 +150,22 @@ pub struct Screen {
     full_redraw: bool,
     /// MODE CON COLS= LINES=: a fixed grid, letterboxed (None = fill).
     fixed: Option<(usize, usize)>,
+    /// Draw at 1× into a small canvas that the compositor enlarges by `zoom`
+    /// (wp_viewporter, nearest-neighbour): a quarter of the memory at 1080p.
+    compact: bool,
+    /// How much the canvas is enlarged on screen (1 when not compact).
+    pub zoom: u32,
+    /// The physical size the screen fills.
+    pub phys: (u32, u32),
 }
 
 impl Screen {
+    #[cfg(test)]
     pub fn new(phys_w: u32, phys_h: u32) -> Screen {
+        Screen::with_mode(phys_w, phys_h, false)
+    }
+
+    pub fn with_mode(phys_w: u32, phys_h: u32, compact: bool) -> Screen {
         let outbox = Rc::new(RefCell::new(Outbox::default()));
         let (cols, rows, fs, origin) = geometry(phys_w, phys_h, None);
         let term = Term::new(
@@ -181,11 +193,21 @@ impl Screen {
             outbox,
             full_redraw: true,
             fixed: None,
+            compact,
+            zoom: 1,
+            phys: (phys_w, phys_h),
         }
+        .laid_out()
+    }
+
+    fn laid_out(mut self) -> Screen {
+        let (w, h) = self.phys;
+        self.relayout(w, h);
+        self
     }
 
     pub fn resize(&mut self, phys_w: u32, phys_h: u32) -> bool {
-        if phys_w == self.canvas.width && phys_h == self.canvas.height {
+        if (phys_w, phys_h) == self.phys {
             return false;
         }
         self.relayout(phys_w, phys_h);
@@ -194,12 +216,22 @@ impl Screen {
 
     fn relayout(&mut self, phys_w: u32, phys_h: u32) {
         let (cols, rows, fs, origin) = geometry(phys_w, phys_h, self.fixed);
+        self.phys = (phys_w, phys_h);
         self.cols = cols;
         self.rows = rows;
-        self.font_scale = fs;
-        self.origin = origin;
         self.term.resize(Size { cols, lines: rows });
-        self.canvas = Canvas::new(phys_w.max(1), phys_h.max(1), 0);
+        let (zoom, w, h) = if self.compact {
+            (fs, phys_w.div_ceil(fs), phys_h.div_ceil(fs))
+        } else {
+            (1, phys_w, phys_h)
+        };
+        self.zoom = zoom;
+        self.font_scale = fs / zoom;
+        self.origin = (
+            (origin.0 + zoom as i32 / 2) / zoom as i32,
+            (origin.1 + zoom as i32 / 2) / zoom as i32,
+        );
+        self.canvas = Canvas::new(w.max(1), h.max(1), 0);
         self.drawn = vec![None; cols * rows];
         self.full_redraw = true;
     }
@@ -233,7 +265,7 @@ impl Screen {
                     let (c, r) = (c.parse::<usize>().ok()?, r.parse::<usize>().ok()?);
                     (c >= 20 && r >= 5).then_some((c, r))
                 });
-                let (w, h) = (self.canvas.width, self.canvas.height);
+                let (w, h) = self.phys;
                 self.relayout(w, h);
             }
             "attr" if v == "default" => self.attr = None,
@@ -425,8 +457,9 @@ impl Screen {
     /// Cell under a physical-pixel position.
     pub fn cell_at(&self, px: f64, py: f64) -> Option<(usize, usize)> {
         let (cw, ch) = (8.0 * self.font_scale as f64, 16.0 * self.font_scale as f64);
-        let x = px - self.origin.0 as f64;
-        let y = py - self.origin.1 as f64;
+        let z = self.zoom as f64;
+        let x = px / z - self.origin.0 as f64;
+        let y = py / z - self.origin.1 as f64;
         if x < 0.0 || y < 0.0 {
             return None;
         }
@@ -508,6 +541,20 @@ mod tests {
         assert_eq!((s.cols, s.rows), (80, 25));
         s.feed(b"\x1b]7701;grid=auto\x07");
         assert_eq!((s.cols, s.rows), (120, 33));
+    }
+
+    #[test]
+    fn compact_mode_draws_at_one_x() {
+        let mut s = Screen::with_mode(1920, 1080, true);
+        assert_eq!((s.cols, s.rows, s.zoom, s.font_scale), (120, 33, 2, 1));
+        assert_eq!((s.canvas.width, s.canvas.height), (960, 540));
+        assert_eq!(s.origin, (0, 6));
+        s.feed(b"C:\\>");
+        assert!(s.render());
+        // A click at physical (20, 45) is column 1, line 1: 8x16 cells enlarged 2x, 12 px border.
+        assert_eq!(s.cell_at(20.0, 45.0), Some((1, 1)));
+        s.feed(b"\x1b]7701;grid=80x25\x07");
+        assert_eq!((s.cols, s.rows, s.canvas.width), (80, 25, 960));
     }
 
     #[test]

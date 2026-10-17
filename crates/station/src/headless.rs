@@ -7,6 +7,7 @@ use crate::state::{client_scale, integer_scale, Station};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::pixman::PixmanRenderer;
 use smithay::backend::renderer::Bind;
+use smithay::backend::renderer::{Renderer as _, TextureFilter};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::pixman;
@@ -50,7 +51,11 @@ pub fn init(st: &mut Station, w: i32, h: i32) {
     let image = pixman::Image::new(pixman::FormatCode::X8R8G8B8, w as usize, h as usize, true)
         .expect("image");
     st.backend = crate::Backend::Headless(Box::new(HeadlessData {
-        renderer: PixmanRenderer::new().expect("pixman"),
+        renderer: {
+            let mut r = PixmanRenderer::new().expect("pixman");
+            let _ = r.upscale_filter(TextureFilter::Nearest);
+            r
+        },
         image,
         damage,
         cursor: CursorCache::default(),

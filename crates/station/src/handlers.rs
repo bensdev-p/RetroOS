@@ -223,6 +223,7 @@ impl XdgDecorationHandler for Station {
 
 delegate_compositor!(Station);
 delegate_shm!(Station);
+smithay::delegate_viewporter!(Station);
 delegate_dmabuf!(Station);
 
 impl DmabufHandler for Station {

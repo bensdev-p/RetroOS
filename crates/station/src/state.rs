@@ -45,6 +45,7 @@ pub struct Station {
     pub xdg_shell_state: XdgShellState,
     pub xdg_decoration_state: XdgDecorationState,
     pub shm_state: ShmState,
+    pub viewporter_state: smithay::wayland::viewporter::ViewporterState,
     pub dmabuf_state: DmabufState,
     /// linux-dmabuf, when rendering on the GPU.
     pub dmabuf_global: Option<DmabufGlobal>,
@@ -129,6 +130,8 @@ impl Station {
         let xdg_shell_state = XdgShellState::new::<Station>(&dh);
         let xdg_decoration_state = XdgDecorationState::new::<Station>(&dh);
         let shm_state = ShmState::new::<Station>(&dh, vec![]);
+        // Lets retro-console send a 1× buffer that we enlarge with nearest-neighbour scaling.
+        let viewporter_state = smithay::wayland::viewporter::ViewporterState::new::<Station>(&dh);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Station>(&dh);
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Station>(&dh);
@@ -177,6 +180,7 @@ impl Station {
             xdg_shell_state,
             xdg_decoration_state,
             shm_state,
+            viewporter_state,
             dmabuf_state: DmabufState::new(),
             dmabuf_global: None,
             output_manager_state,
