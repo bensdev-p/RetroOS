@@ -4,7 +4,6 @@ use std::ffi::CString;
 use std::path::Path;
 
 pub struct FsInfo {
-    #[allow(dead_code)] // used by CHKDSK (M2)
     pub total: u64,
     pub free: u64,
     pub serial: String,

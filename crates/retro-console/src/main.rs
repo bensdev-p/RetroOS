@@ -107,7 +107,14 @@ impl App {
                                 Ok(0) => return Ok(app.shell_gone()),
                                 Ok(n) => {
                                     if let Some(s) = app.screen.as_mut() {
+                                        let before = (s.cols, s.rows);
                                         s.feed(&buf[..n]);
+                                        // MODE CON changed the grid: tell the shell.
+                                        if (s.cols, s.rows) != before {
+                                            if let Some(p) = &app.pty {
+                                                p.resize(s.cols as u16, s.rows as u16);
+                                            }
+                                        }
                                     }
                                     app.needs_draw = true;
                                 }

@@ -1,6 +1,8 @@
 //! Built-in (internal) commands.
 
+mod config;
 mod control;
+mod disk;
 mod env;
 mod files;
 mod listing;
@@ -116,6 +118,13 @@ static BUILTINS: &[Builtin] = &[
     programs::FILER,
     programs::NET,
     programs::WIFI,
+    disk::ATTRIB,
+    disk::XCOPY,
+    disk::CHKDSK,
+    config::MODE,
+    config::KEYB,
+    config::ADMIN,
+    config::ABOUT,
 ];
 
 /// Paging helper for long outputs (DIR /P, MORE, HELP).

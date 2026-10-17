@@ -148,12 +148,14 @@ pub struct Screen {
     pub mouse_cell: Option<(usize, usize)>,
     pub outbox: Rc<RefCell<Outbox>>,
     full_redraw: bool,
+    /// MODE CON COLS= LINES=: a fixed grid, letterboxed (None = fill).
+    fixed: Option<(usize, usize)>,
 }
 
 impl Screen {
     pub fn new(phys_w: u32, phys_h: u32) -> Screen {
         let outbox = Rc::new(RefCell::new(Outbox::default()));
-        let (cols, rows, fs, origin) = geometry(phys_w, phys_h);
+        let (cols, rows, fs, origin) = geometry(phys_w, phys_h, None);
         let term = Term::new(
             Config::default(),
             &Size { cols, lines: rows },
@@ -178,6 +180,7 @@ impl Screen {
             mouse_cell: None,
             outbox,
             full_redraw: true,
+            fixed: None,
         }
     }
 
@@ -185,7 +188,12 @@ impl Screen {
         if phys_w == self.canvas.width && phys_h == self.canvas.height {
             return false;
         }
-        let (cols, rows, fs, origin) = geometry(phys_w, phys_h);
+        self.relayout(phys_w, phys_h);
+        true
+    }
+
+    fn relayout(&mut self, phys_w: u32, phys_h: u32) {
+        let (cols, rows, fs, origin) = geometry(phys_w, phys_h, self.fixed);
         self.cols = cols;
         self.rows = rows;
         self.font_scale = fs;
@@ -194,7 +202,6 @@ impl Screen {
         self.canvas = Canvas::new(phys_w.max(1), phys_h.max(1), 0);
         self.drawn = vec![None; cols * rows];
         self.full_redraw = true;
-        true
     }
 
     /// Feed shell output. Returns true if RetroOS commands changed colours.
@@ -220,6 +227,14 @@ impl Screen {
                     _ => Scheme::CLASSIC,
                 };
                 self.attr = None;
+            }
+            "grid" => {
+                self.fixed = v.split_once('x').and_then(|(c, r)| {
+                    let (c, r) = (c.parse::<usize>().ok()?, r.parse::<usize>().ok()?);
+                    (c >= 20 && r >= 5).then_some((c, r))
+                });
+                let (w, h) = (self.canvas.width, self.canvas.height);
+                self.relayout(w, h);
             }
             "attr" if v == "default" => self.attr = None,
             "attr" => {
@@ -421,11 +436,25 @@ impl Screen {
 }
 
 /// (cols, rows, font scale, origin) for a physical size: the largest integer
-/// scale that still gives at least 80×25 cells, centred with a border.
-fn geometry(w: u32, h: u32) -> (usize, usize, u32, (i32, i32)) {
-    let fs = fit_scale(w.max(8), h.max(16), 8, 16, 80, 25);
-    let cols = (w / (8 * fs)).max(1) as usize;
-    let rows = (h / (16 * fs)).max(1) as usize;
+/// scale that still gives at least 80×25 cells, centred with a border. A
+/// fixed grid gets the largest scale it fits at (clamped to the screen).
+fn geometry(w: u32, h: u32, fixed: Option<(usize, usize)>) -> (usize, usize, u32, (i32, i32)) {
+    let (fs, cols, rows) = match fixed {
+        Some((c, r)) => {
+            let fs = fit_scale(w.max(8), h.max(16), 8, 16, c as u32, r as u32);
+            let c = c.min((w / (8 * fs)).max(1) as usize);
+            let r = r.min((h / (16 * fs)).max(1) as usize);
+            (fs, c, r)
+        }
+        None => {
+            let fs = fit_scale(w.max(8), h.max(16), 8, 16, 80, 25);
+            (
+                fs,
+                (w / (8 * fs)).max(1) as usize,
+                (h / (16 * fs)).max(1) as usize,
+            )
+        }
+    };
     let ox = ((w - cols as u32 * 8 * fs) / 2) as i32;
     let oy = ((h - rows as u32 * 16 * fs) / 2) as i32;
     (cols, rows, fs, (ox, oy))
@@ -461,9 +490,24 @@ mod tests {
 
     #[test]
     fn geometry_1080p() {
-        let (c, r, fs, o) = geometry(1920, 1080);
+        let (c, r, fs, o) = geometry(1920, 1080, None);
         assert_eq!((c, r, fs), (120, 33, 2));
         assert_eq!(o, (0, 12));
+        // MODE CON COLS=80 LINES=25: 80×25 at 2×, letterboxed.
+        let (c, r, fs, o) = geometry(1920, 1080, Some((80, 25)));
+        assert_eq!((c, r, fs), (80, 25, 2));
+        assert_eq!(o, (320, 140));
+        // More than fits at 1×: clamped.
+        assert_eq!(geometry(640, 480, Some((132, 60))).0, 80);
+    }
+
+    #[test]
+    fn grid_command() {
+        let mut s = Screen::new(1920, 1080);
+        s.feed(b"\x1b]7701;grid=80x25\x07");
+        assert_eq!((s.cols, s.rows), (80, 25));
+        s.feed(b"\x1b]7701;grid=auto\x07");
+        assert_eq!((s.cols, s.rows), (120, 33));
     }
 
     #[test]

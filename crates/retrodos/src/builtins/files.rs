@@ -186,7 +186,7 @@ fn split_pat(p: &str) -> (&str, Option<&str>) {
     }
 }
 
-fn same_file(a: &Path, b: &Path) -> bool {
+pub(super) fn same_file(a: &Path, b: &Path) -> bool {
     use std::os::unix::fs::MetadataExt;
     match (std::fs::metadata(a), std::fs::metadata(b)) {
         (Ok(x), Ok(y)) => x.dev() == y.dev() && x.ino() == y.ino(),
@@ -195,7 +195,7 @@ fn same_file(a: &Path, b: &Path) -> bool {
 }
 
 /// Overwrite policy: /Y, /-Y, COPYCMD, else ask only when interactive.
-fn confirm_overwrite(a: &Args, io: &Io) -> bool {
+pub(super) fn confirm_overwrite(a: &Args, io: &Io) -> bool {
     if a.has("Y") {
         return false;
     }
@@ -214,13 +214,13 @@ fn confirm_overwrite(a: &Args, io: &Io) -> bool {
     io.tty && term::is_tty(0)
 }
 
-enum Answer {
+pub(super) enum Answer {
     Yes,
     No,
     All,
 }
 
-fn ask_overwrite(name: &str) -> Answer {
+pub(super) fn ask_overwrite(name: &str) -> Answer {
     match term::ask(&format!("Overwrite {name} (Yes/No/All)? "), "YNA") {
         'Y' => Answer::Yes,
         'A' => Answer::All,

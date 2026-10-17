@@ -52,6 +52,7 @@ test-host:
 
 test-qemu:
 	python3 tests/qemu/test_m1.py $(OUT)
+	python3 tests/qemu/test_m2.py $(OUT)
 
 container:
 	docker build -t $(CONTAINER_IMAGE) -f build/Containerfile build
