@@ -67,4 +67,6 @@ jobs:
             out/manifest.txt
             out/test-m1/*.png
             out/test-m1/report.json
-            out/test-m1/serial.log
+            out/test-m1/diagnostics.txt
+            out/test-m1/*.log
+            out/test-m1/qemu.err

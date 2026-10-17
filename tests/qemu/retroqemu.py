@@ -88,8 +88,8 @@ class ScreenReader:
 
 class Qemu:
     def __init__(self, qemu_dir, workdir, mem_mb=2048, smp=4, width=1280, height=800, extra_append=""):
-        self.dir = qemu_dir
-        self.work = workdir
+        self.dir = os.path.abspath(qemu_dir)
+        self.work = os.path.abspath(workdir)
         os.makedirs(workdir, exist_ok=True)
         self.qmp_path = os.path.join(workdir, "qmp.sock")
         self.serial_path = os.path.join(workdir, "serial.log")
@@ -115,10 +115,18 @@ class Qemu:
         # Journal to the serial console so the harness can see RetroOS markers.
         append = append.replace("console=ttyAMA0 console=tty1", "console=tty1 console=ttyAMA0")
         append += " systemd.journald.forward_to_console=1 " + self.extra_append
-        accel = ["-accel", "kvm"] if os.path.exists("/dev/kvm") and os.uname().machine == "aarch64" else \
-                ["-accel", "tcg,thread=multi"]
-        cpu = "host" if accel[1] == "kvm" else "cortex-a76"
-        cmd = ["qemu-system-aarch64", "-M", "virt", "-cpu", cpu, *accel, "-smp", str(self.smp),
+        use_kvm = os.uname().machine == "aarch64" and os.access("/dev/kvm", os.R_OK | os.W_OK) \
+            and os.environ.get("RETRO_QEMU_ACCEL", "auto") != "tcg"
+        for attempt in (["kvm", "host"], ["tcg,thread=multi", "cortex-a76"]):
+            if attempt[0] == "kvm" and not use_kvm:
+                continue
+            if self._launch(append, disk, accel=attempt[0], cpu=attempt[1]):
+                return
+        raise RuntimeError("QEMU did not start; see " + os.path.join(self.work, "qemu.err") + ":\n"
+                           + open(os.path.join(self.work, "qemu.err")).read()[-2000:])
+
+    def _launch(self, append, disk, accel, cpu):
+        cmd = ["qemu-system-aarch64", "-M", "virt", "-cpu", cpu, "-accel", accel, "-smp", str(self.smp),
                "-m", str(self.mem), "-kernel", os.path.join(self.dir, "vmlinuz"),
                "-initrd", os.path.join(self.dir, "initrd.img"), "-append", append,
                "-drive", f"file={disk},if=virtio,format=qcow2",
@@ -135,16 +143,31 @@ class Qemu:
         if os.path.exists(self.qmp_path):
             os.remove(self.qmp_path)
         self.t0 = time.time()
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=open(os.path.join(self.work, "qemu.err"), "w"))
-        for _ in range(100):
+        err = open(os.path.join(self.work, "qemu.err"), "a")
+        err.write(f"--- boot {self.boot}: accel={accel}\n")
+        err.flush()
+        self.proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=err)
+        s = None
+        for _ in range(200):
+            if self.proc.poll() is not None:
+                self.boot -= 1
+                return False  # QEMU gave up (e.g. KVM unusable); caller tries the next accelerator
             if os.path.exists(self.qmp_path):
-                break
+                try:
+                    s = socket.socket(socket.AF_UNIX)
+                    s.connect(self.qmp_path)
+                    break
+                except OSError:
+                    s = None
             time.sleep(0.1)
-        s = socket.socket(socket.AF_UNIX)
-        s.connect(self.qmp_path)
+        if s is None:
+            self.proc.kill()
+            return False
+        self.accel = accel
         self.qmp = s.makefile("rw")
         self.qmp.readline()
         self._qmp("qmp_capabilities")
+        return True
 
     def _qmp(self, cmd, **args):
         self.qmp.write(json.dumps({"execute": cmd, "arguments": args}) + "\n")
