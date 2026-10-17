@@ -214,11 +214,14 @@ impl Station {
                     .get(&conn)
                     .and_then(peer_pid)
                     .and_then(|p| self.task_for_pid(p));
-                // Graphical programs get the GPU renderer (and linux-dmabuf)
-                // before they connect.
-                crate::udev::set_gpu(self, true);
                 match self.spawn(&argv, cwd, &env, Some(lid)) {
                     Ok(pid) => {
+                        // Graphical programs get the GPU renderer (and
+                        // linux-dmabuf). Switching after the spawn overlaps
+                        // Mesa's start-up with the program's own; the program
+                        // cannot connect before we return to the event loop,
+                        // so it still sees the GPU from its first request.
+                        crate::udev::set_gpu(self, true);
                         self.broker.launches.insert(lid, (conn, requester));
                         if let Some((_, n)) = env.iter().find(|(k, _)| k == "RETROOS_LAUNCH_NAME") {
                             self.broker.names.insert(lid, n.clone());

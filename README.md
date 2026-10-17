@@ -14,7 +14,7 @@ shell; the **RetroOS Desktop** (Milestone 3) is one command away.
 - [`docs/BUDGET.md`](docs/BUDGET.md) — measured boot time and memory
 - [`docs/HW_CHECKLIST.md`](docs/HW_CHECKLIST.md) — real-hardware test list
 
-## Status: Milestone 2 (in progress)
+## Status: Milestone 2 complete (Milestone 3, the desktop, is next)
 
 | Works now | Arrives in |
 |---|---|
@@ -23,10 +23,11 @@ shell; the **RetroOS Desktop** (Milestone 3) is one command away.
 | Station compositor (text personality: full-screen tasks, Ctrl+Alt+Tab task swapper, Print Screen) | M1 ✓ |
 | RetroDOS: DOSKEY line editing, drive letters, pipes, redirection, ~35 commands, `UNIX` POSIX shell | M1 ✓ |
 | Batch files and `AUTOEXEC.BAT`; `IF` `FOR` `GOTO` `CALL` `SHIFT` `CHOICE`; `XCOPY` `ATTRIB` `CHKDSK` `MODE` `KEYB` `ADMIN` | M2 ✓ |
-| `FIREFOX` (or `RUN`/`START` any graphical program) full-screen from the prompt; `TASKS`, `KILL` | M2 ✓ (QEMU; Pi GPU check pending) |
+| `FIREFOX` (or `RUN`/`START` any graphical program) full-screen from the prompt; `TASKS`, `KILL`, Ctrl+Alt+Esc Task List | M2 ✓ |
 | EDIT (EDIT.COM-style editor), FILER (Norton Commander-style file manager), NET/WIFI network setup | M2 ✓ |
-| GPU rendering (GLES, linux-dmabuf) with CPU fallback | M2 ✓ (needs the Pi to verify) |
-| X11-only programs (Xwayland), USB stick auto-mount | M2 — next |
+| GPU rendering (V3D) while graphical programs run, CPU at the prompt; idle RetroOS userspace 44 MB on a Pi 5 | M2 ✓ |
+| USB sticks as D: and up, `EJECT` | M2 ✓ |
+| X11-only programs (Xwayland) | M3 (D-025) |
 | RetroOS Desktop: windows, Program Manager, File Cabinet | M3 |
 | Control Panel, Software Library, audio, Bluetooth, app theming | M4 |
 

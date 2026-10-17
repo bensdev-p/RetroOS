@@ -83,3 +83,20 @@ Planned cuts, largest first:
    `/etc/retroos/startup.conf` restores always-GPU.
 3. Services: measure what dropping the per-user systemd instance and
    systemd-resolved would save (they come back with PipeWire/DNS needs).
+
+### Raspberry Pi 5 (8 GB), after the M2 memory cuts (2026-10-17, CI run 24)
+
+| Metric | Before (run 15) | After (run 24) | Target (D-028) |
+|---|---:|---:|---:|
+| RetroOS userspace: AnonPages + Shmem | 93.5 MB | **44.4 MB** (34.2 + 10.3) | < 60 MB ✅ |
+| MemTotal − MemAvailable ("used") | 278.7 MB | **224.4 MB** | < 200 MB ❌ (kernel side) |
+| …of which kernel watermark reserve | 45.8 MB | 49.8 MB | |
+| Unreclaimable slab / vmalloc | 34.3 / 20.2 MB | 31.0 / 20.1 MB | |
+| station RSS | 103 MB | 31.8 MB | |
+| retro-console RSS | 30.8 MB | 9.9 MB | |
+| Boot to POST / to `C:\>` | — | within target (reported by the tester; stopwatch values not recorded) | < 10 s |
+
+The remaining gap to 200 MB is kernel-side (reserve, slab, vmalloc, drivers).
+M5 candidates: stop auto-loading drivers RetroOS does not use yet (camera/ISP,
+V4L2 codecs; vmalloc is mostly module memory), and re-check the watermark
+reserve, which on an 8 GB board is set by the kernel's defaults, not by us.

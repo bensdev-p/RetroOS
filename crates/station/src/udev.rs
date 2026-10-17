@@ -4,7 +4,7 @@
 //! Rendering is Pixman on the CPU into dumb buffers while only the console and
 //! other software-drawn programs are on screen, and GLES on the GPU (GBM/EGL;
 //! v3d on the Pi) with linux-dmabuf while graphical programs run: the switch
-//! happens just before the broker launches one and ~10 s after the last one
+//! happens as the broker launches one and ~60 s after the last one
 //! exits, so the prompt does not carry Mesa and GPU buffers (D-023, D-028).
 //! `renderer=gpu|cpu|auto` in /etc/retroos/startup.conf (or RETROOS_RENDERER)
 //! pins it.
@@ -66,8 +66,9 @@ fn renderer_policy() -> RendererPolicy {
     }
 }
 
-/// Seconds without graphical programs before the GPU renderer is dropped.
-const GPU_IDLE: Duration = Duration::from_secs(10);
+/// Time without graphical programs before the GPU renderer is dropped (long
+/// enough that closing and reopening a program does not pay the switch twice).
+const GPU_IDLE: Duration = Duration::from_secs(60);
 
 type DumbCompositor = DrmCompositor<DumbAllocator, DrmDeviceFd, (), DrmDeviceFd>;
 type GbmCompositor =

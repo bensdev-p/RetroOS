@@ -65,3 +65,4 @@ Optional but very useful: a USB-serial adapter on the Pi 5 debug UART
 | Date | Image | Board | Pass | Notes |
 |---|---|---|---|---|
 | 2026-10-17 | CI run 15 (d22b35a) | Pi 5 8 GB, Raspberry Pi monitor 1080p | 2.1, 2.3, 2.8–2.14 | 2.2 Wi-Fi joins but `ping` lacks permission (fixed: ping_group_range); 2.4 not tested (no cable); 2.5 Firefox "huge, unusable" (fixed: D-027) so 2.6/2.7 untested; 2.15 KEYB "Access denied" from localectl (fixed: own helper, applies at once); 2.16 idle 276 MB (target 100); 2.17 1,247 MB with YouTube |
+| 2026-10-17 | CI run 24 (ade8015) | Pi 5 8 GB, Raspberry Pi monitor 1080p | 2.2, 2.5–2.7, 2.15, 2.16; boot times within target | idle userspace 44 MB (target 60), "used" 224 MB; Firefox normal size with GPU, but it opened a little late (fixed after: the GPU switch now overlaps Firefox's start-up, and the GPU stays up 60 s after the last program) |
