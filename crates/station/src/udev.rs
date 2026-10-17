@@ -1,9 +1,13 @@
 //! The real-hardware backend: libseat session, one KMS output driven through
 //! Smithay's DrmCompositor, and libinput for keyboards and mice.
 //!
-//! Rendering is GLES on the GPU (GBM/EGL; v3d on the Pi) with linux-dmabuf
-//! for GPU clients, or Pixman on the CPU into dumb buffers when there is no
-//! GPU or only a software one (QEMU without virgl). D-023.
+//! Rendering is Pixman on the CPU into dumb buffers while only the console and
+//! other software-drawn programs are on screen, and GLES on the GPU (GBM/EGL;
+//! v3d on the Pi) with linux-dmabuf while graphical programs run: the switch
+//! happens just before the broker launches one and ~10 s after the last one
+//! exits, so the prompt does not carry Mesa and GPU buffers (D-023, D-028).
+//! `renderer=gpu|cpu|auto` in /etc/retroos/startup.conf (or RETROOS_RENDERER)
+//! pins it.
 
 use crate::render::{self, CursorCache, Scene};
 use crate::state::{client_scale, integer_scale, Station};
@@ -25,13 +29,45 @@ use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::backend::udev::UdevBackend;
 use smithay::output::{Mode, Output, OutputModeSource, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
-use smithay::reexports::drm::control::{connector, Device as ControlDevice, ModeTypeFlags};
+use smithay::reexports::drm::control::{
+    connector, crtc, Device as ControlDevice, Mode as DrmMode, ModeTypeFlags,
+};
 use smithay::reexports::input::{DeviceCapability, Libinput};
 use smithay::reexports::rustix::fs::OFlags;
 use smithay::utils::{DeviceFd, Transform};
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// When the GPU renderer is used.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RendererPolicy {
+    /// CPU at the prompt, GPU while graphical programs run.
+    Auto,
+    Gpu,
+    Cpu,
+}
+
+fn renderer_policy() -> RendererPolicy {
+    let conf = std::fs::read_to_string("/etc/retroos/startup.conf").unwrap_or_default();
+    let v = std::env::var("RETROOS_RENDERER").ok().or_else(|| {
+        conf.lines().find_map(|l| {
+            l.split('#')
+                .next()?
+                .trim()
+                .strip_prefix("renderer=")
+                .map(|v| v.trim().to_string())
+        })
+    });
+    match v.as_deref() {
+        Some("gpu" | "gles") => RendererPolicy::Gpu,
+        Some("cpu" | "pixman") => RendererPolicy::Cpu,
+        _ => RendererPolicy::Auto,
+    }
+}
+
+/// Seconds without graphical programs before the GPU renderer is dropped.
+const GPU_IDLE: Duration = Duration::from_secs(10);
 
 type DumbCompositor = DrmCompositor<DumbAllocator, DrmDeviceFd, (), DrmDeviceFd>;
 type GbmCompositor =
@@ -72,11 +108,26 @@ macro_rules! with_gpu {
     };
 }
 
+/// What it takes to (re)create the DRM surface for the one output.
+struct Scanout {
+    fd: DrmDeviceFd,
+    crtc: crtc::Handle,
+    mode: DrmMode,
+    connector: connector::Handle,
+    output: Output,
+}
+
 pub struct UdevData {
     pub session: LibSeatSession,
     libinput: Libinput,
     drm: DrmDevice,
-    pub gpu: Gpu,
+    scanout: Scanout,
+    /// None only for the moment a renderer switch takes.
+    pub gpu: Option<Gpu>,
+    policy: RendererPolicy,
+    /// GLES failed once (no GPU, software only): don't keep retrying.
+    gpu_unavailable: bool,
+    gpu_idle_since: Option<Instant>,
     pub cursor: CursorCache,
     frame_pending: bool,
     pub pointer_seen: bool,
@@ -86,17 +137,66 @@ impl UdevData {
     /// Import a client's dmabuf into the GPU renderer.
     pub fn import_dmabuf(&mut self, dmabuf: &Dmabuf) -> bool {
         match &mut self.gpu {
-            Gpu::Gles { renderer, .. } => renderer.import_dmabuf(dmabuf, None).is_ok(),
-            Gpu::Pixman { .. } => false,
+            Some(Gpu::Gles { renderer, .. }) => renderer.import_dmabuf(dmabuf, None).is_ok(),
+            _ => false,
         }
+    }
+
+    fn on_gpu(&self) -> bool {
+        matches!(self.gpu, Some(Gpu::Gles { .. }))
+    }
+
+    fn surface(&mut self) -> Result<DrmSurface, String> {
+        let sc = &self.scanout;
+        self.drm
+            .create_surface(sc.crtc, sc.mode, &[sc.connector])
+            .map_err(|e| format!("surface: {e}"))
+    }
+
+    fn build_pixman(&mut self) -> Result<Gpu, String> {
+        let mut renderer = PixmanRenderer::new().map_err(|e| format!("pixman: {e:?}"))?;
+        // Integer enlargement must stay pixel-sharp (the console's 1× buffer).
+        let _ = renderer.upscale_filter(TextureFilter::Nearest);
+        let surface = self.surface()?;
+        let compositor =
+            dumb_compositor(&self.scanout.output, surface, &self.scanout.fd, &renderer)?;
+        Ok(Gpu::Pixman {
+            renderer,
+            compositor,
+        })
+    }
+
+    fn build_gles(&mut self) -> Result<Gpu, String> {
+        let (gbm, renderer, render_node) = open_gles(&self.scanout.fd)?;
+        let formats = renderer.dmabuf_formats();
+        let surface = self.surface()?;
+        let compositor = GbmCompositor::new(
+            OutputModeSource::Auto(self.scanout.output.clone()),
+            surface,
+            None,
+            GbmAllocator::new(
+                gbm.clone(),
+                GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
+            ),
+            GbmFramebufferExporter::new(gbm.clone(), render_node),
+            [Fourcc::Xrgb8888, Fourcc::Argb8888],
+            formats,
+            (64, 64).into(),
+            Some(gbm),
+        )
+        .map_err(|e| format!("GPU output: {e:?}"))?;
+        Ok(Gpu::Gles {
+            renderer: Box::new(renderer),
+            compositor,
+            render_node,
+        })
     }
 }
 
 struct Opened {
     drm: DrmDevice,
     notifier: smithay::backend::drm::DrmDeviceNotifier,
-    gpu: Gpu,
-    output: Output,
+    scanout: Scanout,
     scale: i32,
 }
 
@@ -105,9 +205,6 @@ struct Opened {
 fn open_gles(
     fd: &DrmDeviceFd,
 ) -> Result<(GbmDevice<DrmDeviceFd>, GlesRenderer, Option<DrmNode>), String> {
-    if std::env::var("RETROOS_RENDERER").is_ok_and(|v| v == "pixman") {
-        return Err("RETROOS_RENDERER=pixman".into());
-    }
     let gbm = GbmDevice::new(fd.clone()).map_err(|e| format!("gbm: {e}"))?;
     // SAFETY: the GBM device outlives the display (both live in Gpu::Gles).
     let display = unsafe { EGLDisplay::new(gbm.clone()) }.map_err(|e| format!("egl: {e}"))?;
@@ -174,7 +271,7 @@ fn open_device(
         )
         .map_err(|e| format!("open {}: {e}", path.display()))?;
     let fd = DrmDeviceFd::new(DeviceFd::from(fd));
-    let (mut drm, notifier) = DrmDevice::new(fd.clone(), true).map_err(|e| format!("drm: {e}"))?;
+    let (drm, notifier) = DrmDevice::new(fd.clone(), true).map_err(|e| format!("drm: {e}"))?;
     let res = drm
         .resource_handles()
         .map_err(|e| format!("resources: {e}"))?;
@@ -220,63 +317,109 @@ fn open_device(
     output.set_preferred(wl_mode);
     let _global = output.create_global::<Station>(dh);
 
-    let new_surface = |drm: &mut DrmDevice| {
-        drm.create_surface(crtc, mode, &[conn.handle()])
-            .map_err(|e| format!("surface: {e}"))
-    };
-    let gpu = match open_gles(&fd) {
-        Ok((gbm, renderer, render_node)) => {
-            let formats = renderer.dmabuf_formats();
-            match GbmCompositor::new(
-                OutputModeSource::Auto(output.clone()),
-                new_surface(&mut drm)?,
-                None,
-                GbmAllocator::new(
-                    gbm.clone(),
-                    GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
-                ),
-                GbmFramebufferExporter::new(gbm.clone(), render_node),
-                [Fourcc::Xrgb8888, Fourcc::Argb8888],
-                formats,
-                (64, 64).into(),
-                Some(gbm),
-            ) {
-                Ok(compositor) => Some(Gpu::Gles {
-                    renderer: Box::new(renderer),
-                    compositor,
-                    render_node,
-                }),
-                Err(e) => {
-                    tracing::warn!("GPU output failed ({e:?}); using CPU rendering");
-                    None
-                }
-            }
-        }
-        Err(e) => {
-            tracing::info!("CPU rendering: {e}");
-            None
-        }
-    };
-    let gpu = match gpu {
-        Some(g) => g,
-        None => {
-            let mut renderer = PixmanRenderer::new().map_err(|e| format!("pixman: {e:?}"))?;
-            // Integer enlargement must stay pixel-sharp (the console's 1× buffer).
-            let _ = renderer.upscale_filter(TextureFilter::Nearest);
-            let compositor = dumb_compositor(&output, new_surface(&mut drm)?, &fd, &renderer)?;
-            Gpu::Pixman {
-                renderer,
-                compositor,
-            }
-        }
-    };
     Ok(Opened {
         drm,
         notifier,
-        gpu,
-        output,
+        scanout: Scanout {
+            fd,
+            crtc,
+            mode,
+            connector: conn.handle(),
+            output,
+        },
         scale,
     })
+}
+
+/// Switch between the CPU and GPU renderer (no-op if already there, if the
+/// policy pins one, or if the GPU failed before). Creates or removes the
+/// linux-dmabuf global to match, so clients only see dmabuf with a GPU.
+pub fn set_gpu(st: &mut Station, on: bool) {
+    let crate::Backend::Udev(ud) = &mut st.backend else {
+        return;
+    };
+    let on = match ud.policy {
+        RendererPolicy::Gpu => true,
+        RendererPolicy::Cpu => false,
+        RendererPolicy::Auto => on,
+    };
+    if ud.gpu.is_some() && ud.on_gpu() == on {
+        return;
+    }
+    if on && ud.gpu_unavailable {
+        return;
+    }
+    // The old compositor holds the CRTC: drop it before building the new one.
+    ud.gpu = None;
+    ud.frame_pending = false;
+    let built = if on {
+        ud.build_gles().or_else(|e| {
+            tracing::info!("CPU rendering: {e}");
+            ud.gpu_unavailable = true;
+            ud.build_pixman()
+        })
+    } else {
+        ud.build_pixman()
+    };
+    match built {
+        Ok(g) => ud.gpu = Some(g),
+        Err(e) => tracing::error!("no renderer: {e}"),
+    }
+    ud.gpu_idle_since = None;
+    // GPU clients: linux-dmabuf, with feedback naming the render device.
+    match &ud.gpu {
+        Some(Gpu::Gles {
+            renderer,
+            render_node,
+            ..
+        }) => {
+            tracing::info!("renderer: GPU");
+            if st.dmabuf_global.is_none() {
+                let formats = renderer.dmabuf_formats();
+                let global = match render_node.and_then(|n| {
+                    DmabufFeedbackBuilder::new(n.dev_id(), formats.clone())
+                        .build()
+                        .ok()
+                }) {
+                    Some(fb) => st
+                        .dmabuf_state
+                        .create_global_with_default_feedback::<Station>(&st.dh, &fb),
+                    None => st.dmabuf_state.create_global::<Station>(&st.dh, formats),
+                };
+                st.dmabuf_global = Some(global);
+            }
+        }
+        _ => {
+            tracing::info!("renderer: CPU");
+            if let Some(g) = st.dmabuf_global.take() {
+                st.dmabuf_state.destroy_global::<Station>(&st.dh, g);
+            }
+        }
+    }
+    st.dirty = true;
+}
+
+/// Drop the GPU renderer once no graphical program has run for a while.
+fn gpu_idle_check(st: &mut Station) {
+    let busy = st
+        .tasks
+        .iter()
+        .any(|t| t.kind == crate::tasks::TaskKind::App)
+        || st.children.iter().any(|(_, l)| l.is_some());
+    let crate::Backend::Udev(ud) = &mut st.backend else {
+        return;
+    };
+    if !ud.on_gpu() || ud.policy != RendererPolicy::Auto {
+        return;
+    }
+    if busy {
+        ud.gpu_idle_since = None;
+        return;
+    }
+    let since = *ud.gpu_idle_since.get_or_insert_with(Instant::now);
+    if since.elapsed() >= GPU_IDLE {
+        set_gpu(st, false);
+    }
 }
 
 pub fn init(st: &mut Station) -> Result<(), String> {
@@ -292,7 +435,7 @@ pub fn init(st: &mut Station) -> Result<(), String> {
     for p in &devices {
         match open_device(&mut session, p, &st.dh) {
             Ok(o) => {
-                tracing::info!(device = %p.display(), output = %o.output.name(), scale = o.scale, "display");
+                tracing::info!(device = %p.display(), output = %o.scanout.output.name(), scale = o.scale, "display");
                 opened = Some(o);
                 break;
             }
@@ -302,30 +445,10 @@ pub fn init(st: &mut Station) -> Result<(), String> {
     let Opened {
         drm,
         notifier,
-        gpu,
-        output,
+        scanout,
         scale,
     } = opened.ok_or_else(|| format!("no usable display: {}", errors.join("; ")))?;
-    // GPU clients: linux-dmabuf, with feedback naming the render device.
-    if let Gpu::Gles {
-        renderer,
-        render_node,
-        ..
-    } = &gpu
-    {
-        let formats = renderer.dmabuf_formats();
-        let global = match render_node.and_then(|n| {
-            DmabufFeedbackBuilder::new(n.dev_id(), formats.clone())
-                .build()
-                .ok()
-        }) {
-            Some(fb) => st
-                .dmabuf_state
-                .create_global_with_default_feedback::<Station>(&st.dh, &fb),
-            None => st.dmabuf_state.create_global::<Station>(&st.dh, formats),
-        };
-        st.dmabuf_global = Some(global);
-    }
+    let output = scanout.output.clone();
     st.scale = scale;
     if let Some(m) = output.current_mode() {
         st.art_scale = integer_scale(m.size.w, m.size.h);
@@ -344,7 +467,11 @@ pub fn init(st: &mut Station) -> Result<(), String> {
         session,
         libinput,
         drm,
-        gpu,
+        scanout,
+        gpu: None,
+        policy: renderer_policy(),
+        gpu_unavailable: false,
+        gpu_idle_since: None,
         cursor: CursorCache::default(),
         frame_pending: false,
         pointer_seen: false,
@@ -383,9 +510,9 @@ pub fn init(st: &mut Station) -> Result<(), String> {
                 tracing::info!("session resumed");
                 let _ = ud.libinput.resume();
                 let _ = ud.drm.activate(false);
-                let _ = with_gpu!(&mut ud.gpu, |_r, c| c
-                    .reset_state()
-                    .map_err(|e| format!("{e:?}")));
+                if let Some(gpu) = ud.gpu.as_mut() {
+                    let _ = with_gpu!(gpu, |_r, c| c.reset_state().map_err(|e| format!("{e:?}")));
+                }
                 ud.frame_pending = false;
                 st.dirty = true;
                 render(st);
@@ -405,6 +532,18 @@ pub fn init(st: &mut Station) -> Result<(), String> {
         },
     )
     .map_err(|_| "render timer")?;
+    // Start on the CPU (or the GPU if pinned); see set_gpu.
+    set_gpu(st, false);
+    if let crate::Backend::Udev(ud) = &st.backend {
+        if ud.gpu.is_none() {
+            return Err("no renderer for the display".into());
+        }
+    }
+    h.insert_source(Timer::from_duration(Duration::from_secs(2)), |_, _, st| {
+        gpu_idle_check(st);
+        TimeoutAction::ToDuration(Duration::from_secs(2))
+    })
+    .map_err(|_| "gpu idle timer")?;
     st.dirty = true;
     render(st);
     Ok(())
@@ -429,7 +568,10 @@ pub fn render(st: &mut Station) {
         overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
     };
     let cursor = &mut ud.cursor;
-    let result = with_gpu!(&mut ud.gpu, |r, c| {
+    let Some(gpu) = ud.gpu.as_mut() else {
+        return;
+    };
+    let result = with_gpu!(gpu, |r, c| {
         let elements = render::build(r, &scene, cursor);
         c.render_frame(r, &elements, render::CLEAR, FrameFlags::DEFAULT)
             .map(|res| res.is_empty)
@@ -458,12 +600,14 @@ pub fn render(st: &mut Station) {
 
 fn frame_finish(st: &mut Station) {
     if let crate::Backend::Udev(ud) = &mut st.backend {
-        if let Err(e) = with_gpu!(&mut ud.gpu, |_r, c| c
-            .frame_submitted()
-            .map(|_| ())
-            .map_err(|e| format!("{e:?}")))
-        {
-            tracing::warn!("frame_submitted: {e:?}");
+        if let Some(gpu) = ud.gpu.as_mut() {
+            if let Err(e) = with_gpu!(gpu, |_r, c| c
+                .frame_submitted()
+                .map(|_| ())
+                .map_err(|e| format!("{e:?}")))
+            {
+                tracing::warn!("frame_submitted: {e:?}");
+            }
         }
         ud.frame_pending = false;
     }

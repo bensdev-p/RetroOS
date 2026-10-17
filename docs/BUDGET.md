@@ -77,8 +77,9 @@ Planned cuts, largest first:
    neighbour scaling (viewporter): its 1080p buffers shrink 4×. Measured on the
    headless Station at 1920×1080: RSS 30.3 → 12.3 MB (anon 9.6 → 3.5, shmem
    16.2 → 4.1), screenshots pixel-identical.
-2. Station stays on Pixman in text mode and brings GLES up only while a
-   graphical program runs (D-023's fallback): no Mesa, LLVM or GPU buffers at
-   the prompt.
+2. ✅ (implemented, to be measured on the Pi) Station stays on Pixman in text
+   mode and brings GLES up only while a graphical program runs (D-023's
+   fallback): no Mesa, LLVM or GPU buffers at the prompt. `renderer=gpu` in
+   `/etc/retroos/startup.conf` restores always-GPU.
 3. Services: measure what dropping the per-user systemd instance and
    systemd-resolved would save (they come back with PipeWire/DNS needs).

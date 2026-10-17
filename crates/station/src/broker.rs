@@ -214,6 +214,9 @@ impl Station {
                     .get(&conn)
                     .and_then(peer_pid)
                     .and_then(|p| self.task_for_pid(p));
+                // Graphical programs get the GPU renderer (and linux-dmabuf)
+                // before they connect.
+                crate::udev::set_gpu(self, true);
                 match self.spawn(&argv, cwd, &env, Some(lid)) {
                     Ok(pid) => {
                         self.broker.launches.insert(lid, (conn, requester));

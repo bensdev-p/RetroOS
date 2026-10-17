@@ -67,7 +67,7 @@ pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
                 show_pointer: false,
                 overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
             };
-            match &mut ud.gpu {
+            match ud.gpu.as_mut().ok_or("no renderer")? {
                 udev::Gpu::Pixman { renderer, .. } => {
                     render::offscreen(renderer, &output, &scene, &mut ud.cursor)?
                 }
