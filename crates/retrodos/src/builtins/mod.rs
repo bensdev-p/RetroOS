@@ -114,6 +114,8 @@ static BUILTINS: &[Builtin] = &[
     tasks::KILL,
     programs::EDIT,
     programs::FILER,
+    programs::NET,
+    programs::WIFI,
 ];
 
 /// Paging helper for long outputs (DIR /P, MORE, HELP).

@@ -1,0 +1,17 @@
+[package]
+name = "retro-net"
+description = "WIFI / NET: RetroOS network setup in text mode"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "retro-net"
+path = "src/main.rs"
+
+[dependencies]
+retro-tui = { path = "../retro-tui" }
+retro-sys = { path = "../retro-sys" }
+
+[lints]
+workspace = true
