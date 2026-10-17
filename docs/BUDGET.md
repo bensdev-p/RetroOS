@@ -48,17 +48,35 @@ copy of the screen. Those are M5 tuning items, prioritised by the Pi numbers.
 | Idle RAM, text mode (MemTotal − MemAvailable, `free -m` "used") | **276 MB** | ❌ target < 100 MB; breakdown requested (below) |
 | With Firefox playing YouTube | 1,247 MB used, 220 MB shared | one tab |
 
-The text-mode figure is 2.8× the target and ~95 MB above QEMU's 181 MB, so most
-of the gap is Pi-specific (GLES context and GPU buffers in Station, the RPi
-kernel's own allocations on an 8 GB board). The next run collects
-`/proc/meminfo` and per-process RSS so the cuts are chosen by data:
-GLES-only-while-needed (D-023's fallback plan), fewer/smaller swapchain
-buffers, kernel trimming.
+Breakdown from `/proc/meminfo` on the Pi (idle at `C:\>`, second run):
 
-### Sizes
+| MB | What | Who controls it |
+|---:|---|---|
+| 278.7 | MemTotal − MemAvailable ("used") | |
+| 45.8 | free memory MemAvailable holds back (zone watermarks; scales with RAM) | kernel |
+| 62.0 | anonymous memory, all processes | RetroOS + systemd services |
+| 31.5 | shmem: the console's two 1080p frame buffers (16.6) + Station's GPU buffers | RetroOS |
+| 34.3 | unreclaimable slab | kernel (some driven by services) |
+| 20.2 | vmalloc | kernel/drivers |
+| 6.3 | kernel stacks, page tables, per-CPU | kernel |
+| 10.0 | CMA in use (display scan-out) | kernel/Station |
+| 68.5 | other kernel and driver pages (Wi-Fi/GPU firmware, DMA rings, …) | stock RPi kernel |
 
-| Item | Size |
-|---|---|
-| retroos.deb (all RetroOS binaries + assets) | 2.0 MB |
-| station / retro-console / retrodos binaries | 2.9 MB / 0.8 MB / 0.7 MB |
-| Image (uncompressed / xz) | _pending_ |
+Biggest processes (RSS, includes shared libraries): station 103 MB (Mesa/LLVM
+libraries mapped since GLES; 17 MB on Pixman in QEMU), retro-console 31 MB,
+systemd 15, systemd-resolved 14, systemd (user) 12, networkd 11, udevd 11.
+
+**Finding (D-028):** about 180 MB of the 279 MB is the stock Raspberry Pi
+kernel, its drivers and its reserves, before any RetroOS process. Under the
+"no custom kernel" rule, < 100 MB MemTotal − MemAvailable is not reachable on
+an 8 GB Pi 5. The budget is re-stated as RetroOS's own share — **userspace
+(AnonPages + Shmem) < 60 MB in text mode** (now 93.5 MB) — plus "used" < 200 MB.
+Planned cuts, largest first:
+
+1. retro-console draws at font scale 1 and Station enlarges it with nearest-
+   neighbour scaling (viewporter): its 1080p buffers shrink 4× (≈ −19 MB).
+2. Station stays on Pixman in text mode and brings GLES up only while a
+   graphical program runs (D-023's fallback): no Mesa, LLVM or GPU buffers at
+   the prompt.
+3. Services: measure what dropping the per-user systemd instance and
+   systemd-resolved would save (they come back with PipeWire/DNS needs).

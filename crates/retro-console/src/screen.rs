@@ -511,6 +511,24 @@ mod tests {
     }
 
     #[test]
+    fn last_column_is_drawn() {
+        let mut s = Screen::new(1920, 1080);
+        assert_eq!(s.cols, 120);
+        let line = format!("{}/x", "a".repeat(119));
+        s.feed(line.as_bytes());
+        s.render();
+        let (cw, ch) = (8 * s.font_scale, 16 * s.font_scale);
+        let bg = s.scheme.color(s.default_bg());
+        // The '/' in column 120 (index 119) has ink.
+        let x0 = s.origin.0 as u32 + 119 * cw;
+        let y0 = s.origin.1 as u32;
+        let ink = (x0..x0 + cw)
+            .flat_map(|x| (y0..y0 + ch).map(move |y| (x, y)))
+            .any(|(x, y)| s.canvas.get(x, y) != bg);
+        assert!(ink, "column 120 is blank");
+    }
+
+    #[test]
     fn renders_text() {
         let mut s = Screen::new(1280, 800);
         s.feed(b"C:\\>DIR\r\n\x1b[1;33mHello\x1b[0m");

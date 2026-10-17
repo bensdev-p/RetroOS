@@ -184,12 +184,15 @@ impl View<'_> {
     /// The terminal cursor is assumed to be at `from`.
     fn redraw_from(&mut self, text: &[char], from: usize, cursor: usize) {
         let s: String = text[from..].iter().collect();
-        let _ = write!(self.out, "{s}\x1b[J");
+        let _ = write!(self.out, "{s}");
         let end = text.len();
         if (self.start_col + end).is_multiple_of(self.cols) && end > from {
-            // Leave the pending-wrap state so our row arithmetic stays true.
-            let _ = write!(self.out, " \r\x1b[K");
+            // Ending exactly at the right margin leaves the cursor "pending
+            // wrap" on the last column, where an erase would wipe the last
+            // character. Wrap for real first; the space is erased below.
+            let _ = write!(self.out, " \r");
         }
+        let _ = write!(self.out, "\x1b[J");
         self.move_cursor(text, end, cursor);
         let _ = self.out.flush();
     }
