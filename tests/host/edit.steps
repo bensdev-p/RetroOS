@@ -1,0 +1,23 @@
+# EDIT: open a new file from RetroDOS, type, select, use a menu, save, exit.
+wait 1500
+type EDIT HELLO.TXT
+key enter
+wait 1200
+type Hello from EDIT.
+key enter
+type    Indented line
+key shift+home
+wait 300
+shot 20-edit-select
+key alt+f
+wait 300
+shot 21-edit-file-menu
+key esc
+key ctrl+s
+key ctrl+q
+wait 800
+type TYPE HELLO.TXT
+key enter
+wait 500
+shot 22-type-saved
+expect-file HELLO.TXT Hello from EDIT.

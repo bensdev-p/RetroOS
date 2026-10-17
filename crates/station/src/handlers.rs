@@ -18,9 +18,11 @@ use smithay::wayland::selection::data_device::{
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationHandler;
 use smithay::wayland::shell::xdg::{PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState};
+use smithay::backend::allocator::dmabuf::Dmabuf;
+use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::{
-    delegate_compositor, delegate_data_device, delegate_output, delegate_seat, delegate_shm, delegate_xdg_decoration,
+    delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat, delegate_shm, delegate_xdg_decoration,
     delegate_xdg_shell,
 };
 
@@ -221,6 +223,30 @@ impl XdgDecorationHandler for Station {
 
 delegate_compositor!(Station);
 delegate_shm!(Station);
+delegate_dmabuf!(Station);
+
+impl DmabufHandler for Station {
+    fn dmabuf_state(&mut self) -> &mut DmabufState {
+        &mut self.dmabuf_state
+    }
+
+    fn dmabuf_imported(
+        &mut self,
+        _global: &DmabufGlobal,
+        dmabuf: Dmabuf,
+        notifier: ImportNotifier,
+    ) {
+        let ok = match &mut self.backend {
+            crate::Backend::Udev(ud) => ud.import_dmabuf(&dmabuf),
+            _ => false,
+        };
+        if ok {
+            let _ = notifier.successful::<Station>();
+        } else {
+            notifier.failed();
+        }
+    }
+}
 delegate_seat!(Station);
 delegate_data_device!(Station);
 delegate_output!(Station);

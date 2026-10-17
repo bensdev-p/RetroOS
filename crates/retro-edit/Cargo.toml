@@ -1,0 +1,17 @@
+[package]
+name = "retro-edit"
+description = "EDIT: the RetroOS full-screen text editor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "retro-edit"
+path = "src/main.rs"
+
+[dependencies]
+retro-tui = { path = "../retro-tui" }
+libc = "0.2"
+
+[lints]
+workspace = true

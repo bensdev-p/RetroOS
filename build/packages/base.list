@@ -30,6 +30,14 @@ libxkbcommon0
 xkb-data
 libgbm1
 libpixman-1-0
+# --- GPU (Mesa: v3d/vc4 on the Pi, virgl in QEMU) for Station and apps
+libegl1
+libegl-mesa0
+libgles2
+libgl1-mesa-dri
+# --- the preinstalled browser (Raspberry Pi build, Wayland + V3D)
+firefox
+fonts-dejavu-core
 # --- sound (the startup chime plays through ALSA before PipeWire exists)
 alsa-utils
 # --- disks and power-user basics

@@ -11,13 +11,16 @@ use smithay::backend::renderer::element::surface::{
     render_elements_from_surface_tree, WaylandSurfaceRenderElement,
 };
 use smithay::backend::renderer::element::{AsRenderElements, Kind};
+use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::backend::renderer::pixman::PixmanRenderer;
-use smithay::backend::renderer::{Bind, ImportAll, ImportMem, Renderer};
+use smithay::backend::renderer::{
+    Bind, ExportMem, ImportAll, ImportMem, Offscreen, Renderer, TextureMapping,
+};
 use smithay::desktop::{Space, Window};
 use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::output::Output;
 use smithay::reexports::pixman;
-use smithay::utils::{Logical, Physical, Point, Scale, Transform};
+use smithay::utils::{Logical, Physical, Point, Rectangle, Scale, Transform};
 use smithay::wayland::compositor::with_states;
 
 smithay::backend::renderer::element::render_elements! {
@@ -204,6 +207,45 @@ pub fn offscreen(
             .map_err(|e| format!("{e:?}"))?;
     }
     Ok(image_to_canvas(&image))
+}
+
+/// The same with the GPU renderer (read back through a texture).
+pub fn offscreen_gles(
+    renderer: &mut GlesRenderer,
+    output: &Output,
+    scene: &Scene,
+    cursor: &mut CursorCache,
+) -> Result<retro_gfx::Canvas, String> {
+    let mode = output.current_mode().ok_or("output has no mode")?;
+    let (w, h) = (mode.size.w, mode.size.h);
+    let mut tex: GlesTexture = renderer
+        .create_buffer(Fourcc::Abgr8888, (w, h).into())
+        .map_err(|e| format!("{e:?}"))?;
+    let elements = build(renderer, scene, cursor);
+    let mapping = {
+        let mut fb = renderer.bind(&mut tex).map_err(|e| format!("{e:?}"))?;
+        let mut damage = OutputDamageTracker::from_output(output);
+        damage
+            .render_output(renderer, &mut fb, 0, &elements, CLEAR)
+            .map_err(|e| format!("{e:?}"))?;
+        renderer
+            .copy_framebuffer(&fb, Rectangle::from_size((w, h).into()), Fourcc::Abgr8888)
+            .map_err(|e| format!("{e:?}"))?
+    };
+    let flipped = mapping.flipped();
+    let data = renderer
+        .map_texture(&mapping)
+        .map_err(|e| format!("{e:?}"))?;
+    let mut c = retro_gfx::Canvas::new(w as u32, h as u32, 0);
+    for y in 0..h as usize {
+        let sy = if flipped { h as usize - 1 - y } else { y };
+        for x in 0..w as usize {
+            let i = (sy * w as usize + x) * 4;
+            let (r, g, b) = (data[i] as u32, data[i + 1] as u32, data[i + 2] as u32);
+            c.px[y * w as usize + x] = (r << 16) | (g << 8) | b;
+        }
+    }
+    Ok(c)
 }
 
 pub fn image_to_canvas(image: &pixman::Image<'_, '_>) -> retro_gfx::Canvas {

@@ -5,6 +5,7 @@
 Starts `station --headless 1920x1080 --exec retro-console --test-ipc` with a
 private XDG_RUNTIME_DIR and HOME, then runs a script of steps:
     type <text> | key <combo> | wait <ms> | shot <name> | expect-task <n> | tasks
+    expect-file <name> <text>   (file under HOME contains text)
 """
 import os, socket, subprocess, sys, tempfile, time, glob
 
@@ -63,7 +64,9 @@ def main():
         elif cmd == "type":
             req("TYPE\t" + arg); time.sleep(0.05)
         elif cmd == "key":
-            req("KEY\t" + arg); time.sleep(0.05)
+            r = req("KEY\t" + arg); time.sleep(0.05)
+            if r[0] != "OK":
+                print("FAIL key", arg, r); ok = False
         elif cmd == "shot":
             time.sleep(0.3)
             r = req("SCREENSHOT\t" + os.path.join(outdir, arg + ".png"))
@@ -73,6 +76,14 @@ def main():
             n = int(r[0].split("\t")[1])
             if n != int(arg):
                 print("FAIL tasks:", r); ok = False
+        elif cmd == "expect-file":
+            name, _, want = arg.partition(" ")
+            try:
+                got = open(os.path.join(home, name)).read()
+            except OSError as e:
+                got = str(e)
+            if want not in got:
+                print("FAIL file", name, repr(got)); ok = False
         elif cmd == "tasks":
             print("\n".join(req("TASKS")))
     req("QUIT")

@@ -73,7 +73,8 @@ and less garish, all pairs used for text pass WCAG AA at our sizes.
   block in insert-toggle/overtype (`Ins` toggles), exactly like DOS.
 - **Mouse**: inverse-video cell block.
 - **TUI chrome** (EDIT, Filer, Control Panel…):
-  - Top menu bar: Silver background, Black text, Lemon mnemonic letter.
+  - Top menu bar: Silver background, Black text, Brick mnemonic letter (Lemon and
+    White were tried: both too faint on Silver at 2× scale). Open menu title inverted.
   - Dialogs: Silver box, double-line `╔═╗` frame, 1-cell Black drop shadow right/bottom.
   - Buttons: `< OK >` `< Cancel >`, focused button in White.
   - Bottom status/F-key bar: `F1 Help  F3 View  F5 Copy …` keys in Black on Teal.

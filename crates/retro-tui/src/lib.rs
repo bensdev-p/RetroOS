@@ -45,6 +45,8 @@ pub struct Screen {
     shown: Vec<Option<Cell>>,
     orig: Option<libc::termios>,
     pub cursor: Option<(u16, u16)>,
+    /// Block instead of underline cursor (overtype mode).
+    pub block_cursor: bool,
     /// Owns the terminal (restores it on drop).
     active: bool,
 }
@@ -111,6 +113,7 @@ impl Screen {
             shown: vec![None; n],
             orig,
             cursor: None,
+            block_cursor: false,
             active: false,
         }
     }
@@ -236,7 +239,12 @@ impl Screen {
             }
         }
         match self.cursor {
-            Some((x, y)) => out.push_str(&format!("\x1b[{};{}H\x1b[?25h\x1b[3 q", y + 1, x + 1)),
+            Some((x, y)) => out.push_str(&format!(
+                "\x1b[{};{}H\x1b[?25h\x1b[{} q",
+                y + 1,
+                x + 1,
+                if self.block_cursor { 1 } else { 3 }
+            )),
             None => out.push_str("\x1b[?25l"),
         }
         let mut so = io::stdout().lock();

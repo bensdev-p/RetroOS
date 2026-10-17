@@ -75,7 +75,7 @@ fn named(k: &str) -> Option<u32> {
         "ctrl" => CTRL,
         "alt" => ALT,
         "shift" => SHIFT,
-        f if f.starts_with('f') && f.len() <= 3 => {
+        f if f.starts_with('f') && (2..=3).contains(&f.len()) => {
             let n: u32 = f[1..].parse().ok()?;
             match n {
                 1..=10 => 58 + n,

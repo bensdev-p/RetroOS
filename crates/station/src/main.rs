@@ -63,7 +63,14 @@ pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
                 scale: st.scale,
                 show_pointer: false,
             };
-            render::offscreen(&mut ud.renderer, &output, &scene, &mut ud.cursor)?
+            match &mut ud.gpu {
+                udev::Gpu::Pixman { renderer, .. } => {
+                    render::offscreen(renderer, &output, &scene, &mut ud.cursor)?
+                }
+                udev::Gpu::Gles { renderer, .. } => {
+                    render::offscreen_gles(renderer, &output, &scene, &mut ud.cursor)?
+                }
+            }
         }
         Backend::None => return Err("no backend".into()),
     };

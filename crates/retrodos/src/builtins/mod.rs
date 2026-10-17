@@ -4,6 +4,7 @@ mod control;
 mod env;
 mod files;
 mod listing;
+mod programs;
 mod sys;
 mod tasks;
 mod text;
@@ -111,6 +112,7 @@ static BUILTINS: &[Builtin] = &[
     tasks::START,
     tasks::TASKS,
     tasks::KILL,
+    programs::EDIT,
 ];
 
 /// Paging helper for long outputs (DIR /P, MORE, HELP).

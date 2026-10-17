@@ -44,9 +44,10 @@ test: test-host
 	cargo test --workspace
 
 test-host:
-	cargo build -p station -p retro-console -p retrodos -p retro-login
+	cargo build -p station -p retro-console -p retrodos -p retro-login -p retro-edit
 	python3 tests/host/station.py target/debug $(OUT)/test-host
 	python3 tests/host/station.py target/debug $(OUT)/test-host-launch tests/host/launch.steps
+	python3 tests/host/station.py target/debug $(OUT)/test-host-edit tests/host/edit.steps
 
 test-qemu:
 	python3 tests/qemu/test_m1.py $(OUT)

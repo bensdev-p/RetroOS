@@ -14,6 +14,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Display, DisplayHandle, Resource};
 use smithay::utils::{Logical, Point, Size};
 use smithay::wayland::compositor::{with_states, CompositorClientState, CompositorState};
+use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
@@ -44,6 +45,9 @@ pub struct Station {
     pub xdg_shell_state: XdgShellState,
     pub xdg_decoration_state: XdgDecorationState,
     pub shm_state: ShmState,
+    pub dmabuf_state: DmabufState,
+    /// linux-dmabuf, when rendering on the GPU.
+    pub dmabuf_global: Option<DmabufGlobal>,
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<Station>,
     pub data_device_state: DataDeviceState,
@@ -148,6 +152,8 @@ impl Station {
             xdg_shell_state,
             xdg_decoration_state,
             shm_state,
+            dmabuf_state: DmabufState::new(),
+            dmabuf_global: None,
             output_manager_state,
             seat_state,
             data_device_state,
