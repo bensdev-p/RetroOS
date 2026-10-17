@@ -1,0 +1,27 @@
+# Task List: Ctrl+Alt+Esc over a running program, switch, end a task.
+wait 1500
+type START DEMO
+key enter
+wait 2000
+expect-task 2
+key ctrl+alt+esc
+wait 400
+shot 40-tasklist
+key up
+key enter
+wait 400
+shot 41-back-to-console
+type ECHO still here
+key enter
+key ctrl+alt+del
+key down
+key e
+wait 1500
+expect-task 1
+shot 42-after-end-task
+key esc
+wait 300
+type ECHO done
+key enter
+wait 300
+shot 43-prompt

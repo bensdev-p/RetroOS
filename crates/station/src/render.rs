@@ -102,6 +102,8 @@ pub struct Scene<'a> {
     pub scale: i32,
     /// Hide the pointer entirely (no pointer device yet).
     pub show_pointer: bool,
+    /// A full-screen overlay drawn by Station (the Task List).
+    pub overlay: Option<&'a MemoryRenderBuffer>,
 }
 
 /// Render elements, front to back.
@@ -149,6 +151,21 @@ where
                     out.push(StationElement::Memory(e));
                 }
             }
+        }
+    }
+
+    if let Some(buf) = scene.overlay {
+        if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(
+            renderer,
+            (0.0, 0.0),
+            buf,
+            None,
+            None,
+            None,
+            Kind::Unspecified,
+        ) {
+            out.push(StationElement::Memory(e));
+            return out;
         }
     }
 

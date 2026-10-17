@@ -405,6 +405,7 @@ pub fn init(st: &mut Station) -> Result<(), String> {
 }
 
 pub fn render(st: &mut Station) {
+    st.task_list_buffer();
     let crate::Backend::Udev(ud) = &mut st.backend else {
         return;
     };
@@ -418,6 +419,7 @@ pub fn render(st: &mut Station) {
         pointer: st.pointer_location,
         scale: st.scale,
         show_pointer: ud.pointer_seen && st.pointer_moved,
+        overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
     };
     let cursor = &mut ud.cursor;
     let result = with_gpu!(&mut ud.gpu, |r, c| {

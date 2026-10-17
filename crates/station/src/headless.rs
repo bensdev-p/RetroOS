@@ -69,6 +69,7 @@ pub fn init(st: &mut Station, w: i32, h: i32) {
 }
 
 pub fn render(st: &mut Station) {
+    st.task_list_buffer();
     let crate::Backend::Headless(hd) = &mut st.backend else {
         return;
     };
@@ -79,6 +80,7 @@ pub fn render(st: &mut Station) {
         pointer: st.pointer_location,
         scale: st.scale,
         show_pointer: false,
+        overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
     };
     let elements = render::build(&mut hd.renderer, &scene, &mut hd.cursor);
     if let Ok(mut fb) = hd.renderer.bind(&mut hd.image) {

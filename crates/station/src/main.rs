@@ -14,6 +14,7 @@ mod inject;
 mod input;
 mod render;
 mod state;
+mod tasklist;
 mod tasks;
 mod udev;
 
@@ -52,6 +53,7 @@ pub fn change_vt(st: &mut Station, vt: i32) {
 
 pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
     let output = st.output.clone().ok_or("no output")?;
+    st.task_list_buffer();
     let canvas = match &mut st.backend {
         Backend::Headless(_) => headless::screenshot(st),
         Backend::Udev(ud) => {
@@ -62,6 +64,7 @@ pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
                 pointer: st.pointer_location,
                 scale: st.scale,
                 show_pointer: false,
+                overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
             };
             match &mut ud.gpu {
                 udev::Gpu::Pixman { renderer, .. } => {

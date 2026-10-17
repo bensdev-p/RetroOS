@@ -1,6 +1,7 @@
 //! Keyboard, pointer and the Station hotkeys.
 //!
 //!   Ctrl+Alt+Tab / Ctrl+Alt+Shift+Tab   next / previous task (task swapper)
+//!   Ctrl+Alt+Esc, Ctrl+Alt+Del          Task List (tasklist.rs)
 //!   Ctrl+Alt+F1..F12                    switch virtual terminal
 //!   Print Screen                        save a screenshot to C:\SCREENS
 
@@ -19,6 +20,8 @@ pub enum Action {
     PrevTask,
     Vt(i32),
     Screenshot,
+    TaskList,
+    TaskListKey(u32),
 }
 
 /// Keyboard settings from /etc/default/keyboard (Debian's console-setup file).
@@ -119,12 +122,28 @@ impl Station {
         let Some(kb) = self.seat.get_keyboard() else {
             return;
         };
-        let action =
-            kb.input::<Action, _>(self, code.into(), state, serial, time, |_, mods, handle| {
+        let action = kb.input::<Action, _>(
+            self,
+            code.into(),
+            state,
+            serial,
+            time,
+            |st, mods, handle| {
                 if state != KeyState::Pressed {
                     return FilterResult::Forward;
                 }
                 let sym = handle.modified_sym().raw();
+                if mods.ctrl
+                    && mods.alt
+                    && (sym == keysyms::KEY_Escape || sym == keysyms::KEY_Delete)
+                {
+                    return FilterResult::Intercept(Action::TaskList);
+                }
+                let switch_vt =
+                    (keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12).contains(&sym);
+                if st.task_list.is_some() && !switch_vt {
+                    return FilterResult::Intercept(Action::TaskListKey(sym));
+                }
                 if mods.ctrl && mods.alt {
                     if sym == keysyms::KEY_Tab || sym == keysyms::KEY_ISO_Left_Tab {
                         return FilterResult::Intercept(
@@ -146,7 +165,8 @@ impl Station {
                     return FilterResult::Intercept(Action::Screenshot);
                 }
                 FilterResult::Forward
-            });
+            },
+        );
         if let Some(a) = action {
             self.run_action(a);
         }
@@ -186,6 +206,12 @@ impl Station {
             Action::NextTask => self.cycle_tasks(true),
             Action::PrevTask => self.cycle_tasks(false),
             Action::Vt(n) => crate::change_vt(self, n),
+            Action::TaskList => {
+                if self.task_list.is_none() {
+                    self.open_task_list();
+                }
+            }
+            Action::TaskListKey(sym) => self.task_list_key(sym),
             Action::Screenshot => {
                 let dir = std::env::var_os("HOME")
                     .map(std::path::PathBuf::from)

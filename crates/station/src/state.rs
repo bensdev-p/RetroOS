@@ -74,6 +74,8 @@ pub struct Station {
     pub exit_code: i32,
     pub backend: crate::Backend,
     pub broker: crate::broker::Broker,
+    /// Ctrl+Alt+Esc Task List, when open.
+    pub task_list: Option<crate::tasklist::TaskList>,
 }
 
 #[derive(Default)]
@@ -173,6 +175,7 @@ impl Station {
             exit_code: 0,
             backend,
             broker,
+            task_list: None,
         }
     }
 
@@ -305,6 +308,7 @@ impl Station {
         };
         let was_focused = self.tasks.focused() == Some(id);
         let t = self.tasks.remove(id);
+        self.task_list_forget(id);
         if let Some(t) = t {
             self.space.unmap_elem(&t.window);
             tracing::info!(id, "task closed");
@@ -353,6 +357,9 @@ impl Station {
         &self,
         pos: Point<f64, Logical>,
     ) -> Option<(WlSurface, Point<f64, Logical>)> {
+        if self.task_list.is_some() {
+            return None;
+        }
         let id = self.tasks.focused()?;
         let t = self.tasks.get(id)?;
         let loc = self.space.element_location(&t.window)?;

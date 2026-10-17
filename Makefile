@@ -49,6 +49,7 @@ test-host:
 	python3 tests/host/station.py target/debug $(OUT)/test-host-launch tests/host/launch.steps
 	python3 tests/host/station.py target/debug $(OUT)/test-host-edit tests/host/edit.steps
 	python3 tests/host/station.py target/debug $(OUT)/test-host-filer tests/host/filer.steps
+	python3 tests/host/station.py target/debug $(OUT)/test-host-tasklist tests/host/tasklist.steps
 
 test-qemu:
 	python3 tests/qemu/test_m1.py $(OUT)

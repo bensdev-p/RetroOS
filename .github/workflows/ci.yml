@@ -34,6 +34,7 @@ jobs:
           python3 tests/host/station.py target/debug out/test-host-launch tests/host/launch.steps
           python3 tests/host/station.py target/debug out/test-host-edit tests/host/edit.steps
           python3 tests/host/station.py target/debug out/test-host-filer tests/host/filer.steps
+          python3 tests/host/station.py target/debug out/test-host-tasklist tests/host/tasklist.steps
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -43,6 +44,7 @@ jobs:
             out/test-host-launch
             out/test-host-edit
             out/test-host-filer
+            out/test-host-tasklist
 
   image:
     name: Build image and boot it in QEMU
