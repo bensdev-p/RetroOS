@@ -1,0 +1,68 @@
+#!/bin/sh
+# Mount a USB storage partition for the person at the screen, or unmount it.
+#
+#   automount add|remove <kernel-name>     (from retro-automount@.service)
+#
+# Mounts at /media/<user>/<LABEL>, where RetroDOS gives it the next free drive
+# letter (D: and up). FAT/exFAT/NTFS are mounted owned by that user; Linux
+# file systems keep their own permissions.
+set -u
+action=$1
+dev=/dev/$2
+state=/run/retroos/automount
+mkdir -p "$state"
+
+case $action in
+remove)
+    [ -f "$state/$2" ] || exit 0
+    dir=$(cat "$state/$2")
+    sync
+    umount "$dir" 2>/dev/null || umount -l "$dir" 2>/dev/null
+    rmdir "$dir" 2>/dev/null
+    rm -f "$state/$2"
+    exit 0
+    ;;
+add) ;;
+*) echo "usage: automount add|remove NAME" >&2; exit 2 ;;
+esac
+
+# Already mounted (by hand or earlier)?
+findmnt -n "$dev" >/dev/null 2>&1 && exit 0
+
+# Who is at the screen: the active session on seat0, else the Setup user.
+user=
+sess=$(loginctl show-seat seat0 -p ActiveSession --value 2>/dev/null)
+[ -n "$sess" ] && user=$(loginctl show-session "$sess" -p Name --value 2>/dev/null)
+case $user in ""|_greetd|root) user=$(awk -F: '$3>=1000 && $3<60000 {print $1; exit}' /etc/passwd) ;; esac
+[ -n "$user" ] || exit 0
+uid=$(id -u "$user") gid=$(id -g "$user")
+
+fstype=$(blkid -o value -s TYPE "$dev" 2>/dev/null)
+label=$(blkid -o value -s LABEL "$dev" 2>/dev/null)
+# A label fit for a directory name; NO_NAME/empty become USB, USB2, ...
+label=$(printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-32)
+case $label in ""|NO_NAME|_*) label=USB ;; esac
+base=/media/$user
+mkdir -p "$base"
+chown "$user:" "$base" 2>/dev/null
+chmod 0750 "$base"
+dir=$base/$label
+n=2
+while [ -e "$dir" ]; do dir=$base/$label$n; n=$((n + 1)); done
+
+case $fstype in
+vfat|msdos) opts="uid=$uid,gid=$gid,umask=022,shortname=mixed,flush,utf8" ;;
+exfat)      opts="uid=$uid,gid=$gid,umask=022" ;;
+ntfs|ntfs3) fstype=ntfs3; opts="uid=$uid,gid=$gid,umask=022" ;;
+ext2|ext3|ext4|btrfs|xfs|f2fs) opts="" ;;
+iso9660|udf) opts="ro" ;;
+*) exit 0 ;;  # not something we know how to show as a drive
+esac
+
+mkdir -p "$dir"
+if mount -t "$fstype" -o "nosuid,nodev${opts:+,$opts}" "$dev" "$dir"; then
+    echo "$dir" > "$state/$2"
+else
+    rmdir "$dir"
+    exit 1
+fi

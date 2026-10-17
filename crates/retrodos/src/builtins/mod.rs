@@ -121,6 +121,7 @@ static BUILTINS: &[Builtin] = &[
     disk::ATTRIB,
     disk::XCOPY,
     disk::CHKDSK,
+    disk::EJECT,
     config::MODE,
     config::KEYB,
     config::ADMIN,

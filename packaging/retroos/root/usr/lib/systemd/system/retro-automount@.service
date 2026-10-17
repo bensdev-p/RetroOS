@@ -1,0 +1,10 @@
+[Unit]
+Description=Mount USB storage %I for RetroDOS
+BindsTo=dev-%i.device
+After=dev-%i.device systemd-logind.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/retroos/automount add %i
+ExecStop=/usr/libexec/retroos/automount remove %i

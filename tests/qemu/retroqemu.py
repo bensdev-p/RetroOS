@@ -96,6 +96,7 @@ class Qemu:
         self.boot = 0
         self.mem, self.smp, self.size = mem_mb, smp, (width, height)
         self.extra_append = extra_append
+        self.extra_args = []  # more QEMU options (devices)
         self.proc = None
         self.qmp = None
         self.t0 = None
@@ -135,7 +136,7 @@ class Qemu:
                "-netdev", "user,id=n0", "-device", "virtio-net-pci,netdev=n0,romfile=",
                "-device", "virtio-rng-pci",
                "-display", "none", "-serial", f"file:{self.serial_path}",
-               "-qmp", f"unix:{self.qmp_path},server=on,wait=off", "-no-reboot"]
+               "-qmp", f"unix:{self.qmp_path},server=on,wait=off", "-no-reboot"] + self.extra_args
         self.boot += 1
         if self.boot > 1:
             self.serial_path = os.path.join(self.work, f"serial-boot{self.boot}.log")

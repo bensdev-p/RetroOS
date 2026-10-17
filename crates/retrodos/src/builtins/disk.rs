@@ -1,4 +1,4 @@
-//! ATTRIB, XCOPY, CHKDSK.
+//! ATTRIB, XCOPY, CHKDSK, EJECT.
 
 use super::files::{ask_overwrite, confirm_overwrite, same_file, Answer};
 use super::Builtin;
@@ -297,3 +297,52 @@ fn chkdsk(sh: &mut Shell, a: &Args, io: &mut Io) -> i32 {
     let _ = writeln!(io.out, "{:>w$} bytes free", thousands(avail));
     0
 }
+
+pub const EJECT: Builtin = Builtin {
+    names: &["EJECT"],
+    summary: "Prepares a removable drive to be unplugged.",
+    usage: "EJECT drive:\n\nWrites everything still waiting to the drive and unmounts it. When it says\nso, the drive can be removed safely.",
+    run: |sh, a, io| {
+        let Some(letter) = a.words.first().and_then(|w| w.chars().next()) else {
+            return err(io, "Required parameter missing");
+        };
+        let letter = letter.to_ascii_uppercase();
+        let Some(drive) = sh.dos.drive(letter).cloned() else {
+            return err(io, "Invalid drive specification");
+        };
+        if drive.kind != retro_dosfs::DriveKind::Removable {
+            return err(io, &format!("Drive {letter}: is not a removable drive"));
+        }
+        if sh.dos.cwd_path().starts_with(&drive.root) {
+            let _ = sh.dos.set_drive('C');
+        }
+        // Which device is mounted there?
+        let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
+        let root = drive.root.to_string_lossy().into_owned();
+        let source = mountinfo.lines().find_map(|l| {
+            let f: Vec<&str> = l.split(' ').collect();
+            let sep = f.iter().position(|x| *x == "-")?;
+            (f.get(4) == Some(&root.as_str())).then(|| f.get(sep + 2).map(|s| s.to_string()))?
+        });
+        let Some(source) = source else {
+            return err(io, &format!("Drive {letter}: is not mounted"));
+        };
+        let name = source.rsplit('/').next().unwrap_or(&source).to_string();
+        unsafe { libc::sync() };
+        let _ = io.out.flush();
+        let ok = std::process::Command::new("systemctl")
+            .args(["stop", "--no-ask-password", &format!("retro-automount@{name}.service")])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+            && !drive.root.exists();
+        if ok {
+            let user = sh.user.clone();
+            sh.dos.refresh_removable(&user);
+            let _ = writeln!(io.out, "Drive {letter}: can now be removed safely.");
+            0
+        } else {
+            err(io, &format!("Drive {letter}: is in use and cannot be ejected"))
+        }
+    },
+};

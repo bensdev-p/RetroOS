@@ -4,7 +4,7 @@
     python3 tests/qemu/test_m2.py [OUT_DIR]        (default: out)
 
 Runs after test_m1.py, on the disk it leaves behind (Setup already done,
-automatic login). Checks batch files, NET /S, an EDIT round trip, which
+automatic login). Checks batch files, NET /S, a USB stick as D: and EJECT, an EDIT round trip, which
 renderer Station picked, and launching Firefox from the prompt with the
 task swapper. Results: OUT/test-m2/{report.json,*.png,serial*.log}.
 """
@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 
@@ -39,6 +40,19 @@ def main():
         sys.exit(2)
     shutil.copy(disk, os.path.join(WORK, "root.qcow2"))
     q = Qemu(os.path.join(OUT, "qemu"), WORK)
+    # A USB stick with a FAT file system and one file on it.
+    stick = os.path.join(WORK, "stick.img")
+    if os.path.exists(stick):
+        os.remove(stick)
+    subprocess.run(["mkfs.vfat", "-C", "-n", "RETROSTICK", stick, "32768"], check=True,
+                   stdout=subprocess.DEVNULL)
+    note = os.path.join(WORK, "STICK.TXT")
+    with open(note, "w") as f:
+        f.write("Hello from the USB stick\n")
+    subprocess.run(["mcopy", "-i", stick, note, "::STICK.TXT"], check=True)
+    q.extra_args = ["-device", "qemu-xhci,id=xhci",
+                    "-drive", f"if=none,id=stick,format=raw,file={stick}",
+                    "-device", "usb-storage,bus=xhci.0,drive=stick"]
     q.font = font_json(os.path.join(WORK, "font.json"))
     q.start(q.font, keep_disk=True)
     try:
@@ -69,6 +83,14 @@ def run(q):
     q.type("CLS\nNET /S\n")
     t = q.wait_text("Wireless", 60, "m2-3-net")
     check("NET /S shows the wired link", "Connected" in t and "10.0.2.15" in t, t[-400:])
+
+    # USB stick: mounted for the user as D:, then ejected.
+    q.type("CLS\nTYPE D:\\STICK.TXT\n")
+    t = q.wait_text("from the USB stick", 60, "m2-3b-usb")
+    check("USB stick appears as D:", "Hello from the USB stick" in t, t[-300:])
+    q.type("EJECT D:\n")
+    t = q.wait_text("removed safely", 60, "m2-3c-eject")
+    check("EJECT D: unmounts the stick", "can now be removed safely" in t, t[-300:])
 
     # EDIT round trip.
     q.type("CLS\nEDIT NOTE.TXT\n")

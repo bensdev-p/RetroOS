@@ -1,0 +1,3 @@
+# USB storage: mount file systems for the person at the screen (RetroDOS D: and up).
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{ID_FS_USAGE}=="filesystem", \
+  ENV{UDISKS_IGNORE}!="1", TAG+="systemd", ENV{SYSTEMD_WANTS}+="retro-automount@%k.service"

@@ -1,0 +1,9 @@
+// EJECT: the person at the screen may unmount USB drives RetroOS mounted.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        subject.local && subject.active &&
+        action.lookup("verb") == "stop" &&
+        String(action.lookup("unit")).indexOf("retro-automount@") == 0) {
+        return polkit.Result.YES;
+    }
+});
