@@ -136,7 +136,7 @@ Status: **Proposed** until the design is approved; then **Accepted**.
 
 ### D-030 · 2026-10-17 · Desktop window management: what differs from STYLE.md §4 and DESIGN.md §5.4 — Accepted
 - **Move/resize outline**: a Black line inside a White one instead of an XOR rectangle. XOR needs the pixels under the outline read back, which neither the Pixman nor the GLES path does cheaply; a two-tone line is visible on any background and costs eight solid rectangles.
-- **Title text** is Phosphor Mono 8×16 until the Lantern 12/9 UI fonts exist (M3 step 3); frames, menus and icon labels switch to Lantern then.
+- **Fonts**: frames, menus, boxes and icon labels use Lantern 12 (`assets/fonts/lantern-12.glyphs`, drawn for M3: proportional, bold, ASCII plus the UI symbols … ◆ ✓ ▸). Icon labels move to Lantern 9 when it exists; Latin-1 letters for Lantern follow with the retro-ui toolkit (characters a font lacks show the replacement box until then).
 - **Exit to DOS** is `Ctrl+Alt+F1` (DESIGN.md §5.4; the session's own VT is 1, so nothing is lost) and the broker request `PERSONALITY text`. The confirmation dialog with "Close all programs first" comes with the ◆ menu of the System Bar (M3 step 4), which will call the same request.
 - **The main DOS Prompt cannot be closed** from its frame or with Alt+F4: closing it would end the session. Station shows a message box ("type EXIT at its prompt") instead. Other DOS Prompt windows close normally.
 - **DOS Prompt windows keep their text size** when resized (more or fewer cells), instead of re-picking the largest scale that fits 80×25 as the full screen does.

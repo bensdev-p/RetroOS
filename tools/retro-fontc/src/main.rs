@@ -18,10 +18,17 @@ fn main() {
             sheet(&args[2], scale)
         }
         Some("psf") if args.len() == 3 => std::fs::write(&args[2], font.to_psf2(&CP437)),
-        Some("sample") if args.len() >= 4 => sample(&args[2], &args[3..].join(" ")),
+        Some("sample") if args.len() >= 4 => {
+            sample(&args[2], &args[3..].join(" "), phosphor_mono())
+        }
+        Some("lantern12") if args.len() >= 4 => sample(
+            &args[2],
+            &args[3..].join(" "),
+            retro_gfx::font::lantern_12(),
+        ),
         Some("json") if args.len() == 3 => std::fs::write(&args[2], json()),
         _ => {
-            eprintln!("usage: retro-fontc sheet <out.png> [scale] | psf <out.psf> | sample <out.png> <text>");
+            eprintln!("usage: retro-fontc sheet <out.png> [scale] | psf <out.psf> | sample <out.png> <text> | lantern12 <out.png> <text>");
             std::process::exit(2);
         }
     };
@@ -77,20 +84,23 @@ fn sheet(out: &str, scale: u32) -> std::io::Result<()> {
     Ok(())
 }
 
-fn sample(out: &str, text: &str) -> std::io::Result<()> {
-    let font = phosphor_mono();
+fn sample(out: &str, text: &str, font: &retro_gfx::Font) -> std::io::Result<()> {
     let sch = &Scheme::CLASSIC;
     let lines: Vec<&str> = text.split("\\n").collect();
     let w = lines.iter().map(|l| l.chars().count()).max().unwrap_or(1) as u32 + 2;
     let h = lines.len() as u32 + 2;
     let scale = 2;
-    let mut c = Canvas::new(w * 8 * scale, h * 16 * scale, sch.color(sch.bg));
+    let mut c = Canvas::new(
+        w * 8 * scale,
+        h * font.cell_h as u32 * scale,
+        sch.color(sch.bg),
+    );
     let mut s = c.surface();
     for (i, l) in lines.iter().enumerate() {
         s.text(
             font,
             (8 * scale) as i32,
-            ((i as u32 + 1) * 16 * scale) as i32,
+            ((i as u32 + 1) * font.cell_h as u32 * scale) as i32,
             scale,
             sch.color(sch.fg),
             None,

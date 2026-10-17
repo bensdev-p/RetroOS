@@ -5,9 +5,9 @@
 //! Sizes are in art pixels ("logical pixels" in STYLE.md), multiplied by
 //! [`Metrics`]: `u` logical pixels per art pixel for geometry, `px` physical
 //! pixels for drawing, so frames stay pixel-exact at every output scale.
-//! Text uses Phosphor Mono until the Lantern UI fonts exist (D-030).
+//! Text is Lantern 12, the Desktop's system font.
 
-use retro_gfx::font::phosphor_mono;
+use retro_gfx::font::lantern_12;
 use retro_gfx::palette::{BLACK, COBALT, SILVER, SKY, SLATE, WHITE};
 use retro_gfx::{Canvas, Rgb, Surface};
 use smithay::backend::allocator::Fourcc;
@@ -257,13 +257,11 @@ pub fn draw_title(w: i32, m: &Metrics, s: &TitleStyle) -> Canvas {
         text_right = min_x - p;
     }
     // Centred title.
-    let font = phosphor_mono();
     let left = t + p;
-    let avail = ((text_right - left) / (8 * p)).max(0) as usize;
-    let title = ellipsize(&s.title, avail);
-    let tw = title.chars().count() as i32 * 8 * p;
+    let title = ellipsize(&s.title, ((text_right - left) / p - 4).max(0));
+    let tw = text_width(&title) * p;
     let tx = left + ((text_right - left) - tw) / 2;
-    sf.text(font, tx, p, p as u32, fg, None, &title);
+    sf.text(lantern_12(), tx, TEXT_Y * p, p as u32, fg, None, &title);
     sf.fill_rect(0, t, wp as u32, p as u32, BLACK);
     c
 }
@@ -306,16 +304,29 @@ fn triangle(sf: &mut Surface, cx: i32, cy: i32, p: i32, up: bool, rows: i32) {
     }
 }
 
-/// `s` cut to `n` characters, ending in "..." when cut.
-pub fn ellipsize(s: &str, n: usize) -> String {
-    if s.chars().count() <= n {
+/// Where Lantern 12 text sits in an 18-pixel bar (title bars, menu items).
+const TEXT_Y: i32 = 3;
+
+/// Width of `s` in Lantern 12 (art px).
+pub fn text_width(s: &str) -> i32 {
+    lantern_12().text_width(s) as i32
+}
+
+/// `s` cut to fit `max` art pixels, ending in "…" when cut.
+pub fn ellipsize(s: &str, max: i32) -> String {
+    if text_width(s) <= max {
         return s.to_string();
     }
-    if n <= 3 {
-        return s.chars().take(n).collect();
+    let mut out = String::new();
+    for ch in s.chars() {
+        let mut next = out.clone();
+        next.push(ch);
+        if text_width(&next) + text_width("…") > max {
+            break;
+        }
+        out = next;
     }
-    let mut out: String = s.chars().take(n - 3).collect();
-    out.push_str("...");
+    out.push('…');
     out
 }
 
@@ -393,13 +404,20 @@ pub fn draw_icon(
     let mut sf = c.surface();
     icon_picture(&mut sf, art, (ICON_W - 32) / 2 * p, 0, p);
     // Label: White on Black, Sky when selected.
-    let font = phosphor_mono();
-    let text = ellipsize(label, (ICON_W / 8) as usize - 1);
-    let tw = text.chars().count() as i32 * 8;
+    let text = ellipsize(label, ICON_W - 6);
+    let tw = text_width(&text);
     let lx = (ICON_W - tw - 4) / 2;
     let bg = if selected { SKY } else { BLACK };
-    sf.fill_rect(lx * p, 34 * p, ((tw + 4) * p) as u32, (18 * p) as u32, bg);
-    sf.text(font, (lx + 2) * p, 35 * p, p as u32, WHITE, None, &text);
+    sf.fill_rect(lx * p, 35 * p, ((tw + 4) * p) as u32, (15 * p) as u32, bg);
+    sf.text(
+        lantern_12(),
+        (lx + 2) * p,
+        36 * p,
+        p as u32,
+        WHITE,
+        None,
+        &text,
+    );
     c
 }
 
@@ -488,16 +506,16 @@ const SEP_H: i32 = 8;
 pub fn menu_layout(items: &[MenuItem]) -> (i32, i32, Vec<(i32, i32)>) {
     let mut y = 2;
     let mut rows = Vec::new();
-    let mut cols = 0;
+    let mut tw = 0;
     for it in items {
         let h = if it.is_separator() { SEP_H } else { ITEM_H };
         rows.push((y, h));
         y += h;
-        let label = it.label.replace('&', "").chars().count();
-        let sc = it.shortcut.chars().count();
-        cols = cols.max(label + if sc > 0 { sc + 3 } else { 0 });
+        let label = text_width(&it.label.replace('&', ""));
+        let sc = text_width(&it.shortcut);
+        tw = tw.max(label + if sc > 0 { sc + 24 } else { 0 });
     }
-    ((cols as i32) * 8 + 32, y + 2, rows)
+    (tw + 32, y + 2, rows)
 }
 
 /// The menu with a 1-px drop shadow (right and bottom), selection `sel`.
@@ -509,7 +527,7 @@ pub fn draw_menu(items: &[MenuItem], sel: Option<usize>, m: &Metrics) -> Canvas 
     sf.fill_rect(p, p, (w * p) as u32, (h * p) as u32, BLACK);
     sf.fill_rect(0, 0, (w * p) as u32, (h * p) as u32, SILVER);
     sf.frame(0, 0, (w * p) as u32, (h * p) as u32, p as u32, BLACK);
-    let font = phosphor_mono();
+    let font = lantern_12();
     for (i, (it, (y, ih))) in items.iter().zip(rows).enumerate() {
         if it.is_separator() {
             sf.fill_rect(p, (y + 3) * p, ((w - 2) * p) as u32, p as u32, SLATE);
@@ -527,7 +545,7 @@ pub fn draw_menu(items: &[MenuItem], sel: Option<usize>, m: &Metrics) -> Canvas 
         if selected {
             sf.fill_rect(2 * p, y * p, ((w - 4) * p) as u32, (ih * p) as u32, SKY);
         }
-        let ty = (y + 1) * p;
+        let ty = (y + TEXT_Y) * p;
         let mut x = 16 * p;
         let mut underline = false;
         for ch in it.label.chars() {
@@ -538,13 +556,20 @@ pub fn draw_menu(items: &[MenuItem], sel: Option<usize>, m: &Metrics) -> Canvas 
             let g = font.glyph_or_replacement(ch);
             sf.glyph(g, x, ty, p as u32, fg, None);
             if underline {
-                sf.fill_rect(x, ty + 13 * p, (7 * p) as u32, p as u32, fg);
+                // Under the baseline, the width of the letter's ink.
+                sf.fill_rect(
+                    x,
+                    ty + 11 * p,
+                    ((g.width as i32 - 1) * p) as u32,
+                    p as u32,
+                    fg,
+                );
                 underline = false;
             }
-            x += 8 * p;
+            x += g.width as i32 * p;
         }
         if !it.shortcut.is_empty() {
-            let sx = (w - 8 - it.shortcut.chars().count() as i32 * 8) * p;
+            let sx = (w - 12 - text_width(&it.shortcut)) * p;
             sf.text(font, sx, ty, p as u32, fg, None, &it.shortcut);
         }
     }
@@ -582,9 +607,8 @@ pub fn draw_switch_box(art: IconArt, title: &str, m: &Metrics) -> Canvas {
         COBALT,
     );
     icon_picture(&mut sf, art, 8 * p, 10 * p, p);
-    let font = phosphor_mono();
-    let text = ellipsize(title, ((w - 64) / 8) as usize);
-    sf.text(font, 52 * p, 18 * p, p as u32, BLACK, None, &text);
+    let text = ellipsize(title, w - 64);
+    sf.text(lantern_12(), 52 * p, 20 * p, p as u32, BLACK, None, &text);
     c
 }
 
@@ -592,8 +616,8 @@ pub fn draw_switch_box(art: IconArt, title: &str, m: &Metrics) -> Canvas {
 /// Returns the canvas and the OK button's art rectangle (x, y, w, h).
 pub fn draw_message(title: &str, lines: &[String], m: &Metrics) -> (Canvas, (i32, i32, i32, i32)) {
     let p = m.px;
-    let cols = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0) as i32;
-    let w = (cols * 8 + 32).max(200);
+    let tw = lines.iter().map(|l| text_width(l)).max().unwrap_or(0);
+    let w = (tw + 32).max(200);
     let h = TITLE + 1 + 16 + lines.len() as i32 * 16 + 16 + 24 + 12;
     let mut c = Canvas::new(((w + 1) * p) as u32, ((h + 1) * p) as u32, CLEAR_PX);
     let mut sf = c.surface();
@@ -612,7 +636,7 @@ pub fn draw_message(title: &str, lines: &[String], m: &Metrics) -> (Canvas, (i32
         },
     );
     sf.blit(&tb, p, p);
-    let font = phosphor_mono();
+    let font = lantern_12();
     let mut y = TITLE + 1 + 16;
     for l in lines {
         sf.text(font, 16 * p, y * p, p as u32, BLACK, None, l);
@@ -667,8 +691,8 @@ pub fn draw_message(title: &str, lines: &[String], m: &Metrics) -> (Canvas, (i32
     );
     sf.text(
         font,
-        (bx + bw / 2 - 8) * p,
-        (by + 4) * p,
+        (bx + (bw - text_width("OK")) / 2) * p,
+        (by + 6) * p,
         p as u32,
         BLACK,
         None,
@@ -823,7 +847,7 @@ mod tests {
         let (w, h, rows) = menu_layout(&items);
         assert_eq!(rows.len(), 4);
         assert_eq!(h, 2 + 3 * 18 + 8 + 2);
-        assert!(w >= 8 * 12);
+        assert!(w >= text_width("Close") + text_width("Alt+F4") + 32);
         assert_eq!(menu_hit(&items, 20, 5), None); // disabled
         assert_eq!(menu_hit(&items, 20, 25), Some(1));
         assert_eq!(menu_hit(&items, 20, 42), None); // separator
@@ -831,6 +855,8 @@ mod tests {
         let c = draw_menu(&items, Some(1), &m2());
         assert_eq!(c.get(c.width - 1, 0), CLEAR_PX);
         assert_eq!(c.get(10, 22 * 2), SKY);
-        assert_eq!(ellipsize("Program Manager", 10), "Program...");
+        let cut = ellipsize("Program Manager", 60);
+        assert!(cut.ends_with('…') && text_width(&cut) <= 60, "{cut}");
+        assert_eq!(ellipsize("DOS", 60), "DOS");
     }
 }
