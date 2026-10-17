@@ -423,12 +423,13 @@ pub const LOGOFF: Builtin = Builtin {
 pub const EXIT: Builtin = Builtin {
     names: &["EXIT"],
     summary: "Quits the RetroDOS command interpreter.",
-    usage: "EXIT [code]",
+    usage: "EXIT [/B] [code]\n\n  /B    In a batch program: leave the batch program, not RetroDOS.\n  code  Sets ERRORLEVEL.",
     run: |sh, a, _| {
-        sh.exit = true;
-        a.words
-            .first()
-            .and_then(|w| w.parse().ok())
-            .unwrap_or(sh.errorlevel)
+        let code = a.words.first().and_then(|w| w.parse().ok()).unwrap_or(sh.errorlevel);
+        match sh.batch.last_mut() {
+            Some(f) if a.has("B") => f.exit = true,
+            _ => sh.exit = true,
+        }
+        code
     },
 };

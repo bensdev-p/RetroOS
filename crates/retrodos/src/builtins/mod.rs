@@ -1,5 +1,6 @@
 //! Built-in (internal) commands.
 
+mod control;
 mod env;
 mod files;
 mod listing;
@@ -26,6 +27,41 @@ pub fn find(name: &str) -> Option<&'static Builtin> {
     BUILTINS
         .iter()
         .find(|b| b.names.iter().any(|n| n.eq_ignore_ascii_case(name)))
+}
+
+/// Commands that were internal to COMMAND.COM leave ERRORLEVEL unchanged
+/// when they succeed; the ones that were separate programs (FIND, SORT,
+/// CHOICE, MEM, …) set it.
+pub fn keeps_errorlevel(name: &str) -> bool {
+    matches!(
+        name,
+        "DIR"
+            | "CD"
+            | "MD"
+            | "RD"
+            | "COPY"
+            | "DEL"
+            | "REN"
+            | "TYPE"
+            | "VER"
+            | "VOL"
+            | "DATE"
+            | "TIME"
+            | "CLS"
+            | "COLOR"
+            | "BEEP"
+            | "ECHO"
+            | "SET"
+            | "PATH"
+            | "PROMPT"
+            | "REM"
+            | "PAUSE"
+            | "HELP"
+            | "IF"
+            | "FOR"
+            | "GOTO"
+            | "SHIFT"
+    )
 }
 
 static BUILTINS: &[Builtin] = &[
@@ -64,6 +100,12 @@ static BUILTINS: &[Builtin] = &[
     env::REM,
     env::PAUSE,
     env::HELP,
+    control::IF,
+    control::FOR,
+    control::GOTO,
+    control::CALL,
+    control::SHIFT,
+    control::CHOICE,
 ];
 
 /// Paging helper for long outputs (DIR /P, MORE, HELP).

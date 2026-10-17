@@ -165,8 +165,24 @@ class Qemu:
             return False
         self.accel = accel
         self.qmp = s.makefile("rw")
-        self.qmp.readline()
-        self._qmp("qmp_capabilities")
+        try:
+            self.qmp.readline()
+            self._qmp("qmp_capabilities")
+        except (OSError, ValueError):
+            # QEMU accepted the connection and then quit (KVM failing late).
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait()
+            self.qmp = None
+            self.boot -= 1
+            return False
+        if accel == "kvm":
+            time.sleep(1)
+            if self.proc.poll() is not None:
+                self.boot -= 1
+                return False
         return True
 
     def _qmp(self, cmd, **args):

@@ -4,9 +4,12 @@ use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+/// Like INTERRUPTED, but only cleared by the batch interpreter.
+static BREAK: AtomicBool = AtomicBool::new(false);
 
 extern "C" fn on_sigint(_: libc::c_int) {
     INTERRUPTED.store(true, Ordering::SeqCst);
+    BREAK.store(true, Ordering::SeqCst);
 }
 
 /// Install the SIGINT handler used while built-in commands run.
@@ -31,6 +34,11 @@ pub fn interrupted() -> bool {
 
 pub fn clear_interrupt() {
     INTERRUPTED.store(false, Ordering::SeqCst);
+}
+
+/// Was Ctrl+C pressed since the last call? (For "Terminate batch job".)
+pub fn take_break() -> bool {
+    BREAK.swap(false, Ordering::SeqCst)
 }
 
 pub fn is_tty(fd: i32) -> bool {

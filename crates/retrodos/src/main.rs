@@ -5,6 +5,7 @@
 //!   retrodos /K command    run a command line, then stay interactive
 //!   retrodos /NOLOGO       skip the banner
 
+mod batch;
 mod builtins;
 mod fmt;
 mod lineedit;
@@ -61,6 +62,11 @@ fn main() {
     if logo && sh.depth == 0 {
         println!("\nRetroDOS Version {VERSION}");
         println!("             (C)Copyright Phosphor Computer Company 1987-1993.\n");
+    }
+    if sh.depth == 0 && keep.is_none() && std::env::var_os("RETROOS_SAFE_MODE").is_none() {
+        if let Some(p) = sh.find_batch("C:\\AUTOEXEC.BAT") {
+            sh.run_batch(&p, Vec::new());
+        }
     }
     if let Some(line) = keep {
         sh.execute(&line);

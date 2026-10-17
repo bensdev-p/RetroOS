@@ -94,3 +94,7 @@ Status: **Proposed** until the design is approved; then **Accepted**.
 
 ### D-021 · 2026-10-16 · Build-time assets come from code, not hand-made binary files — Accepted
 - **Rationale**: sounds are synthesised by `tools/retro-synth` (patches are Rust functions rather than `.synth` text files, which bought nothing over code), the font is a text glyph source compiled at build time, and GNU Unifont's `.hex` is extracted from its Debian package (pinned) as the console's fallback for undrawn glyphs — 3.7 MB instead of the 58 MB `unifont` packages.
+
+### D-022 · 2026-10-17 · Batch files: MS-DOS 6 semantics plus a few NT conveniences — Accepted
+- **Rationale**: users' muscle memory and old scripts are DOS 6 (`%1`, `SHIFT`, `IF ERRORLEVEL n`, `CHOICE /C:`), but `EXIT /B`, `IF /I`, `IF DEFINED`, `::` comments and `&&`/`||` cost nothing and are what people reach for today. ERRORLEVEL follows COMMAND.COM: programs set it, built-ins that were internal commands (ECHO, IF, SET, CD, …) leave it alone when they succeed; `&&`/`||` look at the last command's own status instead. Running a batch file from another one without CALL returns to the caller, as if CALLed.
+- **Consequences**: `C:\AUTOEXEC.BAT` (shipped in `/etc/skel`) runs when the top-level shell starts; `RETROOS_SAFE_MODE=1` skips it. Batch files are not supported as stages of a pipeline yet.

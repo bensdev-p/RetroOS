@@ -35,12 +35,19 @@ impl Io<'_> {
 pub struct Shell {
     pub dos: Dos,
     pub errorlevel: i32,
+    /// Exit status of the last command (for && and ||). Unlike ERRORLEVEL,
+    /// it is also set by internal commands that succeed.
+    pub status: i32,
+    /// The last command was an internal command that leaves ERRORLEVEL alone.
+    keep_level: bool,
     pub echo: bool,
     pub editor: Editor,
     pub exit: bool,
     pub user: String,
     /// Nesting depth (COMMAND inside COMMAND).
     pub depth: u32,
+    /// Running batch files, innermost last.
+    pub batch: Vec<crate::batch::Frame>,
 }
 
 /// A DOS-style error message with an errorlevel.
@@ -72,11 +79,14 @@ impl Shell {
         Shell {
             dos,
             errorlevel: 0,
+            status: 0,
+            keep_level: false,
             echo: true,
             editor: Editor::default(),
             exit: false,
             user,
             depth,
+            batch: Vec::new(),
         }
     }
 
@@ -206,8 +216,8 @@ impl Shell {
         for (cond, part) in parse::split_chain(&expanded) {
             let run = match cond {
                 parse::Cond::Always => true,
-                parse::Cond::IfOk => self.errorlevel == 0,
-                parse::Cond::IfFail => self.errorlevel != 0,
+                parse::Cond::IfOk => self.status == 0,
+                parse::Cond::IfFail => self.status != 0,
             };
             if run && !self.exit && !term::interrupted() {
                 self.execute_pipeline(&part);
@@ -220,12 +230,18 @@ impl Shell {
         if stages.is_empty() {
             return;
         }
+        self.keep_level = false;
         let code = if stages.len() == 1 {
             self.run_single(&stages[0])
         } else {
             self.run_pipeline(&stages)
         };
-        self.errorlevel = code;
+        self.status = code;
+        // Like COMMAND.COM: programs set ERRORLEVEL, internal commands only
+        // when they fail.
+        if !self.keep_level {
+            self.errorlevel = code;
+        }
         let _ = io::stdout().flush();
     }
 
@@ -276,6 +292,9 @@ impl Shell {
                 Ok(()) => 0,
                 Err(e) => err_stdout(&e.to_string()),
             };
+        }
+        if let Some(bat) = self.find_batch(&st.cmd) {
+            return self.run_batch(&bat, parse::words(&st.rest));
         }
         let Some(prog) = self.find_program(&st.cmd) else {
             return err_stdout("Bad command or file name");
@@ -464,6 +483,7 @@ impl Shell {
             return 0;
         }
         let code = (b.run)(self, args, io);
+        self.keep_level = code == 0 && builtins::keeps_errorlevel(b.names[0]);
         let _ = io.out.flush();
         if term::interrupted() {
             let _ = writeln!(io.out, "^C");
