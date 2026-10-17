@@ -46,6 +46,7 @@ test: test-host
 test-host:
 	cargo build -p station -p retro-console -p retrodos -p retro-login
 	python3 tests/host/station.py target/debug $(OUT)/test-host
+	python3 tests/host/station.py target/debug $(OUT)/test-host-launch tests/host/launch.steps
 
 test-qemu:
 	python3 tests/qemu/test_m1.py $(OUT)

@@ -5,6 +5,7 @@ mod env;
 mod files;
 mod listing;
 mod sys;
+mod tasks;
 mod text;
 
 use crate::parse::Args;
@@ -106,6 +107,10 @@ static BUILTINS: &[Builtin] = &[
     control::CALL,
     control::SHIFT,
     control::CHOICE,
+    tasks::RUN,
+    tasks::START,
+    tasks::TASKS,
+    tasks::KILL,
 ];
 
 /// Paging helper for long outputs (DIR /P, MORE, HELP).

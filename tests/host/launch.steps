@@ -1,0 +1,31 @@
+# Launch broker: a GUI app started by name runs full-screen, RetroDOS waits,
+# and focus comes back when it exits. START/TASKS/KILL.
+wait 1500
+type DEMO
+key enter
+wait 2000
+expect-task 2
+shot 10-demo-running
+type EXIT
+key enter
+wait 1500
+expect-task 1
+shot 11-back-at-prompt
+type START DEMO
+key enter
+wait 2000
+expect-task 2
+key ctrl+alt+tab
+wait 500
+type TASKS
+key enter
+wait 800
+shot 12-tasks
+type KILL DEMO
+key enter
+wait 1500
+expect-task 1
+type ECHO done %ERRORLEVEL%
+key enter
+wait 500
+shot 13-after-kill

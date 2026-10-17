@@ -1,6 +1,7 @@
 //! The RetroDOS command interpreter.
 
 use crate::builtins;
+use crate::launch::Mode;
 use crate::lineedit::{Editor, Outcome};
 use crate::parse::{self, Args, Redir, Stage};
 use crate::term;
@@ -296,18 +297,7 @@ impl Shell {
         if let Some(bat) = self.find_batch(&st.cmd) {
             return self.run_batch(&bat, parse::words(&st.rest));
         }
-        let Some(prog) = self.find_program(&st.cmd) else {
-            return err_stdout("Bad command or file name");
-        };
-        let args = self.external_args(&st.rest);
-        let mut cmd = self.command(&prog, &args);
-        if let Some(f) = input_file {
-            cmd.stdin(f);
-        }
-        if let Some(f) = out_file {
-            cmd.stdout(f);
-        }
-        self.wait(cmd)
+        self.run_target(&st.cmd, &st.rest, Mode::Auto, true, input_file, out_file)
     }
 
     fn run_pipeline(&mut self, stages: &[Stage]) -> i32 {

@@ -4,7 +4,7 @@
 
 Starts `station --headless 1920x1080 --exec retro-console --test-ipc` with a
 private XDG_RUNTIME_DIR and HOME, then runs a script of steps:
-    type <text> | key <combo> | wait <ms> | shot <name> | expect-task <n>
+    type <text> | key <combo> | wait <ms> | shot <name> | expect-task <n> | tasks
 """
 import os, socket, subprocess, sys, tempfile, time, glob
 
@@ -18,6 +18,12 @@ def main():
     os.makedirs(os.path.join(home, "Documents"))
     with open(os.path.join(home, "README.TXT"), "w") as f:
         f.write("Welcome to RetroOS.\n")
+    # A "graphical application" for launch tests: a second console window.
+    apps = os.path.join(home, ".local", "share", "applications")
+    os.makedirs(apps)
+    with open(os.path.join(apps, "demo.desktop"), "w") as f:
+        f.write("[Desktop Entry]\nType=Application\nName=Demo App\n"
+                "Exec=retro-console --once --exec retrodos /K ECHO This is the demo app.\n")
     env = dict(os.environ, XDG_RUNTIME_DIR=run, HOME=home, USER="retro",
                PATH=bindir + ":" + os.environ["PATH"], RUST_LOG="station=info")
     env.pop("WAYLAND_DISPLAY", None)

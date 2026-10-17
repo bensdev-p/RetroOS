@@ -202,12 +202,20 @@ impl Station {
             TaskKind::App
         };
         let launch = pid.and_then(|p| self.launch_for_pid(p));
+        let name = launch
+            .and_then(|l| self.broker.launch_name(l))
+            .or_else(|| {
+                let comm = std::fs::read_to_string(format!("/proc/{}/comm", pid?)).ok()?;
+                Some(comm.trim().to_ascii_uppercase())
+            })
+            .unwrap_or_default();
         let id = self.tasks.add(Task {
             id: 0,
             window: window.clone(),
             pid,
             kind,
             launch,
+            name,
             dialog: parent.is_some(),
         });
         self.space.map_element(window, (0, 0), false);
@@ -289,11 +297,12 @@ impl Station {
         let Some(id) = self.tasks.find_surface(surface) else {
             return;
         };
+        let was_focused = self.tasks.focused() == Some(id);
         let t = self.tasks.remove(id);
         if let Some(t) = t {
             self.space.unmap_elem(&t.window);
             tracing::info!(id, "task closed");
-            if self.tasks.focused().is_none() || self.tasks.focused() == Some(id) {
+            if was_focused || self.tasks.focused().is_none() {
                 // Back to whoever launched it, else the most recent task.
                 let back = t
                     .launch

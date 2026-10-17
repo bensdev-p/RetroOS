@@ -19,6 +19,8 @@ pub struct Task {
     pub kind: TaskKind,
     /// Broker launch request that started this task, if any.
     pub launch: Option<u64>,
+    /// Program name: what it was launched as (FIREFOX), else the process name.
+    pub name: String,
     /// Has a parent toplevel (dialogs are not full-screen).
     pub dialog: bool,
 }

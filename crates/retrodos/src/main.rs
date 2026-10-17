@@ -5,9 +5,11 @@
 //!   retrodos /K command    run a command line, then stay interactive
 //!   retrodos /NOLOGO       skip the banner
 
+mod apps;
 mod batch;
 mod builtins;
 mod fmt;
+mod launch;
 mod lineedit;
 mod parse;
 mod shell;

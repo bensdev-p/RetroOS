@@ -4,10 +4,13 @@
 //!
 //! Requests (one per line, fields separated by TAB):
 //!   PING                          → OK station <version>
-//!   TASKS                         → OK <n>, then n lines: TASK <id> <pid> <kind> <focused> <title>
+//!   TASKS                         → OK <n>, then n lines: TASK <id> <pid> <kind> <focused> <name> <title>
 //!   SWITCH <id>                   → OK | ERR <msg>
-//!   LAUNCH <wait|nowait> <cwd> <argv0> [argv…]
+//!   LAUNCH <wait|nowait> <cwd> [=NAME=VALUE…] <argv0> [argv…]
 //!                                 → OK <launch-id> <pid>; later EXIT <launch-id> <code>
+//!                                   (fields starting with '=' set environment variables)
+//!   KILL <launch-id>              → OK | ERR <msg>   (SIGTERM to the launched process)
+//!   END <task-id> [FORCE]         → OK | ERR <msg>   (ask the window to close; FORCE kills)
 //!   SCREENSHOT <path>             → OK | ERR <msg>
 //! Test-only (station --test-ipc):
 //!   TYPE <text>   KEY <combo>…   QUIT
@@ -25,6 +28,8 @@ pub struct Broker {
     conns: HashMap<u64, UnixStream>,
     /// launch id → (connection, requesting task)
     launches: HashMap<u64, (u64, Option<u64>)>,
+    /// launch id → the name it was launched as (`=RETROOS_LAUNCH_NAME=`)
+    names: HashMap<u64, String>,
     next: u64,
     pub test_ipc: bool,
 }
@@ -58,6 +63,7 @@ impl Broker {
             path,
             conns: HashMap::new(),
             launches: HashMap::new(),
+            names: HashMap::new(),
             next: 0,
             test_ipc: false,
         }
@@ -75,7 +81,12 @@ impl Broker {
         }
     }
 
+    pub fn launch_name(&self, launch: u64) -> Option<String> {
+        self.names.get(&launch).cloned()
+    }
+
     pub fn launch_exited(&mut self, launch: u64, code: i32) {
+        self.names.remove(&launch);
         if let Some((conn, _)) = self.launches.remove(&launch) {
             self.send(conn, &format!("EXIT\t{launch}\t{code}"));
         }
@@ -159,12 +170,13 @@ impl Station {
                 let mut lines = vec![format!("OK\t{}", self.tasks.len())];
                 for t in self.tasks.iter() {
                     lines.push(format!(
-                        "TASK\t{}\t{}\t{:?}\t{}\t{}",
+                        "TASK\t{}\t{}\t{:?}\t{}\t{}\t{}",
                         t.id,
                         t.pid.unwrap_or(0),
                         t.kind,
                         (focused == Some(t.id)) as u8,
-                        self.task_title(t)
+                        t.name,
+                        self.task_title(t).replace(['\t', '\n'], " ")
                     ));
                 }
                 lines.join("\n")
@@ -178,7 +190,21 @@ impl Station {
             },
             "LAUNCH" if f.len() >= 4 => {
                 let cwd = Some(f[2]).filter(|s| !s.is_empty());
-                let argv: Vec<String> = f[3..].iter().map(|s| s.to_string()).collect();
+                let env: Vec<(String, String)> = f[3..]
+                    .iter()
+                    .map_while(|s| s.strip_prefix('='))
+                    .filter_map(|kv| kv.split_once('='))
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect();
+                let argv: Vec<String> = f[3..]
+                    .iter()
+                    .skip_while(|s| s.starts_with('='))
+                    .map(|s| s.to_string())
+                    .collect();
+                if argv.is_empty() {
+                    self.broker.send(conn, "ERR	no program");
+                    return;
+                }
                 self.broker.next += 1;
                 let lid = self.broker.next;
                 let requester = self
@@ -187,12 +213,48 @@ impl Station {
                     .get(&conn)
                     .and_then(peer_pid)
                     .and_then(|p| self.task_for_pid(p));
-                match self.spawn(&argv, cwd, &[], Some(lid)) {
+                match self.spawn(&argv, cwd, &env, Some(lid)) {
                     Ok(pid) => {
                         self.broker.launches.insert(lid, (conn, requester));
+                        if let Some((_, n)) = env.iter().find(|(k, _)| k == "RETROOS_LAUNCH_NAME") {
+                            self.broker.names.insert(lid, n.clone());
+                        }
                         format!("OK\t{lid}\t{pid}")
                     }
                     Err(e) => format!("ERR\t{e}"),
+                }
+            }
+            "KILL" if f.len() == 2 => {
+                let lid = f[1].parse::<u64>().ok();
+                match self
+                    .children
+                    .iter()
+                    .find(|(_, l)| lid.is_some() && *l == lid)
+                {
+                    Some((c, _)) => {
+                        unsafe { libc::kill(c.id() as i32, libc::SIGTERM) };
+                        "OK".into()
+                    }
+                    None => "ERR	no such program".into(),
+                }
+            }
+            "END" if f.len() >= 2 => {
+                let force = f.get(2).is_some_and(|s| s.eq_ignore_ascii_case("FORCE"));
+                match f[1].parse::<u64>().ok().and_then(|id| self.tasks.get(id)) {
+                    Some(t) if force => match t.pid {
+                        Some(pid) if Some(pid) != self.primary_pid => {
+                            unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+                            "OK".into()
+                        }
+                        _ => "ERR	cannot end this task".into(),
+                    },
+                    Some(t) => {
+                        if let Some(top) = t.window.toplevel() {
+                            top.send_close();
+                        }
+                        "OK".into()
+                    }
+                    None => "ERR	no such task".into(),
                 }
             }
             "SCREENSHOT" if f.len() == 2 => {
