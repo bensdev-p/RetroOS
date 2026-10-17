@@ -52,16 +52,17 @@ const ARROW: [&str; 19] = [
     ".......XX...",
 ];
 
-/// The arrow pre-scaled to the output scale (so it stays pixel-sharp).
+/// The arrow pre-scaled by whole pixels (so it stays sharp).
 #[derive(Default)]
 pub struct CursorCache {
-    scale: i32,
+    scale: (i32, i32),
     buf: Option<MemoryRenderBuffer>,
 }
 
 impl CursorCache {
-    fn get(&mut self, scale: i32) -> &MemoryRenderBuffer {
-        if self.scale != scale || self.buf.is_none() {
+    /// `scale` = pixels per art pixel; `buffer_scale` = the output scale.
+    fn get(&mut self, scale: i32, buffer_scale: i32) -> &MemoryRenderBuffer {
+        if self.scale != (scale, buffer_scale) || self.buf.is_none() {
             let (w, h) = (ARROW[0].len() as i32 * scale, ARROW.len() as i32 * scale);
             let mut px = vec![0u8; (w * h * 4) as usize];
             for (y, row) in ARROW.iter().enumerate() {
@@ -84,11 +85,11 @@ impl CursorCache {
                 &px,
                 Fourcc::Argb8888,
                 (w, h),
-                scale,
+                buffer_scale,
                 Transform::Normal,
                 None,
             ));
-            self.scale = scale;
+            self.scale = (scale, buffer_scale);
         }
         self.buf.as_ref().unwrap()
     }
@@ -100,6 +101,8 @@ pub struct Scene<'a> {
     pub cursor_status: &'a CursorImageStatus,
     pub pointer: Point<f64, Logical>,
     pub scale: i32,
+    /// Pixel scale of the arrow (it stays 2× at 1080p even at output scale 1).
+    pub art_scale: i32,
     /// Hide the pointer entirely (no pointer device yet).
     pub show_pointer: bool,
     /// A full-screen overlay drawn by Station (the Task List).
@@ -138,7 +141,7 @@ where
                 ));
             }
             CursorImageStatus::Named(_) => {
-                let buf = cursor.get(scene.scale);
+                let buf = cursor.get(scene.art_scale.max(scene.scale), scene.scale);
                 if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(
                     renderer,
                     pos,

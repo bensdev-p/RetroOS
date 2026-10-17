@@ -36,7 +36,24 @@ copy of the screen. Those are M5 tuning items, prioritised by the Pi numbers.
 |---|---|---|
 | Power-on → POST screen | _to measure_ | HW_CHECKLIST 1.1 |
 | Power-on → `C:\>` | _to measure_ | HW_CHECKLIST 1.8 |
-| Idle RAM, text mode | _to measure_ | HW_CHECKLIST 1.18 |
+| Idle RAM, text mode | _see Milestone 2_ | HW_CHECKLIST 1.18 |
+
+## Milestone 2
+
+### Raspberry Pi 5 (8 GB), first hardware run (2026-10-17, image from CI run 15)
+
+| Metric | Value | Notes |
+|---|---|---|
+| Renderer | GPU (V3D) | HW_CHECKLIST 2.1 |
+| Idle RAM, text mode (MemTotal − MemAvailable, `free -m` "used") | **276 MB** | ❌ target < 100 MB; breakdown requested (below) |
+| With Firefox playing YouTube | 1,247 MB used, 220 MB shared | one tab |
+
+The text-mode figure is 2.8× the target and ~95 MB above QEMU's 181 MB, so most
+of the gap is Pi-specific (GLES context and GPU buffers in Station, the RPi
+kernel's own allocations on an 8 GB board). The next run collects
+`/proc/meminfo` and per-process RSS so the cuts are chosen by data:
+GLES-only-while-needed (D-023's fallback plan), fewer/smaller swapchain
+buffers, kernel trimming.
 
 ### Sizes
 

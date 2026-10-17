@@ -18,6 +18,8 @@
     },
     "Preferences": {
       "browser.aboutwelcome.enabled": { "Value": false, "Status": "default" },
+      "browser.disableResetPrompt": { "Value": true, "Status": "default" },
+      "browser.startup.homepage_override.mstone": { "Value": "ignore", "Status": "default" },
       "browser.tabs.inTitlebar": { "Value": 0, "Status": "default" },
       "media.hardware-video-decoding.enabled": { "Value": true, "Status": "default" }
     }

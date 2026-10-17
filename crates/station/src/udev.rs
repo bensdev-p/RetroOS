@@ -6,7 +6,7 @@
 //! GPU or only a software one (QEMU without virgl). D-023.
 
 use crate::render::{self, CursorCache, Scene};
-use crate::state::{integer_scale, Station};
+use crate::state::{client_scale, integer_scale, Station};
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::allocator::dumb::DumbAllocator;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
@@ -208,7 +208,7 @@ fn open_device(
         },
     );
     let (w, h) = mode.size();
-    let scale = integer_scale(w as i32, h as i32);
+    let scale = client_scale(w as i32, h as i32);
     let wl_mode = Mode::from(mode);
     output.change_current_state(
         Some(wl_mode),
@@ -324,6 +324,9 @@ pub fn init(st: &mut Station) -> Result<(), String> {
         st.dmabuf_global = Some(global);
     }
     st.scale = scale;
+    if let Some(m) = output.current_mode() {
+        st.art_scale = integer_scale(m.size.w, m.size.h);
+    }
     st.space.map_output(&output, (0, 0));
     st.output = Some(output);
 
@@ -418,6 +421,7 @@ pub fn render(st: &mut Station) {
         cursor_status: &st.cursor_status,
         pointer: st.pointer_location,
         scale: st.scale,
+        art_scale: st.art_scale,
         show_pointer: ud.pointer_seen && st.pointer_moved,
         overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
     };

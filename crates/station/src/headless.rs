@@ -3,7 +3,7 @@
 //! a display.
 
 use crate::render::{self, CursorCache, Scene};
-use crate::state::{integer_scale, Station};
+use crate::state::{client_scale, integer_scale, Station};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::pixman::PixmanRenderer;
 use smithay::backend::renderer::Bind;
@@ -34,7 +34,8 @@ pub fn init(st: &mut Station, w: i32, h: i32) {
         size: (w, h).into(),
         refresh: 60_000,
     };
-    st.scale = integer_scale(w, h);
+    st.scale = client_scale(w, h);
+    st.art_scale = integer_scale(w, h);
     output.change_current_state(
         Some(mode),
         Some(Transform::Normal),
@@ -79,6 +80,7 @@ pub fn render(st: &mut Station) {
         cursor_status: &st.cursor_status,
         pointer: st.pointer_location,
         scale: st.scale,
+        art_scale: st.art_scale,
         show_pointer: false,
         overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
     };

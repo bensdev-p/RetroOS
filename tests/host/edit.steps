@@ -21,3 +21,9 @@ key enter
 wait 500
 shot 22-type-saved
 expect-file HELLO.TXT Hello from EDIT.
+# KEYB asks Station to reload the keyboard layout; typing still works after.
+request KEYMAP
+type ECHO keys ok
+key enter
+wait 300
+shot 23-after-keymap

@@ -118,7 +118,7 @@ const KEYB_CODES: &[(&str, &str)] = &[
 pub const KEYB: Builtin = Builtin {
     names: &["KEYB"],
     summary: "Shows or changes the keyboard layout.",
-    usage: "KEYB [code]\n\n  code   A DOS keyboard code (US, UK, GR, FR, SP, IT, SG, SF, NL, BE, DK,\n         NO, SV, SU, PO, BR, LA, CF, JP, PL, CZ, HU, RU, TR) or a layout\n         name such as de or gb.\n\nChanging the layout needs an administrator password. It takes effect the\nnext time you log on.",
+    usage: "KEYB [code]\n\n  code   A DOS keyboard code (US, UK, GR, FR, SP, IT, SG, SF, NL, BE, DK,\n         NO, SV, SU, PO, BR, LA, CF, JP, PL, CZ, HU, RU, TR) or a layout\n         name such as de or gb.\n\nChanging the layout needs an administrator password. It takes effect at once.",
     run: |sh, a, io| {
         let Some(code) = a.words.first() else {
             let cur = keyboard_layout();
@@ -143,14 +143,19 @@ pub const KEYB: Builtin = Builtin {
             Some((l, v)) => (l.to_string(), v.trim_end_matches(')').to_string()),
             None => (xkb.clone(), String::new()),
         };
-        let mut args = vec!["localectl".to_string(), "set-x11-keymap".into(), layout];
+        let mut args = vec!["/usr/libexec/retroos/set-keyboard".to_string(), layout];
         if !variant.is_empty() {
-            args.extend(["".into(), variant]);
+            args.push(variant);
         }
         let _ = io.out.flush();
         let code = run_admin(sh, &args);
         if code == 0 {
-            let _ = writeln!(io.out, "Keyboard layout set to {}. It takes effect the next time you log on.", xkb.to_uppercase());
+            // Station switches layout at once; elsewhere (SSH) it applies next time.
+            let live = crate::launch::Broker::connect()
+                .map(|mut b| b.request(&["KEYMAP"]).is_ok())
+                .unwrap_or(false);
+            let when = if live { "" } else { " It takes effect the next time you log on." };
+            let _ = writeln!(io.out, "Keyboard layout set to {}.{when}", xkb.to_uppercase());
         } else {
             let _ = writeln!(io.out, "The keyboard layout was not changed.");
         }

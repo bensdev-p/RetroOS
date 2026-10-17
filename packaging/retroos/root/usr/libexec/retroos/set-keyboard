@@ -1,0 +1,36 @@
+#!/bin/sh
+# Set the keyboard layout for the console and Station (run as root).
+#
+#   set-keyboard LAYOUT [VARIANT]        e.g. gb, de, ch fr
+#
+# Writes /etc/default/keyboard (keeping the model and options), which Station
+# and the Linux console read. Used by KEYB; checks the layout exists in XKB.
+set -eu
+layout=${1:-}
+variant=${2:-}
+case $layout in ""|*[!a-z0-9_]*) echo "Invalid keyboard layout" >&2; exit 2 ;; esac
+case $variant in *[!a-z0-9_-]*) echo "Invalid keyboard variant" >&2; exit 2 ;; esac
+lst=/usr/share/X11/xkb/rules/evdev.lst
+if [ -f "$lst" ]; then
+    awk '/^! layout/ {f=1; next} /^!/ {f=0} f {print $1}' "$lst" | grep -qx "$layout" ||
+        { echo "Unknown keyboard layout: $layout" >&2; exit 3; }
+    if [ -n "$variant" ]; then
+        awk '/^! variant/ {f=1; next} /^!/ {f=0} f {print $1, $2}' "$lst" |
+            grep -qx "$variant $layout:" || { echo "Unknown variant $variant for $layout" >&2; exit 3; }
+    fi
+fi
+f=/etc/default/keyboard
+get() { [ -f $f ] && sed -n "s/^$1=\"\{0,1\}\([^\"]*\)\"\{0,1\}$/\1/p" $f | head -1; }
+model=$(get XKBMODEL); options=$(get XKBOPTIONS); backspace=$(get BACKSPACE)
+cat > $f.new <<EOT
+# Keyboard settings (written by RetroOS KEYB). See keyboard(5).
+XKBMODEL="${model:-pc105}"
+XKBLAYOUT="$layout"
+XKBVARIANT="$variant"
+XKBOPTIONS="$options"
+BACKSPACE="${backspace:-guess}"
+EOT
+mv $f.new $f
+# The Linux console (safe mode) follows on the next boot; apply now if possible.
+command -v setupcon >/dev/null 2>&1 && setupcon -k --force >/dev/null 2>&1 || true
+exit 0

@@ -283,6 +283,8 @@ Because nothing is restarted, switching takes one frame.
   GLES context unallocated and composite with Pixman, bringing GL up on the
   first dmabuf/GL client. If this proves fragile in Smithay we keep GLES always
   on and absorb ~20 MB (tracked in §16; D-007).
+- *(Revised by D-027 after the first hardware test: programs now get scale 1 up
+  to 1440p and 2 at 4K; the rule below applies to RetroOS's own bitmap text.)*
 - **Integer scaling only.** Station picks the largest integer scale such that the
   logical desktop is ≥ 960×540 (1080p → 2×, 1440p → 2×, 4K → 4×, 1024×768 → 1×).
   Clients get `wl_output.scale`/`wp_fractional_scale` = integer, so modern apps

@@ -254,7 +254,9 @@ impl Shell {
                 println!("Running {label}...  Ctrl+Alt+Tab switches back, Ctrl+C ends it.");
                 let _ = std::io::stdout().flush();
                 term::clear_interrupt();
+                let quiet = term::Quiet::enable();
                 let code = b.wait_exit(lid);
+                drop(quiet);
                 term::clear_interrupt();
                 code
             }

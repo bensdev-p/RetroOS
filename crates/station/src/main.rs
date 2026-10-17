@@ -63,6 +63,7 @@ pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
                 cursor_status: &st.cursor_status,
                 pointer: st.pointer_location,
                 scale: st.scale,
+                art_scale: st.art_scale,
                 show_pointer: false,
                 overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
             };

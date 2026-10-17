@@ -58,8 +58,10 @@ pub struct Station {
     pub tasks: Tasks,
     pub personality: Personality,
     pub output: Option<Output>,
-    /// Integer output scale (docs/DESIGN.md §6.3).
+    /// Integer output scale programs see (client_scale).
     pub scale: i32,
+    /// Pixel scale of Station's bitmap art (integer_scale).
+    pub art_scale: i32,
 
     pub pointer_location: Point<f64, Logical>,
     /// The mouse has moved at least once (the pointer stays hidden until then).
@@ -88,9 +90,30 @@ impl ClientData for ClientState {
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {}
 }
 
-/// Integer scale so the logical desktop is at least 960×540 (1080p → 2×, 4K → 4×).
+/// Pixel scale for Station's own bitmap art (the mouse arrow): the largest
+/// that keeps a 960×540 grid (1080p → 2×, 4K → 4×).
 pub fn integer_scale(w: i32, h: i32) -> i32 {
     (w / 960).min(h / 540).clamp(1, 8)
+}
+
+/// The output scale programs see (docs/DECISIONS.md D-027): 1 up to 1440p,
+/// 2 at 4K. `ui_scale=` in /etc/retroos/startup.conf overrides it. Bitmap
+/// text (the console, the Task List) picks its own pixel scale regardless.
+pub fn client_scale(w: i32, h: i32) -> i32 {
+    let conf = std::fs::read_to_string("/etc/retroos/startup.conf").unwrap_or_default();
+    let set = std::env::var("RETROOS_UI_SCALE").ok().or_else(|| {
+        conf.lines().find_map(|l| {
+            l.split('#')
+                .next()?
+                .trim()
+                .strip_prefix("ui_scale=")
+                .map(|v| v.trim().to_string())
+        })
+    });
+    if let Some(n) = set.and_then(|v| v.parse::<i32>().ok()) {
+        return n.clamp(1, 4);
+    }
+    (w / 1920).min(h / 1080).clamp(1, 4)
 }
 
 impl Station {
@@ -166,6 +189,7 @@ impl Station {
             personality,
             output: None,
             scale: 1,
+            art_scale: 1,
             pointer_location: (0.0, 0.0).into(),
             pointer_moved: false,
             cursor_status: CursorImageStatus::default_named(),
@@ -434,5 +458,9 @@ mod tests {
         assert_eq!(super::integer_scale(3840, 2160), 4);
         assert_eq!(super::integer_scale(1024, 768), 1);
         assert_eq!(super::integer_scale(2560, 1440), 2);
+        std::env::remove_var("RETROOS_UI_SCALE");
+        assert_eq!(super::client_scale(1920, 1080), 1);
+        assert_eq!(super::client_scale(2560, 1440), 1);
+        assert_eq!(super::client_scale(3840, 2160), 2);
     }
 }

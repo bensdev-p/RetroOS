@@ -6,6 +6,7 @@ Starts `station --headless 1920x1080 --exec retro-console --test-ipc` with a
 private XDG_RUNTIME_DIR and HOME, then runs a script of steps:
     type <text> | key <combo> | wait <ms> | shot <name> | expect-task <n> | tasks
     expect-file <name> <text>   (file under HOME contains text)
+    request <BROKER REQUEST>    (fields separated by spaces; must answer OK)
 """
 import os, socket, subprocess, sys, tempfile, time, glob
 
@@ -84,6 +85,10 @@ def main():
                 got = str(e)
             if want not in got:
                 print("FAIL file", name, repr(got)); ok = False
+        elif cmd == "request":  # raw broker request; must answer OK
+            r = req(arg.replace(" ", "\t"))
+            if not r[0].startswith("OK"):
+                print("FAIL request", arg, r); ok = False
         elif cmd == "tasks":
             print("\n".join(req("TASKS")))
     req("QUIT")

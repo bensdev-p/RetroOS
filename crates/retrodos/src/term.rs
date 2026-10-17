@@ -87,6 +87,38 @@ impl Drop for RawMode {
     }
 }
 
+/// While a graphical program runs, keys typed at the console are not echoed
+/// (no stray `^[[A`) and are thrown away afterwards. Ctrl+C still works.
+pub struct Quiet {
+    orig: Option<libc::termios>,
+}
+
+impl Quiet {
+    pub fn enable() -> Quiet {
+        unsafe {
+            let mut t: libc::termios = std::mem::zeroed();
+            if !is_tty(0) || libc::tcgetattr(0, &mut t) != 0 {
+                return Quiet { orig: None };
+            }
+            let orig = t;
+            t.c_lflag &= !(libc::ECHO | libc::ECHOCTL);
+            libc::tcsetattr(0, libc::TCSANOW, &t);
+            Quiet { orig: Some(orig) }
+        }
+    }
+}
+
+impl Drop for Quiet {
+    fn drop(&mut self) {
+        if let Some(o) = self.orig {
+            unsafe {
+                libc::tcflush(0, libc::TCIFLUSH);
+                libc::tcsetattr(0, libc::TCSANOW, &o);
+            }
+        }
+    }
+}
+
 /// Make sure the terminal is in sane cooked mode (after a child messed it up).
 pub fn sane() {
     unsafe {

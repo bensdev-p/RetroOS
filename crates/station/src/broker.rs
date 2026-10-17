@@ -11,6 +11,7 @@
 //!                                   (fields starting with '=' set environment variables)
 //!   KILL <launch-id>              → OK | ERR <msg>   (SIGTERM to the launched process)
 //!   END <task-id> [FORCE]         → OK | ERR <msg>   (ask the window to close; FORCE kills)
+//!   KEYMAP                        → OK | ERR <msg>   (reload /etc/default/keyboard)
 //!   SCREENSHOT <path>             → OK | ERR <msg>
 //! Test-only (station --test-ipc):
 //!   TYPE <text>   KEY <combo>…   QUIT
@@ -255,6 +256,19 @@ impl Station {
                         "OK".into()
                     }
                     None => "ERR	no such task".into(),
+                }
+            }
+            "KEYMAP" => {
+                // /etc/default/keyboard changed (KEYB): load it now.
+                let cfg = crate::input::xkb_config();
+                match self
+                    .seat
+                    .get_keyboard()
+                    .map(|kb| kb.set_xkb_config(self, cfg))
+                {
+                    Some(Ok(())) => "OK".into(),
+                    Some(Err(e)) => format!("ERR\t{e:?}"),
+                    None => "ERR\tno keyboard".into(),
                 }
             }
             "SCREENSHOT" if f.len() == 2 => {
