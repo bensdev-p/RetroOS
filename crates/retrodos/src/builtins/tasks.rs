@@ -1,4 +1,5 @@
-//! RUN, START, TASKS, KILL — programs and the Station task swapper.
+//! RUN, START, TASKS, KILL, DESKTOP — programs, the Station task swapper,
+//! and the switch to the RetroOS Desktop.
 
 use super::Builtin;
 use crate::batch::take_word;
@@ -49,9 +50,24 @@ pub const START: Builtin = Builtin {
 pub const TASKS: Builtin = Builtin {
     names: &["TASKS"],
     summary: "Lists running programs, or switches to one.",
-    usage: "TASKS [number]\n\n  number   Switch to that task.\n\nCtrl+Alt+Tab also switches between tasks.",
+    usage: "TASKS [number | /W]\n\n  number   Switch to that task.\n  /W       List windows: position, size and state, top window first.\n\nCtrl+Alt+Tab also switches between tasks.",
     run: |_, a, io| {
         let Some(mut b) = Broker::connect() else { return err(io, NO_DISPLAY) };
+        if a.has("W") {
+            let wins = match b.windows() {
+                Ok(w) => w,
+                Err(e) => return err(io, &e),
+            };
+            let _ = writeln!(io.out, "\n Task  Position     Size         State       Title");
+            let _ = writeln!(io.out, " ----  -----------  -----------  ----------  {}", "-".repeat(20));
+            for w in &wins {
+                let pos = format!("{},{}", w[1], w[2]);
+                let size = format!("{}x{}", w[3], w[4]);
+                let _ = writeln!(io.out, " {:>4}  {:<11}  {:<11}  {:<10}  {}", w[0], pos, size, w[5], clip(&w[6..].join(" "), 20));
+            }
+            let _ = writeln!(io.out, "\n {} window(s)", wins.len());
+            return 0;
+        }
         if let Some(n) = a.words.first() {
             let Ok(id) = n.parse::<u64>() else { return err(io, "Invalid task number") };
             return match b.request(&["SWITCH", &id.to_string()]) {
@@ -110,6 +126,29 @@ pub const KILL: Builtin = Builtin {
             req.push("FORCE");
         }
         match b.request(&req) {
+            Ok(_) => 0,
+            Err(e) => err(io, &e),
+        }
+    },
+};
+
+pub const DESKTOP: Builtin = Builtin {
+    names: &["DESKTOP", "WIN"],
+    summary: "Starts the RetroOS Desktop.",
+    usage: "DESKTOP\n\nSwitches the screen to the RetroOS Desktop. Nothing is closed: running\nprograms become windows and RetroDOS becomes a DOS Prompt window.\nCtrl+Alt+F1 (Exit to DOS) comes back here.",
+    run: |_, _, io| {
+        let Some(mut b) = Broker::connect() else {
+            return err(io, "The Desktop needs the RetroOS display, which is not available here.");
+        };
+        match b.request(&["PERSONALITY"]) {
+            Ok(r) if r.first().is_some_and(|p| p == "desktop") => {
+                let _ = writeln!(io.out, "The RetroOS Desktop is already running.");
+                return 0;
+            }
+            Ok(_) => {}
+            Err(e) => return err(io, &e),
+        }
+        match b.request(&["PERSONALITY", "desktop"]) {
             Ok(_) => 0,
             Err(e) => err(io, &e),
         }

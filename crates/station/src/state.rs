@@ -30,7 +30,7 @@ use std::time::Instant;
 pub enum Personality {
     /// RetroDOS: everything full-screen, Ctrl+Alt+Tab task swapper.
     Text,
-    /// RetroOS Desktop (Milestone 3).
+    /// RetroOS Desktop: overlapping windows with frames (desktop.rs).
     Desktop,
 }
 
@@ -79,6 +79,8 @@ pub struct Station {
     pub broker: crate::broker::Broker,
     /// Ctrl+Alt+Esc Task List, when open.
     pub task_list: Option<crate::tasklist::TaskList>,
+    /// Window manager state of the Desktop personality.
+    pub desktop: crate::desktop::Desktop,
 }
 
 #[derive(Default)]
@@ -204,6 +206,7 @@ impl Station {
             backend,
             broker,
             task_list: None,
+            desktop: Default::default(),
         }
     }
 
@@ -216,6 +219,14 @@ impl Station {
                     .map(|m| m.size.to_logical(o.current_scale().integer_scale()))
             })
             .unwrap_or_else(|| (960, 540).into())
+    }
+
+    /// Bring Station-drawn parts up to date before a frame is rendered.
+    pub fn prepare_frame(&mut self) {
+        self.task_list_buffer();
+        if self.personality == Personality::Desktop {
+            self.desktop_prepare();
+        }
     }
 
     pub fn now_ms(&self) -> u32 {
@@ -254,6 +265,7 @@ impl Station {
             launch,
             name,
             dialog: parent.is_some(),
+            place: Default::default(),
         });
         self.space.map_element(window, (0, 0), false);
         self.configure_task(id);
@@ -278,6 +290,9 @@ impl Station {
 
     /// Send the configure that the current personality wants.
     pub fn configure_task(&mut self, id: u64) {
+        if self.personality == Personality::Desktop {
+            return self.desktop_configure(id);
+        }
         let size = self.output_size();
         let Some(t) = self.tasks.get(id) else { return };
         let Some(top) = t.window.toplevel() else {
@@ -293,6 +308,9 @@ impl Station {
                 s.size = Some(size);
                 s.states.set(xdg_toplevel::State::Fullscreen);
             }
+            // Desktop states do not apply here.
+            s.states.unset(xdg_toplevel::State::Maximized);
+            s.states.unset(xdg_toplevel::State::Suspended);
             if focused {
                 s.states.set(xdg_toplevel::State::Activated);
             } else {
@@ -305,6 +323,14 @@ impl Station {
     }
 
     pub fn focus_task(&mut self, id: u64) {
+        let desktop = self.personality == Personality::Desktop;
+        if desktop && self.tasks.get(id).is_some_and(|t| t.place.minimized) {
+            // Switching to an icon restores it.
+            if let Some(t) = self.tasks.get_mut(id) {
+                t.place.minimized = false;
+                t.place.slot = None;
+            }
+        }
         let prev = self.tasks.focused();
         self.tasks.set_focus(id);
         if let Some(p) = prev.filter(|p| *p != id) {
@@ -315,7 +341,7 @@ impl Station {
             let w = t.window.clone();
             self.space.raise_element(&w, true);
             // Dialogs sit centred over their parent.
-            if t.dialog {
+            if t.dialog && !desktop {
                 let geo = w.geometry().size;
                 let out = self.output_size();
                 let loc = ((out.w - geo.w).max(0) / 2, (out.h - geo.h).max(0) / 2);
@@ -337,10 +363,23 @@ impl Station {
         let was_focused = self.tasks.focused() == Some(id);
         let t = self.tasks.remove(id);
         self.task_list_forget(id);
+        self.desktop_forget(id);
         if let Some(t) = t {
             self.space.unmap_elem(&t.window);
             tracing::info!(id, "task closed");
-            if was_focused || self.tasks.focused().is_none() {
+            if self.personality == Personality::Desktop {
+                // The next window down comes up (an icon stays an icon).
+                if was_focused {
+                    let next = self
+                        .tasks
+                        .mru()
+                        .into_iter()
+                        .find(|i| self.tasks.get(*i).is_some_and(|t| !t.place.minimized));
+                    if let Some(n) = next {
+                        self.focus_task(n);
+                    }
+                }
+            } else if was_focused || self.tasks.focused().is_none() {
                 // Back to whoever launched it, else the most recent task.
                 let back = t
                     .launch
@@ -380,7 +419,8 @@ impl Station {
             .unwrap_or_default()
     }
 
-    /// Surface under the pointer (focused task only, popups first).
+    /// Surface under the pointer (focused task only, popups first; in the
+    /// Desktop the topmost window there, unless a frame is in the way).
     pub fn surface_under(
         &self,
         pos: Point<f64, Logical>,
@@ -388,9 +428,25 @@ impl Station {
         if self.task_list.is_some() {
             return None;
         }
+        if self.personality == Personality::Desktop {
+            if self.desktop.captures_pointer() {
+                return None;
+            }
+            let crate::desktop::Hit::Window(id, crate::chrome::Part::Client) = self.hit_test(pos)
+            else {
+                return None;
+            };
+            let t = self.tasks.get(id)?;
+            // Surface coordinates start at the surface, not at its window geometry.
+            let loc = self.shown_rect(t).loc - t.window.geometry().loc;
+            return t
+                .window
+                .surface_under(pos - loc.to_f64(), WindowSurfaceType::ALL)
+                .map(|(s, p)| (s, (p + loc).to_f64()));
+        }
         let id = self.tasks.focused()?;
         let t = self.tasks.get(id)?;
-        let loc = self.space.element_location(&t.window)?;
+        let loc = self.space.element_location(&t.window)? - t.window.geometry().loc;
         t.window
             .surface_under(pos - loc.to_f64(), WindowSurfaceType::ALL)
             .map(|(s, p)| (s, (p + loc).to_f64()))

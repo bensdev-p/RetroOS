@@ -13,10 +13,16 @@
 //!   END <task-id> [FORCE]         → OK | ERR <msg>   (ask the window to close; FORCE kills)
 //!   KEYMAP                        → OK | ERR <msg>   (reload /etc/default/keyboard)
 //!   SCREENSHOT <path>             → OK | ERR <msg>
+//!   PERSONALITY [text|desktop]    → OK <current>     (switch live; DESKTOP / Exit to DOS)
+//!   WINDOWS                       → OK <n>, then n lines, top first:
+//!                                   WINDOW <id> <x> <y> <w> <h> <state> <title>
+//!                                   (state: normal maximized minimized fullscreen hidden)
 //! Test-only (station --test-ipc):
 //!   TYPE <text>   KEY <combo>…   QUIT
+//!   POINTER <x> <y>               move the mouse (logical pixels)
+//!   BUTTON <down|up|click> [right|middle]
 
-use crate::state::Station;
+use crate::state::{Personality, Station};
 use smithay::reexports::calloop::{generic::Generic, Interest, LoopHandle, Mode, PostAction};
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -282,6 +288,91 @@ impl Station {
                     Ok(()) => "OK".into(),
                     Err(e) => format!("ERR\t{e}"),
                 }
+            }
+            "PERSONALITY" => {
+                match f.get(1).map(|s| s.to_ascii_lowercase()).as_deref() {
+                    None => {}
+                    Some("desktop") => self.set_personality(Personality::Desktop),
+                    Some("text") => self.set_personality(Personality::Text),
+                    Some(_) => {
+                        self.broker.send(conn, "ERR\tunknown personality");
+                        return;
+                    }
+                }
+                let p = match self.personality {
+                    Personality::Text => "text",
+                    Personality::Desktop => "desktop",
+                };
+                format!("OK\t{p}")
+            }
+            "WINDOWS" => {
+                let ids = self.tasks.z_order();
+                let mut lines = vec![format!("OK\t{}", ids.len())];
+                for id in ids {
+                    let Some(t) = self.tasks.get(id) else {
+                        continue;
+                    };
+                    let r = self.shown_rect(t);
+                    let p = &t.place;
+                    let state = if self.personality == Personality::Text {
+                        if self.tasks.focused() == Some(id) {
+                            "fullscreen"
+                        } else {
+                            "hidden"
+                        }
+                    } else if p.minimized {
+                        "minimized"
+                    } else if p.fullscreen {
+                        "fullscreen"
+                    } else if p.maximized {
+                        "maximized"
+                    } else if p.placed {
+                        "normal"
+                    } else {
+                        "hidden"
+                    };
+                    lines.push(format!(
+                        "WINDOW\t{id}\t{}\t{}\t{}\t{}\t{state}\t{}",
+                        r.loc.x,
+                        r.loc.y,
+                        r.size.w,
+                        r.size.h,
+                        self.window_title(t).replace(['\t', '\n'], " ")
+                    ));
+                }
+                lines.join("\n")
+            }
+            "POINTER" if self.broker.test_ipc && f.len() == 3 => {
+                match (f[1].parse::<f64>(), f[2].parse::<f64>()) {
+                    (Ok(x), Ok(y)) => {
+                        let t = self.now_ms();
+                        self.pointer_motion((x, y).into(), t);
+                        "OK".into()
+                    }
+                    _ => "ERR\tbad position".into(),
+                }
+            }
+            "BUTTON" if self.broker.test_ipc && f.len() >= 2 => {
+                use smithay::backend::input::ButtonState;
+                let code = match f.get(2).copied() {
+                    Some("right") => 0x111,
+                    Some("middle") => 0x112,
+                    _ => 0x110,
+                };
+                let states: &[ButtonState] = match f[1] {
+                    "down" => &[ButtonState::Pressed],
+                    "up" => &[ButtonState::Released],
+                    "click" => &[ButtonState::Pressed, ButtonState::Released],
+                    _ => {
+                        self.broker.send(conn, "ERR\tbad button action");
+                        return;
+                    }
+                };
+                for s in states {
+                    let t = self.now_ms();
+                    self.pointer_button(code, *s, t);
+                }
+                "OK".into()
             }
             "TYPE" if self.broker.test_ipc && f.len() >= 2 => {
                 self.inject_text(&f[1..].join("\t"));

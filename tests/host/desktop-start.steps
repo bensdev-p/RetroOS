@@ -1,0 +1,57 @@
+# Station started with --personality desktop (Startup Menu / login choice).
+# Keyboard-only window management and closing programs.
+wait 1500
+expect PERSONALITY => desktop
+expect WINDOWS => WINDOW 1 8 46 1280 800 normal DOS Prompt
+shot 60-desktop-start
+# DEMO waits like any program; it opens as a window on top.
+type DEMO
+key enter
+wait 2000
+expect-task 2
+# Window menu → Move: arrows move the outline, Enter puts the window there.
+key alt+space
+key m
+key right
+key right
+key down
+key enter
+wait 300
+expect WINDOWS => WINDOW 2 84 106 640 400 normal
+# Window menu → Size: the first arrow picks the edge.
+key alt+space
+key s
+key right
+key right
+key enter
+wait 600
+expect WINDOWS => WINDOW 2 84 106 672 400 normal
+# Minimise with the keyboard; the DOS Prompt comes forward.
+key alt+space
+key n
+wait 300
+expect WINDOWS => minimized
+shot 61-keyboard-minimise
+# Alt+Tab with the icon: holding Alt shows the box; switching restores it.
+key alt+tab
+wait 300
+expect WINDOWS => WINDOW 2 84 106 672 400 normal
+# Alt+Esc sends it to the back.
+key alt+esc
+wait 200
+expect WINDOWS => OK 2
+# The Task List works over the desktop.
+key ctrl+alt+esc
+wait 300
+shot 62-task-list
+key esc
+# Alt+F4 closes the demo program; RetroDOS gets its prompt back.
+key alt+tab
+wait 200
+key alt+f4
+wait 1500
+expect-task 1
+type ECHO done
+key enter
+wait 300
+shot 63-closed

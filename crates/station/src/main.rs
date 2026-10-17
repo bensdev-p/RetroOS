@@ -1,6 +1,6 @@
 //! Station — the RetroOS compositor.
 //!
-//!   station [--headless WxH] [--personality text] [--exec CMD] [--spawn CMD]…
+//!   station [--headless WxH] [--personality text|desktop] [--exec CMD] [--spawn CMD]…
 //!           [--test-ipc] [--screenshot-after MS PATH]
 //!
 //! `--exec` starts the primary client (normally retro-console); when it exits
@@ -8,6 +8,8 @@
 //! inside a logind session (libseat) and drives the display directly.
 
 mod broker;
+mod chrome;
+mod desktop;
 mod handlers;
 mod headless;
 mod inject;
@@ -36,7 +38,17 @@ pub enum Backend {
 pub fn send_frames(st: &mut Station) {
     if let Some(output) = st.output.clone() {
         let now = st.start.elapsed();
+        // Minimised windows draw nothing until they come back.
+        let hidden: Vec<smithay::desktop::Window> = st
+            .tasks
+            .iter()
+            .filter(|t| st.personality == Personality::Desktop && t.place.minimized)
+            .map(|t| t.window.clone())
+            .collect();
         for w in st.space.elements() {
+            if hidden.contains(w) {
+                continue;
+            }
             w.send_frame(&output, now, Some(Duration::ZERO), |_, _| {
                 Some(output.clone())
             });
@@ -53,7 +65,7 @@ pub fn change_vt(st: &mut Station, vt: i32) {
 
 pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
     let output = st.output.clone().ok_or("no output")?;
-    st.task_list_buffer();
+    st.prepare_frame();
     let canvas = match &mut st.backend {
         Backend::Headless(_) => headless::screenshot(st),
         Backend::Udev(ud) => {
@@ -66,6 +78,8 @@ pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
                 art_scale: st.art_scale,
                 show_pointer: false,
                 overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
+                personality: st.personality,
+                desktop: &st.desktop,
             };
             match ud.gpu.as_mut().ok_or("no renderer")? {
                 udev::Gpu::Pixman { renderer, .. } => {
@@ -119,10 +133,11 @@ fn main() {
                 i += 1;
             }
             "--personality" => {
-                if next(i) == "desktop" {
-                    tracing::warn!("Desktop personality arrives in Milestone 3; using text");
-                }
-                personality = Personality::Text;
+                personality = if next(i) == "desktop" {
+                    Personality::Desktop
+                } else {
+                    Personality::Text
+                };
                 i += 1;
             }
             "--test-ipc" => test_ipc = true,

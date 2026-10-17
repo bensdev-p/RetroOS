@@ -30,6 +30,7 @@ use smithay_client_toolkit::reexports::client::protocol::{
 };
 use smithay_client_toolkit::reexports::client::Proxy;
 use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
+use smithay_client_toolkit::reexports::csd_frame::WindowState;
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::{
     wp_viewport::WpViewport, wp_viewporter::WpViewporter,
 };
@@ -397,6 +398,12 @@ impl WindowHandler for App {
             });
         let first = !self.configured;
         self.configured = true;
+        // A Desktop window keeps its text size when resized; full screen
+        // picks the largest that fits.
+        let windowed = !cfg.state.contains(WindowState::FULLSCREEN);
+        if let Some(s) = self.screen.as_mut() {
+            s.keep_scale = windowed;
+        }
         if first || (w, h) != self.logical {
             self.logical = (w, h);
             self.relayout();

@@ -4,8 +4,11 @@
 //!   Ctrl+Alt+Esc, Ctrl+Alt+Del          Task List (tasklist.rs)
 //!   Ctrl+Alt+F1..F12                    switch virtual terminal
 //!   Print Screen                        save a screenshot to C:\SCREENS
+//! and in the Desktop (desktop.rs): Alt+Tab, Alt+Esc, Alt+F4, Alt+Space,
+//! Alt+Enter, and Ctrl+Alt+F1 = Exit to DOS (the session's own VT is 1).
 
-use crate::state::Station;
+use crate::state::{Personality, Station};
+use crate::tasks::TaskKind;
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
     KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
@@ -22,6 +25,19 @@ pub enum Action {
     Screenshot,
     TaskList,
     TaskListKey(u32),
+    /// Alt+Tab (true) / Alt+Shift+Tab.
+    Switch(bool),
+    SwitchCancel,
+    AltEsc,
+    Close,
+    WindowMenu,
+    Fullscreen,
+    ExitToDos,
+    MenuKey(u32),
+    MessageKey(u32),
+    DragKey(u32),
+    /// Taken by Station, does nothing.
+    Swallow,
 }
 
 /// Keyboard settings from /etc/default/keyboard (Debian's console-setup file).
@@ -74,21 +90,7 @@ impl Station {
                 self.pointer_motion(loc, event.time_msec());
             }
             InputEvent::PointerButton { event } => {
-                let Some(ptr) = self.seat.get_pointer() else {
-                    return;
-                };
-                let serial = SERIAL_COUNTER.next_serial();
-                ptr.button(
-                    self,
-                    &ButtonEvent {
-                        button: event.button_code(),
-                        state: event.state(),
-                        serial,
-                        time: event.time_msec(),
-                    },
-                );
-                ptr.frame(self);
-                let _ = ButtonState::Pressed;
+                self.pointer_button(event.button_code(), event.state(), event.time_msec());
             }
             InputEvent::PointerAxis { event } => {
                 let Some(ptr) = self.seat.get_pointer() else {
@@ -144,6 +146,11 @@ impl Station {
                 if st.task_list.is_some() && !switch_vt {
                     return FilterResult::Intercept(Action::TaskListKey(sym));
                 }
+                if st.personality == Personality::Desktop {
+                    if let Some(a) = st.desktop_hotkey(sym, mods.ctrl, mods.alt, mods.shift) {
+                        return FilterResult::Intercept(a);
+                    }
+                }
                 if mods.ctrl && mods.alt {
                     if sym == keysyms::KEY_Tab || sym == keysyms::KEY_ISO_Left_Tab {
                         return FilterResult::Intercept(
@@ -170,6 +177,57 @@ impl Station {
         if let Some(a) = action {
             self.run_action(a);
         }
+        // Alt let go during Alt+Tab: switch.
+        if self.desktop.switcher.is_some()
+            && !self
+                .seat
+                .get_keyboard()
+                .is_some_and(|k| k.modifier_state().alt)
+        {
+            self.switch_finish();
+        }
+    }
+
+    /// Desktop keys Station takes for itself.
+    fn desktop_hotkey(&self, sym: u32, ctrl: bool, alt: bool, shift: bool) -> Option<Action> {
+        let d = &self.desktop;
+        if d.message.is_some() {
+            return Some(Action::MessageKey(sym));
+        }
+        if d.menu.is_some() {
+            return Some(Action::MenuKey(sym));
+        }
+        if d.captures_keys() && d.switcher.is_none() {
+            return Some(Action::DragKey(sym));
+        }
+        let tab = sym == keysyms::KEY_Tab || sym == keysyms::KEY_ISO_Left_Tab;
+        let back = shift || sym == keysyms::KEY_ISO_Left_Tab;
+        if d.switcher.is_some() {
+            return Some(match sym {
+                _ if tab => Action::Switch(!back),
+                keysyms::KEY_Escape => Action::SwitchCancel,
+                _ => Action::Swallow,
+            });
+        }
+        if alt && !ctrl {
+            let console = self
+                .tasks
+                .focused()
+                .and_then(|f| self.tasks.get(f))
+                .is_some_and(|t| t.kind == TaskKind::Console);
+            return match sym {
+                _ if tab => Some(Action::Switch(!back)),
+                keysyms::KEY_Escape => Some(Action::AltEsc),
+                keysyms::KEY_F4 => Some(Action::Close),
+                keysyms::KEY_space => Some(Action::WindowMenu),
+                keysyms::KEY_Return if console => Some(Action::Fullscreen),
+                _ => None,
+            };
+        }
+        if ctrl && alt && sym == keysyms::KEY_XF86Switch_VT_1 {
+            return Some(Action::ExitToDos);
+        }
+        None
     }
 
     fn clamp(&self, p: Point<f64, Logical>) -> Point<f64, Logical> {
@@ -184,6 +242,9 @@ impl Station {
     pub fn pointer_motion(&mut self, loc: Point<f64, Logical>, time: u32) {
         self.pointer_location = loc;
         self.pointer_moved = true;
+        if self.personality == Personality::Desktop {
+            self.desktop_motion(loc);
+        }
         let under = self.surface_under(loc);
         if let Some(ptr) = self.seat.get_pointer() {
             ptr.motion(
@@ -200,6 +261,34 @@ impl Station {
         self.dirty = true;
     }
 
+    /// A mouse button: the Desktop's frames and menus first, then the program.
+    pub fn pointer_button(&mut self, button: u32, state: ButtonState, time: u32) {
+        let Some(ptr) = self.seat.get_pointer() else {
+            return;
+        };
+        let desktop = self.personality == Personality::Desktop && self.task_list.is_none();
+        if desktop
+            && !ptr.is_grabbed()
+            && self.desktop_button(button, state == ButtonState::Pressed, time)
+        {
+            // Programs under the pointer lose it while Station has it.
+            let loc = self.pointer_location;
+            self.pointer_motion(loc, time);
+            return;
+        }
+        let serial = SERIAL_COUNTER.next_serial();
+        ptr.button(
+            self,
+            &ButtonEvent {
+                button,
+                state,
+                serial,
+                time,
+            },
+        );
+        ptr.frame(self);
+    }
+
     pub fn run_action(&mut self, a: Action) {
         tracing::debug!(?a, "hotkey");
         match a {
@@ -212,6 +301,30 @@ impl Station {
                 }
             }
             Action::TaskListKey(sym) => self.task_list_key(sym),
+            Action::Switch(fwd) => self.switch_step(fwd),
+            Action::SwitchCancel => self.switch_cancel(),
+            Action::AltEsc => self.alt_esc(),
+            Action::Close => {
+                if let Some(f) = self.tasks.focused() {
+                    self.close_task(f);
+                }
+            }
+            Action::WindowMenu => {
+                if let Some(f) = self.tasks.focused() {
+                    self.open_window_menu(f, false);
+                }
+            }
+            Action::Fullscreen => {
+                if let Some(f) = self.tasks.focused() {
+                    let on = self.tasks.get(f).is_some_and(|t| !t.place.fullscreen);
+                    self.set_fullscreen(f, on);
+                }
+            }
+            Action::ExitToDos => self.set_personality(Personality::Text),
+            Action::MenuKey(sym) => self.menu_key(sym),
+            Action::MessageKey(sym) => self.message_key(sym),
+            Action::DragKey(sym) => self.drag_key(sym),
+            Action::Swallow => {}
             Action::Screenshot => {
                 let dir = std::env::var_os("HOME")
                     .map(std::path::PathBuf::from)

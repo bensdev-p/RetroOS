@@ -7,6 +7,10 @@ private XDG_RUNTIME_DIR and HOME, then runs a script of steps:
     type <text> | key <combo> | wait <ms> | shot <name> | expect-task <n> | tasks
     expect-file <name> <text>   (file under HOME contains text)
     request <BROKER REQUEST>    (fields separated by spaces; must answer OK)
+    expect <REQUEST> => <text>  (the reply, all lines, contains text)
+    pointer <x> <y> | button <down|up|click> [right]   (mouse, logical pixels)
+    windows                     (print the WINDOWS reply)
+Extra Station arguments come from $STATION_ARGS (e.g. --personality desktop).
 """
 import os, socket, subprocess, sys, tempfile, time, glob
 
@@ -31,7 +35,8 @@ def main():
     env.pop("WAYLAND_DISPLAY", None)
     log = open(os.path.join(outdir, "station.log"), "w")
     p = subprocess.Popen([os.path.join(bindir, "station"), "--headless", "1920x1080",
-                          "--exec", os.environ.get("STATION_EXEC", "retro-console"), "--test-ipc"], env=env, cwd=home,
+                          "--exec", os.environ.get("STATION_EXEC", "retro-console"), "--test-ipc"]
+                         + os.environ.get("STATION_ARGS", "").split(), env=env, cwd=home,
                          stdout=log, stderr=subprocess.STDOUT)
     sock_path = None
     for _ in range(100):
@@ -47,7 +52,7 @@ def main():
         f.write(line + "\n"); f.flush()
         first = f.readline().strip()
         out = [first]
-        if first.startswith("OK\t") and line == "TASKS":
+        if first.startswith("OK\t") and line in ("TASKS", "WINDOWS"):
             for _ in range(int(first.split("\t")[1])):
                 out.append(f.readline().strip())
         return out
@@ -91,6 +96,20 @@ def main():
                 print("FAIL request", arg, r); ok = False
         elif cmd == "tasks":
             print("\n".join(req("TASKS")))
+        elif cmd == "windows":
+            print("\n".join(req("WINDOWS")))
+        elif cmd == "expect":
+            request, _, want = arg.partition(" => ")
+            r = req(request.replace(" ", "\t"))
+            got = "\n".join(r).replace("\t", " ")
+            if want not in got:
+                print("FAIL expect", request, "=>", want, "got:", got); ok = False
+        elif cmd == "pointer":
+            req("POINTER\t" + arg.replace(" ", "\t")); time.sleep(0.03)
+        elif cmd == "button":
+            r = req("BUTTON\t" + arg.replace(" ", "\t")); time.sleep(0.05)
+            if r[0] != "OK":
+                print("FAIL button", arg, r); ok = False
     req("QUIT")
     try:
         p.wait(timeout=5)

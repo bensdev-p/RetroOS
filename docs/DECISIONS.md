@@ -129,3 +129,20 @@ Status: **Proposed** until the design is approved; then **Accepted**.
 ### D-029 · 2026-10-17 · GPU renderer only while graphical programs run — Accepted (revises D-023)
 - **Rationale**: the Pi measurement (D-028) showed Station at 103 MB RSS on GLES against 17 MB on Pixman; at the prompt the GPU buys nothing (one shm buffer, enlarged).
 - **Decision**: Station starts on Pixman. The launch broker switches it to GLES (creating the linux-dmabuf global) as it starts a graphical program (after the spawn, so Mesa's start-up overlaps the program's; the program cannot connect before Station returns to its event loop, so it sees dmabuf from its first request); ~60 s after the last graphical program and its processes are gone, Station drops GLES and the global. A failed GLES attempt (no GPU, software-only Mesa) is remembered and not retried. The switch re-creates the DRM surface, which may blank the screen for a frame. `renderer=gpu|cpu|auto` in `/etc/retroos/startup.conf` (or `RETROOS_RENDERER`) pins the choice.
+
+---
+
+## Decisions made during Milestone 3
+
+### D-030 · 2026-10-17 · Desktop window management: what differs from STYLE.md §4 and DESIGN.md §5.4 — Accepted
+- **Move/resize outline**: a Black line inside a White one instead of an XOR rectangle. XOR needs the pixels under the outline read back, which neither the Pixman nor the GLES path does cheaply; a two-tone line is visible on any background and costs eight solid rectangles.
+- **Title text** is Phosphor Mono 8×16 until the Lantern 12/9 UI fonts exist (M3 step 3); frames, menus and icon labels switch to Lantern then.
+- **Exit to DOS** is `Ctrl+Alt+F1` (DESIGN.md §5.4; the session's own VT is 1, so nothing is lost) and the broker request `PERSONALITY text`. The confirmation dialog with "Close all programs first" comes with the ◆ menu of the System Bar (M3 step 4), which will call the same request.
+- **The main DOS Prompt cannot be closed** from its frame or with Alt+F4: closing it would end the session. Station shows a message box ("type EXIT at its prompt") instead. Other DOS Prompt windows close normally.
+- **DOS Prompt windows keep their text size** when resized (more or fewer cells), instead of re-picking the largest scale that fits 80×25 as the full screen does.
+- **Interim icons**: minimised windows use two icons drawn in code (a program window, a DOS Prompt) until the icon set (M3 step 7).
+- **Consequences**: frames, the desktop pattern, icons and menus are Station's own drawing (desktop.rs, chrome.rs), cached per window and redrawn only when their state changes; the dithered desktop is one 64-pixel band drawn repeatedly (~1 MB at 1080p).
+
+### D-031 · 2026-10-17 · Station frames only windows that ask for server-side decorations — Accepted
+- **Rationale**: programs that bind `xdg-decoration` (retro-console, Qt, SDL, foot, mpv…) get our Windows 3.1 frame. GTK 3/4 programs, Firefox included, do not use that protocol and draw their own title bars (client-side decorations); framing them too would show two title bars. Their title-bar drags and border resizes arrive as `xdg_toplevel.move`/`resize` requests, which Station runs with the same outline, and maximise/minimise/full-screen requests work as for framed windows.
+- **Consequences**: Firefox and GTK programs look like themselves until the GTK theme (M4) styles their title bars. A later option: the KDE server-decoration protocol, which GTK 3 programs without a custom title bar honour (Firefox keeps its own while tabs are in the title bar).

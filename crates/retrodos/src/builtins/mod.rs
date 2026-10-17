@@ -114,6 +114,7 @@ static BUILTINS: &[Builtin] = &[
     tasks::START,
     tasks::TASKS,
     tasks::KILL,
+    tasks::DESKTOP,
     programs::EDIT,
     programs::FILER,
     programs::NET,

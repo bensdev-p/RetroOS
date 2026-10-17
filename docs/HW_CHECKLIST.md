@@ -60,6 +60,28 @@ Optional but very useful: a USB-serial adapter on the Pi 5 debug UART
 | 2.16 | Idle RAM, text mode | `UNIX free -m` 60 s after the prompt | record (GLES now costs memory; see BUDGET.md) |
 | 2.17 | RAM with Firefox | one tab of a news site, `UNIX free -m` | record |
 
+## M3 — the RetroOS Desktop
+
+| # | Check | How | Expect |
+|---|---|---|---|
+| 3.1 | Switch to the Desktop | at `C:\>` type `DESKTOP` | dithered blue desktop; RetroDOS in a "DOS Prompt" window with a Silver frame and a Cobalt title bar, in one frame (no flicker, no logout) |
+| 3.2 | Frames look right | photo of the top-left corner of the window | 4-px frame (8 screen pixels at 1080p) with notches, control-menu box at left, ▼ ▲ at right, crisp (no blur) |
+| 3.3 | Mouse pointer | move over the frame edges and corners | ↔ ↕ and diagonal sizing arrows over the border; normal arrow over the title bar and desktop |
+| 3.4 | Move | drag the title bar | a black-and-white outline follows; the window jumps there on release |
+| 3.5 | Resize | drag the bottom-right corner | outline; DOS Prompt gets more/fewer columns and rows, same text size |
+| 3.6 | Minimise / restore | click ▼, then double-click the icon at the bottom left | icon with the window's name; double-click brings it back |
+| 3.7 | Maximise | click ▲, then double-click the title bar | fills the screen (title bar at the top), then back |
+| 3.8 | Window menu, keys | Alt+Space, then Move, arrows, Enter; Alt+F4 on the DOS Prompt | menu under the control-menu box; Alt+F4 says it is the main session |
+| 3.9 | Firefox windowed | `START FIREFOX` in the DOS Prompt; time from Enter to the window | a normal window (own title bar), opens within ~5 s **(confirms the M2 start-up delay fix)**; `ADMIN UNIX journalctl -b -g rendering` shows "GPU rendering" |
+| 3.10 | Firefox windowed works | drag its tab bar, resize its edge, maximise/restore with its buttons, play a YouTube video, then full screen (F) and Esc | moves/resizes with the outline; video smooth; full screen covers everything and comes back |
+| 3.11 | Alt+Tab | hold Alt, tap Tab twice, let go | a box with the next window's name; releasing Alt switches (an icon is restored) |
+| 3.12 | Desktop idle RAM | close Firefox, wait 60 s, then in the DOS Prompt run the M2 memory command (below) | record; target RetroOS userspace (AnonPages + Shmem) < 160 MB |
+| 3.13 | Exit to DOS | Ctrl+Alt+F1 | full-screen RetroDOS at once; `TASKS` still lists the other programs; `DESKTOP` puts the windows back where they were |
+| 3.14 | Start in the Desktop | `RESTART`, tap F8, choose 2 (RetroOS Desktop) | boots straight into the Desktop with the DOS Prompt window |
+| 3.15 | Boot times (carried over) | stopwatch, second boot, text mode | record power-on → POST screen (1.1) and power-on → `C:\>` (1.8) |
+
+Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|Slab|SUnrecl|KernelSt|PageTab|Vmalloc|Percpu|Cma|AnonPages' /proc/meminfo; ps -eo rss,comm --sort=-rss | head -12"`
+
 ## Results
 
 | Date | Image | Board | Pass | Notes |
