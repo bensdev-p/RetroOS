@@ -30,3 +30,10 @@ pub const EDIT: Builtin = Builtin {
     usage: "EDIT [[drive:][path]filename]\n\nIn the editor: F10 or Alt opens the menus, F1 shows the keys.",
     run: |sh, a, io| run_tool(sh, a, io, "retro-edit"),
 };
+
+pub const FILER: Builtin = Builtin {
+    names: &["FILER"],
+    summary: "Starts the RetroOS file manager.",
+    usage: "FILER [left-directory [right-directory]]\n\nTwo panels side by side: Tab switches, F5 copies, F6 moves, F8 deletes,\nF9 changes drive, F10 quits. F1 lists all keys.",
+    run: |sh, a, io| run_tool(sh, a, io, "retro-filer"),
+};

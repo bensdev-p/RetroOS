@@ -1,0 +1,18 @@
+[package]
+name = "retro-filer"
+description = "FILER: the RetroOS dual-panel file manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "retro-filer"
+path = "src/main.rs"
+
+[dependencies]
+retro-tui = { path = "../retro-tui" }
+retro-dosfs.workspace = true
+libc = "0.2"
+
+[lints]
+workspace = true

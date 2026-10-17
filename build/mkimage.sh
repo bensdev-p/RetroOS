@@ -28,6 +28,20 @@ RPI=https://archive.raspberrypi.com/debian
 
 [ -f "$OUT/repo/Packages" ] || "$ROOT/build/mkdeb.sh" "$OUT"
 
+# On non-arm64 hosts the chroot steps run under qemu-user via binfmt_misc;
+# containers often start without it registered.
+BF=/proc/sys/fs/binfmt_misc
+if [ "$(uname -m)" != aarch64 ] && [ ! -e $BF/qemu-aarch64 ]; then
+    [ -e $BF/register ] || mount -t binfmt_misc binfmt_misc $BF 2>/dev/null || true
+    for conf in /usr/lib/binfmt.d/qemu-aarch64.conf /etc/binfmt.d/qemu-aarch64.conf; do
+        if [ -e $BF/register ] && [ -f $conf ]; then
+            grep -v '^#' $conf | head -1 > $BF/register 2>/dev/null || true
+            break
+        fi
+    done
+    [ -e $BF/qemu-aarch64 ] || echo "!! qemu-aarch64 binfmt is not registered; mmdebstrap will fail" >&2
+fi
+
 rm -rf "$WORK"
 mkdir -p "$WORK"
 

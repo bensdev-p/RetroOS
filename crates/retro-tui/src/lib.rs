@@ -252,6 +252,11 @@ impl Screen {
         so.flush()
     }
 
+    /// The terminal mode from before `open` (to run another program).
+    pub fn original_mode(&self) -> Option<libc::termios> {
+        self.orig
+    }
+
     /// Forget what is on the terminal (after another program drew on it).
     pub fn invalidate(&mut self) {
         self.shown.iter_mut().for_each(|c| *c = None);

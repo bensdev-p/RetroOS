@@ -1,0 +1,28 @@
+# FILER: copy a file to the other panel, make a directory, view a file.
+wait 1500
+type MD BACKUP
+key enter
+type FILER . BACKUP
+key enter
+wait 1200
+shot 30-filer
+key end
+key f5
+wait 300
+shot 31-filer-copy
+key enter
+wait 500
+key f7
+type NOTES
+key enter
+wait 500
+key tab
+wait 300
+shot 32-filer-after
+key f10
+wait 600
+type DIR BACKUP
+key enter
+wait 500
+shot 33-dir-backup
+expect-file BACKUP/README.TXT Welcome to RetroOS.

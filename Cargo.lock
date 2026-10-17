@@ -903,6 +903,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-filer"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "retro-dosfs",
+ "retro-tui",
+]
+
+[[package]]
 name = "retro-fontc"
 version = "0.1.0"
 dependencies = [
