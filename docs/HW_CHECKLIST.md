@@ -38,6 +38,28 @@ Optional but very useful: a USB-serial adapter on the Pi 5 debug UART
 | 1.22 | Thermal/idle CPU | `UNIX top` for 30 s at idle | no process using > 1% CPU at the prompt |
 | 1.23 | Pi 4 | repeat 1.1–1.8, 1.18 | boots `kernel8.img`; ≤ 10 s to prompt |
 
+## M2 — shell complete, networking, browser from the prompt
+
+| # | Check | How | Expect |
+|---|---|---|---|
+| 2.1 | GPU rendering | `ADMIN UNIX journalctl -b -g rendering` | `GPU rendering renderer=V3D 7.1` (not "CPU rendering") |
+| 2.2 | Wi-Fi join | `WIFI`, pick your network, type the passphrase | "Connected"; `NET /S` shows the SSID; `UNIX ping -c3 deb.debian.org` works |
+| 2.3 | Wi-Fi remembered | `RESTART /Y`, then `NET /S` | reconnects by itself |
+| 2.4 | Wired | plug in Ethernet, `NET /S` | "Connected" with an address |
+| 2.5 | Firefox | `FIREFOX` | full-screen within ~5 s; RetroDOS shows "Running FIREFOX..." |
+| 2.6 | WebGL | in Firefox open `about:support` | "Compositing: WebRender" (hardware), WebGL 2 driver renderer V3D |
+| 2.7 | YouTube 1080p | play a 1080p video for 2 minutes | smooth; note dropped frames (right-click → Stats for nerds) |
+| 2.8 | Task swapper | Ctrl+Alt+Tab while Firefox runs, `TASKS`, Ctrl+Alt+Tab back | both tasks listed; switching is instant |
+| 2.9 | End a program | `START FIREFOX`, then `KILL FIREFOX` | Firefox closes; prompt keeps working |
+| 2.10 | Return on exit | close Firefox (Ctrl+Q) | back at `C:\>`, `ECHO %ERRORLEVEL%` prints 0 |
+| 2.11 | EDIT | `EDIT TEST.TXT`, type, mouse-select, Alt+F → Save, Exit | file saved; mouse clicks place the cursor |
+| 2.12 | FILER | `FILER`, copy a file with F5, F9 to switch drives | copies; drive list shows C: and Z: (and D: with a stick) |
+| 2.13 | Batch | edit `AUTOEXEC.BAT` to `ECHO Hello`, `RESTART /Y` | "Hello" before the prompt |
+| 2.14 | MODE | `MODE CON COLS=80 LINES=25`, then `MODE CON RESET` | 80×25 letterboxed with a border; back to full screen |
+| 2.15 | KEYB | `KEYB UK`, log off and on, type `#` and `£` | UK layout; `KEYB US` to undo |
+| 2.16 | Idle RAM, text mode | `UNIX free -m` 60 s after the prompt | record (GLES now costs memory; see BUDGET.md) |
+| 2.17 | RAM with Firefox | one tab of a news site, `UNIX free -m` | record |
+
 ## Results
 
 | Date | Image | Board | Pass | Notes |

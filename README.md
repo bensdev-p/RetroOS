@@ -14,7 +14,7 @@ shell; the **RetroOS Desktop** (Milestone 3) is one command away.
 - [`docs/BUDGET.md`](docs/BUDGET.md) — measured boot time and memory
 - [`docs/HW_CHECKLIST.md`](docs/HW_CHECKLIST.md) — real-hardware test list
 
-## Status: Milestone 1
+## Status: Milestone 2 (in progress)
 
 | Works now | Arrives in |
 |---|---|
@@ -22,7 +22,11 @@ shell; the **RetroOS Desktop** (Milestone 3) is one command away.
 | First-boot Setup (account, computer name, time zone, keyboard, automatic login) and the login screen | M1 ✓ |
 | Station compositor (text personality: full-screen tasks, Ctrl+Alt+Tab task swapper, Print Screen) | M1 ✓ |
 | RetroDOS: DOSKEY line editing, drive letters, pipes, redirection, ~35 commands, `UNIX` POSIX shell | M1 ✓ |
-| `RUN FIREFOX` full-screen from the prompt, batch files, EDIT, FILER, Wi-Fi setup | M2 |
+| Batch files and `AUTOEXEC.BAT`; `IF` `FOR` `GOTO` `CALL` `SHIFT` `CHOICE`; `XCOPY` `ATTRIB` `CHKDSK` `MODE` `KEYB` `ADMIN` | M2 ✓ |
+| `FIREFOX` (or `RUN`/`START` any graphical program) full-screen from the prompt; `TASKS`, `KILL` | M2 ✓ (QEMU; Pi GPU check pending) |
+| EDIT (EDIT.COM-style editor), FILER (Norton Commander-style file manager), NET/WIFI network setup | M2 ✓ |
+| GPU rendering (GLES, linux-dmabuf) with CPU fallback | M2 ✓ (needs the Pi to verify) |
+| X11-only programs (Xwayland), USB stick auto-mount | M2 — next |
 | RetroOS Desktop: windows, Program Manager, File Cabinet | M3 |
 | Control Panel, Software Library, audio, Bluetooth, app theming | M4 |
 
@@ -36,8 +40,19 @@ C:\>TYPE README.TXT | MORE
 C:\>MEM /C                 memory by program
 C:\>COLOR AMBER            schemes: CLASSIC, AMBER, GREEN, PAPER, CONTRAST
 C:\>UNIX                   a bash shell; EXIT comes back
+C:\>FIREFOX                runs full-screen; RetroDOS waits until you close it
+C:\>START FIREFOX          ...or keeps going; TASKS lists, KILL ends, Ctrl+Alt+Tab switches
+C:\>EDIT AUTOEXEC.BAT      the editor (F10 or Alt for menus, F1 for keys)
+C:\>FILER                  two-panel file manager (F5 copy, F6 move, F8 delete)
+C:\>WIFI                   join a wireless network; NET /S shows the status
+C:\>MODE CON COLS=80 LINES=25   a classic 80x25 screen, centred with a border
 C:\>HELP                   every command; COMMAND /? for details
 ```
+
+`C:\AUTOEXEC.BAT` runs whenever RetroDOS starts (a default one is created for
+new users). Batch files support `%1`–`%9`, `SHIFT`, labels and `GOTO`,
+`IF [NOT] EXIST/ERRORLEVEL/==/DEFINED`, `FOR %%F IN (...) DO`, `CALL`,
+`CHOICE` and `EXIT /B`.
 
 Drives: `C:` is your home folder, `Z:` is `/`, removable media get `D:` upward.
 Keys: ↑/↓ history, F3 repeat the last command, Tab completes file names,
