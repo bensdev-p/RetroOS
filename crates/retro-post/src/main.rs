@@ -418,7 +418,6 @@ fn wait_for_display() -> Option<Display> {
 }
 
 fn boot() {
-    let t0 = Instant::now();
     let mut cfg = Config::load(Path::new(config::PATH));
     if cfg.chime {
         play_chime();
@@ -428,6 +427,8 @@ fn boot() {
         return;
     };
     let mut kb = Keyboard::open();
+    // The animation starts once the display is lit, however long the driver took.
+    let t0 = Instant::now();
     let (w, h) = (d.width, d.height);
     let scale = fit_scale(w, h, 8, 16, COLS, ROWS);
     let mut c = Canvas::new(w, h, 0);

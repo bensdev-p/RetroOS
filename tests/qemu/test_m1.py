@@ -103,7 +103,7 @@ def run(q):
     time.sleep(60)  # let the system settle ("idle" = 60 s after reaching the prompt)
     q.type('UNIX "systemd-analyze > /dev/ttyAMA0; free -k > /dev/ttyAMA0; echo RETRO-MEASURE-END > /dev/ttyAMA0"\n')
     s = q.wait_serial("RETRO-MEASURE-END", 120)
-    line = re.search(r"Startup finished in .*", s)
+    line = re.search(r"Startup finished in .*\(kernel\).*", s)
     if line:
         results["metrics"]["first_boot_systemd_analyze_tcg"] = line.group(0).strip()
     m = re.search(r"Mem:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)", s)
@@ -148,7 +148,7 @@ def run(q):
     results["metrics"]["second_boot_poweron_to_prompt_s_tcg"] = round(q.elapsed(), 1)
     q.type('UNIX "(systemd-analyze; systemd-analyze blame | head -12; echo RETRO-BOOT2-END) > /dev/ttyAMA0"\n')
     s = q.wait_serial("RETRO-BOOT2-END", 120)
-    line = re.search(r"Startup finished in .*", s)
+    line = re.search(r"Startup finished in .*\(kernel\).*", s)
     if line:
         results["metrics"]["second_boot_systemd_analyze_tcg"] = line.group(0).strip()
     blame = s[s.rfind("Startup finished"):s.rfind("RETRO-BOOT2-END")].splitlines()[1:]
