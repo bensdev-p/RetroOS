@@ -1,0 +1,40 @@
+# The System Bar: started with the Desktop, windows keep clear of it,
+# its menus open and act. (Art pixels ×2 at 1080p: the bar is 40 px.)
+wait 1500
+type DESKTOP
+key enter
+wait 1500
+expect WINDOWS => WINDOW 1 8 86 1280 800 normal DOS Prompt
+shot 70-bar
+# ◆ menu → DOS Prompt opens a second console window.
+pointer 36 20
+button click
+wait 600
+shot 71-phosphor-menu
+pointer 72 198
+wait 200
+button click
+wait 2000
+expect-task 2
+shot 72-dos-prompt-started
+# Window menu: both windows, the top one checked; pick the first DOS Prompt.
+pointer 270 20
+button click
+wait 600
+shot 73-window-menu
+key down
+key enter
+wait 400
+expect WINDOWS => WINDOW 1 8 86 1280 800 normal DOS Prompt
+# ◆ → Exit to DOS…: a dialog; Enter confirms.
+pointer 36 20
+button click
+wait 600
+key up
+key enter
+wait 1000
+shot 74-exit-dialog
+key enter
+wait 800
+expect PERSONALITY => text
+shot 75-back-in-dos

@@ -246,16 +246,33 @@ impl Station {
             self.desktop_motion(loc);
         }
         let under = self.surface_under(loc);
+        // A program that never sets a pointer image gets the arrow, not
+        // the last program's (the console hides it).
+        let client = under
+            .as_ref()
+            .and_then(|(s, _)| {
+                self.dh
+                    .get_client(smithay::reexports::wayland_server::Resource::id(s))
+                    .ok()
+            })
+            .map(|c| c.id());
+        if client != self.pointer_client {
+            self.pointer_client = client;
+            self.cursor_status = smithay::input::pointer::CursorImageStatus::default_named();
+        }
         if let Some(ptr) = self.seat.get_pointer() {
-            ptr.motion(
-                self,
-                under,
-                &MotionEvent {
-                    location: loc,
-                    serial: SERIAL_COUNTER.next_serial(),
-                    time,
-                },
-            );
+            let grabbed = ptr.is_grabbed();
+            let event = |serial| MotionEvent {
+                location: loc,
+                serial,
+                time,
+            };
+            ptr.motion(self, under.clone(), &event(SERIAL_COUNTER.next_serial()));
+            // A closed menu's grab ends on the next motion and eats it: send
+            // it again so the program under the pointer gets it.
+            if grabbed && !ptr.is_grabbed() {
+                ptr.motion(self, under, &event(SERIAL_COUNTER.next_serial()));
+            }
             ptr.frame(self);
         }
         self.dirty = true;

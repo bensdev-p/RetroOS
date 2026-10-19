@@ -1,3 +1,4 @@
+# Window management alone: run with RETROOS_NO_BAR=1 (bar.steps covers the bar).
 # Desktop personality, entered live with DESKTOP: the DOS Prompt becomes a
 # window; a second program cascades; move, minimise, restore, maximise,
 # the window menu, Alt+Tab, and Exit to DOS (Ctrl+Alt+F1) and back.

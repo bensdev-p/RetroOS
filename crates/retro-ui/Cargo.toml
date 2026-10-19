@@ -1,0 +1,13 @@
+[package]
+name = "retro-ui"
+description = "The RetroOS GUI toolkit: 1x software-drawn surfaces (bars, popups, windows) enlarged by Station"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+retro-gfx.workspace = true
+smithay-client-toolkit = { version = "0.21.1", default-features = false, features = ["calloop", "xkbcommon"] }
+
+[lints]
+workspace = true

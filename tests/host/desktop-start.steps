@@ -1,3 +1,4 @@
+# Window management alone: run with RETROOS_NO_BAR=1 (bar.steps covers the bar).
 # Station started with --personality desktop (Startup Menu / login choice).
 # Keyboard-only window management and closing programs.
 wait 1500

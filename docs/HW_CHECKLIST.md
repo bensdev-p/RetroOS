@@ -78,6 +78,10 @@ Optional but very useful: a USB-serial adapter on the Pi 5 debug UART
 | 3.12 | Desktop idle RAM | close Firefox, wait 60 s, then in the DOS Prompt run the M2 memory command (below) | record; target RetroOS userspace (AnonPages + Shmem) < 160 MB |
 | 3.13 | Exit to DOS | Ctrl+Alt+F1 | full-screen RetroDOS at once; `TASKS` still lists the other programs; `DESKTOP` puts the windows back where they were |
 | 3.14 | Start in the Desktop | `RESTART`, tap F8, choose 2 (RetroOS Desktop) | boots straight into the Desktop with the DOS Prompt window |
+| 3.16 | System Bar | look at the top of the screen in the Desktop | White bar, ◆ Programs Window at left, the right time at right; windows start below it |
+| 3.17 | Bar menus | click ◆, then DOS Prompt; click Programs → a group → a program; click Window → another window | menus drop down under the title; a second DOS Prompt window opens; the program starts; the window comes to the front |
+| 3.18 | Exit to DOS from the bar | ◆ → Exit to DOS…, tick "Close all programs first", OK | dialog in the middle of the screen; programs close; full-screen RetroDOS |
+| 3.19 | Shut down from the bar | ◆ → Shut Down…, OK | the Pi powers off (green LED off) |
 | 3.15 | Boot times (carried over) | stopwatch, second boot, text mode | record power-on → POST screen (1.1) and power-on → `C:\>` (1.8) |
 
 Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|Slab|SUnrecl|KernelSt|PageTab|Vmalloc|Percpu|Cma|AnonPages' /proc/meminfo; ps -eo rss,comm --sort=-rss | head -12"`

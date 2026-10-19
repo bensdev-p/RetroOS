@@ -30,7 +30,9 @@ def main():
     with open(os.path.join(apps, "demo.desktop"), "w") as f:
         f.write("[Desktop Entry]\nType=Application\nName=Demo App\n"
                 "Exec=retro-console --once --exec retrodos /K ECHO This is the demo app.\n")
-    env = dict(os.environ, XDG_RUNTIME_DIR=run, HOME=home, USER="retro",
+    # Applications come from the test HOME only, not from the machine.
+    nodata = tempfile.mkdtemp(prefix="retro-data-")
+    env = dict(os.environ, XDG_RUNTIME_DIR=run, HOME=home, USER="retro", XDG_DATA_DIRS=nodata,
                PATH=bindir + ":" + os.environ["PATH"], RUST_LOG="station=info")
     env.pop("WAYLAND_DISPLAY", None)
     log = open(os.path.join(outdir, "station.log"), "w")

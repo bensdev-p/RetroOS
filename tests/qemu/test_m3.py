@@ -10,7 +10,7 @@ switches with Alt+Tab, leaves with Exit to DOS (Ctrl+Alt+F1), and starts
 Firefox in a window. Results: OUT/test-m3/{report.json,*.png,serial*.log}.
 
 At 1280x800 Station's art scale is 1: frames are 4 px, title bars 18 px,
-and the first window's client area starts at (4, 23).
+the System Bar is 20 px, and the first window's client area starts at (4, 43).
 """
 import json
 import os
@@ -88,7 +88,7 @@ def serial_after(q, marker, shell, timeout=180):
     return s[: s.rfind(marker)]
 
 
-DOS = (4, 23, 640, 400)
+DOS = (4, 43, 640, 400)
 
 
 def run(q):
@@ -103,10 +103,12 @@ def run(q):
     w, h = img.size
     corner = {px[w - 1, h - 1], px[w - 2, h - 1]}
     check("The desktop is a Cobalt/Black dither", corner == {COBALT, BLACK}, str(corner))
-    check("The DOS Prompt has an active (Cobalt) title bar", px[100, 10] == COBALT, str(px[100, 10]))
+    check("The DOS Prompt has an active (Cobalt) title bar", px[100, 30] == COBALT, str(px[100, 30]))
     check("The window has a Silver frame", px[2, 200] == SILVER and px[0, 200] == BLACK,
           f"{px[0, 200]} {px[2, 200]}")
     check("RetroDOS runs in the DOS Prompt window", "C:\\>" in t, t[-300:])
+    check("The System Bar runs along the top (White, Black rule)",
+          px[600, 5] == (0xF5, 0xF5, 0xF0) and px[600, 19] == BLACK, f"{px[600, 5]} {px[600, 19]}")
 
     q.type("ECHO typed in a window\n")
     t, _ = wait_window_text(q, "typed in a window", 60, "m3-3-typing", DOS)
@@ -114,14 +116,14 @@ def run(q):
 
     # A second window (another console) opens cascaded and gets the focus.
     q.type("START retro-console\n")
-    second = (26, 45, 640, 400)
+    second = (26, 65, 640, 400)
     t, _ = wait_window_text(q, "C:\\>", 120, "m3-4-second", second)
     q.type("ECHO second window\n")
     t, img = wait_window_text(q, "second window", 60, "m3-5-second-typing", second)
     check("A second program opens in its own window", "second window" in t, t[-300:])
     px = img.load()
     check("The new window is active, the DOS Prompt inactive",
-          px[300, 32] == COBALT and px[200, 10] == SILVER, f"{px[300, 32]} {px[200, 10]}")
+          px[300, 52] == COBALT and px[200, 30] == SILVER, f"{px[300, 52]} {px[200, 30]}")
 
     # Minimise it from the window menu; its icon appears on the desktop.
     q.key("alt", "spc")

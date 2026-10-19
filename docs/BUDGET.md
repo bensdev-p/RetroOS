@@ -113,6 +113,9 @@ with the DOS Prompt as a 1280×800 window:
 | station | 21.8 / 9.4 / 4.1 MB | 23.2 / 11.7 / 3.1 MB |
 | retro-console | 10.4 / 3.4 / 4.1 MB | 8.2 / 2.3 / 3.0 MB |
 
+With the System Bar (after M3 step 2): station 24.3 / 11.8 / 4.1 MB, retro-bar
+**3.8 MB RSS (0.9 MB anonymous, 0.1 MB shmem: its 960×20 buffer)**.
+
 The Desktop costs Station ≈ 2.3 MB of anonymous memory: the pattern band
 (1920×128, ~1 MB), title bars (~0.2 MB per window at 1080p) and their
 textures. (Headless Station also holds its 8 MB off-screen image.)

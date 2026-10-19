@@ -14,6 +14,7 @@ mod handlers;
 mod headless;
 mod inject;
 mod input;
+mod layers;
 mod render;
 mod state;
 mod tasklist;
@@ -53,6 +54,8 @@ pub fn send_frames(st: &mut Station) {
                 Some(output.clone())
             });
         }
+        st.layer_frames(&output, now);
+        smithay::desktop::layer_map_for_output(&output).cleanup();
     }
     st.space.refresh();
     st.popups.cleanup();
@@ -192,6 +195,7 @@ fn main() {
             }
         }
     }
+    st.ensure_bar();
     for s in spawns {
         if let Err(e) = st.spawn(&split_cmd(&s), None, &[], None) {
             tracing::warn!("cannot start {s}: {e}");

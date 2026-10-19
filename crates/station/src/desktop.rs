@@ -40,6 +40,8 @@ const DRAG_START: f64 = 3.0;
 pub enum DrawItem {
     /// A task's window (surface and popups) at its client-area location.
     Window(u64, Point<i32, Logical>),
+    /// A layer surface (System Bar, desktop icons) and its popups.
+    Layer(smithay::desktop::LayerSurface, Point<i32, Logical>),
     Solid(Id, Rectangle<i32, Logical>, Rgb),
     /// A buffer; with an Id when the same buffer is drawn more than once.
     Buffer(MemoryRenderBuffer, Point<i32, Logical>, Option<Id>),
@@ -140,6 +142,9 @@ pub struct Desktop {
     band_ids: Vec<Id>,
     outline_ids: Vec<Id>,
     pub draw: Vec<DrawItem>,
+    /// The System Bar process, and how often it was started.
+    bar_pid: Option<u32>,
+    bar_starts: u32,
 }
 
 impl Desktop {
@@ -195,13 +200,25 @@ fn clamp_size(t: &Task, s: Size<i32, Logical>, floor: Size<i32, Logical>) -> Siz
 }
 
 impl Station {
+    /// Layers drawn above windows, and below them.
+    pub const UPPER: [smithay::wayland::shell::wlr_layer::Layer; 2] = [
+        smithay::wayland::shell::wlr_layer::Layer::Overlay,
+        smithay::wayland::shell::wlr_layer::Layer::Top,
+    ];
+    pub const LOWER: [smithay::wayland::shell::wlr_layer::Layer; 2] = [
+        smithay::wayland::shell::wlr_layer::Layer::Bottom,
+        smithay::wayland::shell::wlr_layer::Layer::Background,
+    ];
+
     pub fn metrics(&self) -> Metrics {
         Metrics::new(self.scale, self.art_scale)
     }
 
-    /// The screen minus reserved strips (the System Bar, later).
+    /// The screen minus reserved strips (the System Bar's exclusive zone).
     pub fn work_area(&self) -> Rectangle<i32, Logical> {
-        Rectangle::from_size(self.output_size())
+        self.layer_work_area()
+            .filter(|r| !r.is_empty())
+            .unwrap_or_else(|| Rectangle::from_size(self.output_size()))
     }
 
     fn is_ssd(t: &Task) -> bool {
@@ -431,6 +448,12 @@ impl Station {
                 );
                 (x, y).into()
             }
+            // Fixed-size windows (alerts, About boxes) sit in the middle.
+            None if fixed_size(t) => (
+                work.loc.x + (work.size.w - size.w) / 2,
+                work.loc.y + (work.size.h - size.h) / 2,
+            )
+                .into(),
             None => self.cascade_position(size),
         };
         if let Some(t) = self.tasks.get_mut(id) {
@@ -469,6 +492,34 @@ impl Station {
     }
 
     // ---------------------------------------------------- personality
+
+    pub fn desktop_bar_pid(&self) -> Option<u32> {
+        self.desktop.bar_pid
+    }
+
+    /// Start the System Bar (retro-bar) with the Desktop; again if it
+    /// crashes, three times at most. RETROOS_NO_BAR=1 leaves it out.
+    pub fn ensure_bar(&mut self) {
+        if self.personality != Personality::Desktop || std::env::var_os("RETROOS_NO_BAR").is_some()
+        {
+            return;
+        }
+        let running = self
+            .desktop
+            .bar_pid
+            .is_some_and(|pid| self.children.iter().any(|(c, _)| c.id() == pid));
+        if running || self.desktop.bar_starts >= 3 {
+            return;
+        }
+        self.desktop.bar_starts += 1;
+        match self.spawn(&["retro-bar".to_string()], None, &[], None) {
+            Ok(pid) => self.desktop.bar_pid = Some(pid),
+            Err(e) => {
+                tracing::warn!("cannot start the System Bar: {e}");
+                self.desktop.bar_starts = 3;
+            }
+        }
+    }
 
     /// Switch personality live: RetroDOS ↔ Desktop (docs/DESIGN.md §5.4).
     pub fn set_personality(&mut self, p: Personality) {
@@ -516,6 +567,7 @@ impl Station {
                 if let Some(f) = self.tasks.focused() {
                     self.focus_task(f);
                 }
+                self.ensure_bar();
             }
             Personality::Text => {
                 for t in self.tasks.iter_mut() {
@@ -1130,9 +1182,15 @@ impl Station {
                     pos.y.floor() as i32 - f.loc.y,
                 );
                 let resizable = !t.place.maximized && !fixed_size(t);
-                if let Some(part) =
-                    chrome::frame_hit(f.size.w, f.size.h, &m, x, y, resizable, !t.dialog)
-                {
+                if let Some(part) = chrome::frame_hit(
+                    f.size.w,
+                    f.size.h,
+                    &m,
+                    x,
+                    y,
+                    resizable,
+                    !t.dialog && !fixed_size(t),
+                ) {
                     return Hit::Window(id, part);
                 }
             } else if r.to_f64().contains(pos) {
@@ -1190,6 +1248,8 @@ impl Station {
         let client_grab = self.seat.get_pointer().is_some_and(|p| p.is_grabbed());
         self.desktop.cursor = if client_grab {
             None
+        } else if self.layer_surface_under(pos, &Self::UPPER).is_some() {
+            Some(CursorShape::Arrow)
         } else {
             match self.hit_test(pos) {
                 Hit::Window(_, Part::Client) => None,
@@ -1250,6 +1310,17 @@ impl Station {
             }
             self.desktop.grab = true;
             return true;
+        }
+        if let Some((layer, _, _)) = self.layer_surface_under(pos, &Self::UPPER) {
+            // The System Bar: the click is the program's.
+            self.focus_layer(&layer);
+            return false;
+        }
+        if hit == Hit::Desktop {
+            if let Some((layer, _, _)) = self.layer_surface_under(pos, &Self::LOWER) {
+                self.focus_layer(&layer);
+                return false;
+            }
         }
         match hit {
             Hit::Window(id, part) => {
@@ -1417,7 +1488,7 @@ impl Station {
             if menu.buffer.is_none() {
                 let only: Vec<MenuItem> = menu.items.iter().map(|(i, _)| i.clone()).collect();
                 menu.buffer = Some(chrome::to_buffer(
-                    &chrome::draw_menu(&only, menu.sel, &m),
+                    &retro_gfx::widgets::draw_menu(&only, menu.sel, m.px),
                     m.scale,
                 ));
             }
@@ -1460,7 +1531,24 @@ impl Station {
             }
         }
 
-        // Windows, top first.
+        // Overlay layers, then the System Bar (unless a full-screen window
+        // is on top), then windows, top first.
+        use smithay::wayland::shell::wlr_layer::Layer;
+        let fullscreen_on_top = self
+            .tasks
+            .z_order()
+            .into_iter()
+            .filter_map(|id| self.tasks.get(id))
+            .find(|t| self.visible(t))
+            .is_some_and(|t| t.place.fullscreen);
+        let upper: &[Layer] = if fullscreen_on_top {
+            &[Layer::Overlay]
+        } else {
+            &[Layer::Overlay, Layer::Top]
+        };
+        for (l, at) in self.layers_on(upper) {
+            draw.push(DrawItem::Layer(l, at));
+        }
         for id in self.tasks.z_order() {
             let Some(t) = self.tasks.get(id) else {
                 continue;
@@ -1475,7 +1563,7 @@ impl Station {
                     title: self.window_title(t),
                     active: focused == Some(id),
                     maximized: t.place.maximized,
-                    buttons: !t.dialog,
+                    buttons: !t.dialog && !fixed_size(t),
                     pressed: match self.desktop.pressed {
                         Some((pid, part, true)) if pid == id => Some(part),
                         _ => None,
@@ -1532,6 +1620,11 @@ impl Station {
             if let Some((_, b)) = self.desktop.icons.get(&id) {
                 draw.push(DrawItem::Buffer(b.clone(), pos, None));
             }
+        }
+
+        // Desktop icons and backgrounds that programs put below the windows.
+        for (l, at) in self.layers_on(&[Layer::Bottom, Layer::Background]) {
+            draw.push(DrawItem::Layer(l, at));
         }
 
         // The dithered desktop, in full-width bands.

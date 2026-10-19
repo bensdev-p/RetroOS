@@ -19,7 +19,19 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   RetroDOS: `DESKTOP`/`WIN`, `TASKS /W`. Decisions D-030, D-031.
 - Tests: `tests/host/desktop.steps`, `tests/host/desktop-start.steps`
   (run with `STATION_ARGS="--personality desktop"`), `tests/qemu/test_m3.py`.
-- Next: steps 2–4 (layer-shell, retro-ui + Lantern fonts, System Bar).
+- **Lantern 12** (`assets/fonts/lantern-12.glyphs`, proportional bold, ASCII
+  + UI symbols) is used by Station's frames and menus; shared menu/button
+  drawing is `retro_gfx::widgets`.
+- **Step 2 done** (D-032): layer-shell in Station (`layers.rs`).
+- **Steps 3–4 begun**: `crates/retro-ui` (toolkit: bars, popups, windows at
+  1× art pixels via viewporter; `station` broker client), `crates/retro-apps`
+  (.desktop parsing, shared with RetroDOS), `crates/retro-bar` (System Bar:
+  ◆ menu, Programs by category, Window list, clock, Restart / Shut Down /
+  Exit to DOS dialogs). Host test `tests/host/bar.steps`; the WM-only
+  scenarios run with `RETROOS_NO_BAR=1`.
+- Next: Lantern 9 and Latin-1 for Lantern; Program Manager; File Cabinet,
+  Jot, About This Computer; Xwayland; icons and cursors (HANDOFF §7 steps
+  3–8).
 
 ## 1. Where things stand
 

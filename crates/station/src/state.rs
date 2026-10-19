@@ -44,6 +44,7 @@ pub struct Station {
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub xdg_decoration_state: XdgDecorationState,
+    pub layer_shell_state: smithay::wayland::shell::wlr_layer::WlrLayerShellState,
     pub shm_state: ShmState,
     pub viewporter_state: smithay::wayland::viewporter::ViewporterState,
     pub dmabuf_state: DmabufState,
@@ -68,6 +69,8 @@ pub struct Station {
     /// The mouse has moved at least once (the pointer stays hidden until then).
     pub pointer_moved: bool,
     pub cursor_status: CursorImageStatus,
+    /// The program under the pointer.
+    pub pointer_client: Option<ClientId>,
     /// Something changed on screen; render at the next opportunity.
     pub dirty: bool,
 
@@ -131,6 +134,8 @@ impl Station {
         let compositor_state = CompositorState::new::<Station>(&dh);
         let xdg_shell_state = XdgShellState::new::<Station>(&dh);
         let xdg_decoration_state = XdgDecorationState::new::<Station>(&dh);
+        let layer_shell_state =
+            smithay::wayland::shell::wlr_layer::WlrLayerShellState::new::<Station>(&dh);
         let shm_state = ShmState::new::<Station>(&dh, vec![]);
         // Lets retro-console send a 1× buffer that we enlarge with nearest-neighbour scaling.
         let viewporter_state = smithay::wayland::viewporter::ViewporterState::new::<Station>(&dh);
@@ -181,6 +186,7 @@ impl Station {
             compositor_state,
             xdg_shell_state,
             xdg_decoration_state,
+            layer_shell_state,
             shm_state,
             viewporter_state,
             dmabuf_state: DmabufState::new(),
@@ -199,6 +205,7 @@ impl Station {
             pointer_location: (0.0, 0.0).into(),
             pointer_moved: false,
             cursor_status: CursorImageStatus::default_named(),
+            pointer_client: None,
             dirty: true,
             children: Vec::new(),
             primary_pid: None,
@@ -350,6 +357,11 @@ impl Station {
             let surface = w.toplevel().map(|t| t.wl_surface().clone());
             let serial = smithay::utils::SERIAL_COUNTER.next_serial();
             if let Some(kb) = self.seat.get_keyboard() {
+                // A menu's grab would hand the keyboard back to whoever had
+                // it before the menu when it ends: end it now.
+                if kb.is_grabbed() {
+                    kb.unset_grab(self);
+                }
                 kb.set_focus(self, surface, serial);
             }
         }
@@ -432,8 +444,16 @@ impl Station {
             if self.desktop.captures_pointer() {
                 return None;
             }
-            let crate::desktop::Hit::Window(id, crate::chrome::Part::Client) = self.hit_test(pos)
-            else {
+            if let Some((_, s, p)) = self.layer_surface_under(pos, &Self::UPPER) {
+                return Some((s, p));
+            }
+            let hit = self.hit_test(pos);
+            if hit == crate::desktop::Hit::Desktop {
+                return self
+                    .layer_surface_under(pos, &Self::LOWER)
+                    .map(|(_, s, p)| (s, p));
+            }
+            let crate::desktop::Hit::Window(id, crate::chrome::Part::Client) = hit else {
                 return None;
             };
             let t = self.tasks.get(id)?;
@@ -493,6 +513,9 @@ impl Station {
             tracing::info!(pid, code, "child exited");
             if let Some(l) = launch {
                 self.broker.launch_exited(l, code);
+            }
+            if Some(pid) == self.desktop_bar_pid() {
+                self.ensure_bar();
             }
             if Some(pid) == self.primary_pid {
                 tracing::info!("primary client exited; leaving");

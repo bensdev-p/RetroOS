@@ -348,6 +348,12 @@ where
                         w, renderer, loc, scale, 1.0,
                     ));
                 }
+                DrawItem::Layer(l, at) => {
+                    let loc = at.to_physical_precise_round(scale);
+                    out.extend(AsRenderElements::<R>::render_elements::<StationElement<R>>(
+                        l, renderer, loc, scale, 1.0,
+                    ));
+                }
                 DrawItem::Solid(id, r, c) => {
                     let rgba = [
                         ((c >> 16) & 0xFF) as f32 / 255.0,

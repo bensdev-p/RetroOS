@@ -20,7 +20,7 @@ export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=${CARGO_TARGET_AARCH64_UNKN
 
 echo ">> cargo build ($TARGET, release)"
 cargo build --manifest-path "$ROOT/Cargo.toml" --release --locked --target $TARGET \
-    -p retrodos -p retro-console -p station -p retro-post -p retro-login -p retro-session -p retro-edit -p retro-filer -p retro-net
+    -p retrodos -p retro-console -p station -p retro-post -p retro-login -p retro-session -p retro-edit -p retro-filer -p retro-net -p retro-bar
 BIN=$ROOT/target/$TARGET/release
 
 echo ">> host tools (sounds)"
@@ -34,7 +34,7 @@ cp -a "$ROOT/packaging/retroos/root/." "$STAGE/"
 
 install -d "$STAGE/usr/bin" "$STAGE/usr/libexec/retroos" "$STAGE/usr/share/retroos/sounds" \
     "$STAGE/usr/share/retroos/fonts" "$STAGE/usr/share/doc/retroos"
-for b in retrodos retro-console station retro-session retro-greeter retro-setup retro-edit retro-filer retro-net; do
+for b in retrodos retro-console station retro-session retro-greeter retro-setup retro-edit retro-filer retro-net retro-bar; do
     install -m 755 "$BIN/$b" "$STAGE/usr/bin/$b"
 done
 install -m 755 "$BIN/retro-post" "$STAGE/usr/libexec/retroos/retro-post"

@@ -48,7 +48,9 @@ impl CompositorHandler for Station {
             while let Some(parent) = get_parent(&root) {
                 root = parent;
             }
-            if let Some(id) = self.tasks.find_surface(&root) {
+            if self.layer_commit(&root) {
+                // A layer surface (layers.rs).
+            } else if let Some(id) = self.tasks.find_surface(&root) {
                 let t = self.tasks.get(id).unwrap();
                 t.window.on_commit();
                 // Initial configure, sent once the client has committed its first state.
@@ -169,7 +171,7 @@ impl XdgShellHandler for Station {
         let Ok(root) = find_popup_root_surface(&kind) else {
             return;
         };
-        if self.tasks.find_surface(&root).is_none() {
+        if self.tasks.find_surface(&root).is_none() && !self.is_layer_surface(&root) {
             return;
         }
         let Ok(mut grab) = self.popups.grab_popup(root, kind, &seat, serial) else {
