@@ -123,7 +123,7 @@ def run(q):
     check("A second program opens in its own window", "second window" in t, t[-300:])
     px = img.load()
     check("The new window is active, the DOS Prompt inactive",
-          px[300, 52] == COBALT and px[200, 30] == SILVER, f"{px[300, 52]} {px[200, 30]}")
+          px[60, 52] == COBALT and px[200, 30] == SILVER, f"{px[60, 52]} {px[200, 30]}")
 
     # Minimise it from the window menu; its icon appears on the desktop.
     q.key("alt", "spc")
