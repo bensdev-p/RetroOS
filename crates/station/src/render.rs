@@ -1,18 +1,25 @@
 //! What Station draws: in text mode, the focused task full-screen, its
-//! dialogs on top, and the mouse pointer.
+//! dialogs on top, and the mouse pointer; in the Desktop, what
+//! `Station::desktop_prepare` listed (desktop.rs).
 
+use crate::desktop::{Desktop, DrawItem};
+use crate::state::Personality;
 use crate::tasks::Tasks;
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
+use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::{
     render_elements_from_surface_tree, WaylandSurfaceRenderElement,
 };
-use smithay::backend::renderer::element::{AsRenderElements, Kind};
+use smithay::backend::renderer::element::{
+    AsRenderElements, Element, Id, Kind, RenderElement, UnderlyingStorage,
+};
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::backend::renderer::pixman::PixmanRenderer;
+use smithay::backend::renderer::utils::{CommitCounter, DamageSet, OpaqueRegions};
 use smithay::backend::renderer::{
     Bind, ExportMem, ImportAll, ImportMem, Offscreen, Renderer, TextureMapping,
 };
@@ -20,13 +27,151 @@ use smithay::desktop::{Space, Window};
 use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::output::Output;
 use smithay::reexports::pixman;
-use smithay::utils::{Logical, Physical, Point, Rectangle, Scale, Transform};
+use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Transform};
 use smithay::wayland::compositor::with_states;
 
 smithay::backend::renderer::element::render_elements! {
     pub StationElement<R> where R: ImportAll + ImportMem;
     Surface=WaylandSurfaceRenderElement<R>,
     Memory=MemoryRenderBufferRenderElement<R>,
+    Tile=Tile<R>,
+    Solid=SolidColorRenderElement,
+}
+
+/// A memory buffer drawn under another element Id, so one buffer can be
+/// drawn several times (the desktop pattern bands) and the damage tracker
+/// still tells the copies apart.
+pub struct Tile<R: Renderer> {
+    id: Id,
+    inner: MemoryRenderBufferRenderElement<R>,
+}
+
+impl<R: Renderer + ImportMem> Element for Tile<R>
+where
+    R::TextureId: 'static,
+{
+    fn id(&self) -> &Id {
+        &self.id
+    }
+    fn current_commit(&self) -> CommitCounter {
+        self.inner.current_commit()
+    }
+    fn src(&self) -> Rectangle<f64, Buffer> {
+        self.inner.src()
+    }
+    fn transform(&self) -> Transform {
+        self.inner.transform()
+    }
+    fn geometry(&self, scale: Scale<f64>) -> Rectangle<i32, Physical> {
+        self.inner.geometry(scale)
+    }
+    fn damage_since(
+        &self,
+        scale: Scale<f64>,
+        commit: Option<CommitCounter>,
+    ) -> DamageSet<i32, Physical> {
+        self.inner.damage_since(scale, commit)
+    }
+    fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
+        self.inner.opaque_regions(scale)
+    }
+    fn alpha(&self) -> f32 {
+        self.inner.alpha()
+    }
+    fn kind(&self) -> Kind {
+        self.inner.kind()
+    }
+}
+
+impl<R: Renderer + ImportMem> RenderElement<R> for Tile<R>
+where
+    R::TextureId: 'static,
+{
+    fn draw(
+        &self,
+        frame: &mut R::Frame<'_, '_>,
+        src: Rectangle<f64, Buffer>,
+        dst: Rectangle<i32, Physical>,
+        damage: &[Rectangle<i32, Physical>],
+        opaque_regions: &[Rectangle<i32, Physical>],
+    ) -> Result<(), R::Error> {
+        self.inner.draw(frame, src, dst, damage, opaque_regions)
+    }
+    fn underlying_storage(&self, renderer: &mut R) -> Option<UnderlyingStorage<'_>> {
+        self.inner.underlying_storage(renderer)
+    }
+}
+
+/// Mouse pointers Station draws itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CursorShape {
+    Arrow,
+    SizeWE,
+    SizeNS,
+    SizeNWSE,
+    SizeNESW,
+}
+
+impl CursorShape {
+    /// The sizing pointer for frame edges (chrome::LEFT…).
+    pub fn for_edges(e: u8) -> CursorShape {
+        use crate::chrome::{BOTTOM, LEFT, RIGHT, TOP};
+        let h = e & (LEFT | RIGHT) != 0;
+        let v = e & (TOP | BOTTOM) != 0;
+        match (h, v) {
+            (true, true) if (e & LEFT != 0) == (e & TOP != 0) => CursorShape::SizeNWSE,
+            (true, true) => CursorShape::SizeNESW,
+            (true, false) => CursorShape::SizeWE,
+            (false, true) => CursorShape::SizeNS,
+            _ => CursorShape::Arrow,
+        }
+    }
+
+    /// Art rows ('X' outline, 'o' fill) and the hotspot.
+    fn art(self) -> (Vec<String>, (i32, i32)) {
+        if self == CursorShape::Arrow {
+            return (ARROW.iter().map(|s| s.to_string()).collect(), (0, 0));
+        }
+        // Double arrows: a filled shape, outlined where it meets the outside.
+        let (w, h): (i32, i32) = match self {
+            CursorShape::SizeWE => (17, 9),
+            CursorShape::SizeNS => (9, 17),
+            _ => (13, 13),
+        };
+        let inside = |x: i32, y: i32| -> bool {
+            match self {
+                CursorShape::SizeWE => {
+                    let d = (y - 4).abs();
+                    d <= x.min(16 - x) && (d <= 1 || x <= 4 || x >= 12)
+                }
+                CursorShape::SizeNS => {
+                    let d = (x - 4).abs();
+                    d <= y.min(16 - y) && (d <= 1 || y <= 4 || y >= 12)
+                }
+                CursorShape::SizeNWSE => x + y <= 5 || x + y >= 19 || (x - y).abs() <= 1,
+                _ => {
+                    let x = 12 - x;
+                    x + y <= 5 || x + y >= 19 || (x - y).abs() <= 1
+                }
+            }
+        };
+        let ok = |x: i32, y: i32| x >= 0 && y >= 0 && x < w && y < h && inside(x, y);
+        let mut rows = Vec::new();
+        for y in -1..=h {
+            let mut r = String::new();
+            for x in -1..=w {
+                r.push(if ok(x, y) {
+                    'o'
+                } else if ok(x - 1, y) || ok(x + 1, y) || ok(x, y - 1) || ok(x, y + 1) {
+                    'X'
+                } else {
+                    '.'
+                });
+            }
+            rows.push(r);
+        }
+        (rows, (w / 2 + 1, h / 2 + 1))
+    }
 }
 
 /// The RetroOS arrow (docs/STYLE.md §5): black outline, white fill.
@@ -52,20 +197,28 @@ const ARROW: [&str; 19] = [
     ".......XX...",
 ];
 
-/// The arrow pre-scaled by whole pixels (so it stays sharp).
+/// Pointer images pre-scaled by whole pixels (so they stay sharp).
 #[derive(Default)]
 pub struct CursorCache {
-    scale: (i32, i32),
+    key: Option<(CursorShape, i32, i32)>,
     buf: Option<MemoryRenderBuffer>,
+    hotspot: (i32, i32),
 }
 
 impl CursorCache {
     /// `scale` = pixels per art pixel; `buffer_scale` = the output scale.
-    fn get(&mut self, scale: i32, buffer_scale: i32) -> &MemoryRenderBuffer {
-        if self.scale != (scale, buffer_scale) || self.buf.is_none() {
-            let (w, h) = (ARROW[0].len() as i32 * scale, ARROW.len() as i32 * scale);
+    /// Returns the image and its hotspot in physical pixels.
+    fn get(
+        &mut self,
+        shape: CursorShape,
+        scale: i32,
+        buffer_scale: i32,
+    ) -> (&MemoryRenderBuffer, (i32, i32)) {
+        if self.key != Some((shape, scale, buffer_scale)) || self.buf.is_none() {
+            let (art, hot) = shape.art();
+            let (w, h) = (art[0].len() as i32 * scale, art.len() as i32 * scale);
             let mut px = vec![0u8; (w * h * 4) as usize];
-            for (y, row) in ARROW.iter().enumerate() {
+            for (y, row) in art.iter().enumerate() {
                 for (x, c) in row.chars().enumerate() {
                     let argb: u32 = match c {
                         'X' => 0xFF0A0A0F,
@@ -89,9 +242,10 @@ impl CursorCache {
                 Transform::Normal,
                 None,
             ));
-            self.scale = (scale, buffer_scale);
+            self.key = Some((shape, scale, buffer_scale));
+            self.hotspot = (hot.0 * scale, hot.1 * scale);
         }
-        self.buf.as_ref().unwrap()
+        (self.buf.as_ref().unwrap(), self.hotspot)
     }
 }
 
@@ -107,6 +261,8 @@ pub struct Scene<'a> {
     pub show_pointer: bool,
     /// A full-screen overlay drawn by Station (the Task List).
     pub overlay: Option<&'a MemoryRenderBuffer>,
+    pub personality: Personality,
+    pub desktop: &'a Desktop,
 }
 
 /// Render elements, front to back.
@@ -118,12 +274,32 @@ where
     let scale = Scale::from(scene.scale as f64);
     let mut out: Vec<StationElement<R>> = Vec::new();
 
-    // Pointer on top.
+    // Pointer on top: the program's, or Station's own (the arrow, or a
+    // sizing arrow over Desktop frames).
     if scene.show_pointer {
         let pos: Point<f64, Physical> = scene.pointer.to_physical(scale);
-        match scene.cursor_status {
-            CursorImageStatus::Hidden => {}
-            CursorImageStatus::Surface(surface) => {
+        let own = match (scene.personality, scene.desktop.cursor, scene.cursor_status) {
+            (Personality::Desktop, Some(shape), _) => Some(shape),
+            (_, _, CursorImageStatus::Named(_)) => Some(CursorShape::Arrow),
+            _ => None,
+        };
+        match (own, scene.cursor_status) {
+            (Some(shape), _) => {
+                let (buf, hot) = cursor.get(shape, scene.art_scale.max(scene.scale), scene.scale);
+                let pos = pos - Point::from((hot.0 as f64, hot.1 as f64));
+                if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(
+                    renderer,
+                    pos,
+                    buf,
+                    None,
+                    None,
+                    None,
+                    Kind::Cursor,
+                ) {
+                    out.push(StationElement::Memory(e));
+                }
+            }
+            (None, CursorImageStatus::Surface(surface)) => {
                 let hotspot = with_states(surface, |s| {
                     s.data_map
                         .get::<CursorImageSurfaceData>()
@@ -140,20 +316,7 @@ where
                     Kind::Cursor,
                 ));
             }
-            CursorImageStatus::Named(_) => {
-                let buf = cursor.get(scene.art_scale.max(scene.scale), scene.scale);
-                if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(
-                    renderer,
-                    pos,
-                    buf,
-                    None,
-                    None,
-                    None,
-                    Kind::Cursor,
-                ) {
-                    out.push(StationElement::Memory(e));
-                }
-            }
+            _ => {}
         }
     }
 
@@ -170,6 +333,66 @@ where
             out.push(StationElement::Memory(e));
             return out;
         }
+    }
+
+    if scene.personality == Personality::Desktop {
+        for item in &scene.desktop.draw {
+            match item {
+                DrawItem::Window(id, at) => {
+                    let Some(t) = scene.tasks.get(*id) else {
+                        continue;
+                    };
+                    let w = &t.window;
+                    let loc = (*at - w.geometry().loc).to_physical_precise_round(scale);
+                    out.extend(AsRenderElements::<R>::render_elements::<StationElement<R>>(
+                        w, renderer, loc, scale, 1.0,
+                    ));
+                }
+                DrawItem::Layer(l, at) => {
+                    let loc = at.to_physical_precise_round(scale);
+                    out.extend(AsRenderElements::<R>::render_elements::<StationElement<R>>(
+                        l, renderer, loc, scale, 1.0,
+                    ));
+                }
+                DrawItem::Solid(id, r, c) => {
+                    let rgba = [
+                        ((c >> 16) & 0xFF) as f32 / 255.0,
+                        ((c >> 8) & 0xFF) as f32 / 255.0,
+                        (c & 0xFF) as f32 / 255.0,
+                        1.0,
+                    ];
+                    out.push(StationElement::Solid(SolidColorRenderElement::new(
+                        id.clone(),
+                        r.to_physical(scene.scale),
+                        CommitCounter::default(),
+                        rgba,
+                        Kind::Unspecified,
+                    )));
+                }
+                DrawItem::Buffer(buf, at, id) => {
+                    let pos = at.to_f64().to_physical(scale);
+                    let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(
+                        renderer,
+                        pos,
+                        buf,
+                        None,
+                        None,
+                        None,
+                        Kind::Unspecified,
+                    ) else {
+                        continue;
+                    };
+                    out.push(match id {
+                        Some(id) => StationElement::Tile(Tile {
+                            id: id.clone(),
+                            inner: e,
+                        }),
+                        None => StationElement::Memory(e),
+                    });
+                }
+            }
+        }
+        return out;
     }
 
     if let Some(fid) = scene.tasks.focused() {
@@ -281,4 +504,36 @@ pub fn image_to_canvas(image: &pixman::Image<'_, '_>) -> retro_gfx::Canvas {
         }
     }
     c
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CursorShape;
+    use crate::chrome::{BOTTOM, LEFT, RIGHT, TOP};
+
+    #[test]
+    fn sizing_pointers() {
+        assert_eq!(CursorShape::for_edges(LEFT), CursorShape::SizeWE);
+        assert_eq!(CursorShape::for_edges(BOTTOM), CursorShape::SizeNS);
+        assert_eq!(CursorShape::for_edges(LEFT | TOP), CursorShape::SizeNWSE);
+        assert_eq!(
+            CursorShape::for_edges(RIGHT | BOTTOM),
+            CursorShape::SizeNWSE
+        );
+        assert_eq!(CursorShape::for_edges(RIGHT | TOP), CursorShape::SizeNESW);
+        for s in [
+            CursorShape::SizeWE,
+            CursorShape::SizeNS,
+            CursorShape::SizeNWSE,
+            CursorShape::SizeNESW,
+        ] {
+            let (rows, (hx, hy)) = s.art();
+            // The hotspot is on the shape, rows are even, the edge is outlined.
+            assert_eq!(rows[hy as usize].as_bytes()[hx as usize], b'o', "{s:?}");
+            assert!(rows.iter().all(|r| r.len() == rows[0].len()));
+            assert!(!rows.iter().any(|r| r.starts_with('o') || r.ends_with('o')));
+        }
+        let (we, _) = CursorShape::SizeWE.art();
+        assert_eq!(we[5], format!("X{}X", "o".repeat(17)));
+    }
 }

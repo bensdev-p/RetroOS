@@ -100,3 +100,30 @@ The remaining gap to 200 MB is kernel-side (reserve, slab, vmalloc, drivers).
 M5 candidates: stop auto-loading drivers RetroOS does not use yet (camera/ISP,
 V4L2 codecs; vmalloc is mostly module memory), and re-check the watermark
 reserve, which on an 8 GB board is set by the kernel's defaults, not by us.
+
+## Milestone 3
+
+### Headless Station, 1920×1080 (host, release build, 2026-10-17)
+
+Station on Pixman with the DOS Prompt only (text mode), then after `DESKTOP`
+with the DOS Prompt as a 1280×800 window:
+
+| Process | Text mode (RSS / anon / shmem) | Desktop (RSS / anon / shmem) |
+|---|---:|---:|
+| station | 21.8 / 9.4 / 4.1 MB | 23.2 / 11.7 / 3.1 MB |
+| retro-console | 10.4 / 3.4 / 4.1 MB | 8.2 / 2.3 / 3.0 MB |
+
+With the System Bar (after M3 step 2): station 24.3 / 11.8 / 4.1 MB, retro-bar
+**3.8 MB RSS (0.9 MB anonymous, 0.1 MB shmem: its 960×20 buffer)**.
+
+The Desktop costs Station ≈ 2.3 MB of anonymous memory: the pattern band
+(1920×128, ~1 MB), title bars (~0.2 MB per window at 1080p) and their
+textures. (Headless Station also holds its 8 MB off-screen image.)
+
+### QEMU and Raspberry Pi 5
+
+| Metric | Value | Notes |
+|---|---|---|
+| Desktop idle, MemTotal − MemAvailable (QEMU TCG) | _from CI (test_m3 report.json)_ | |
+| Desktop idle, RetroOS userspace (Pi 5) | _to measure_ | HW_CHECKLIST 3.12; target < 160 MB (D-028) |
+| Firefox windowed, GPU (Pi 5) | _to measure_ | HW_CHECKLIST 3.9 |

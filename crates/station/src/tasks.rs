@@ -1,8 +1,10 @@
 //! The task list: every toplevel window is a task. In RetroDOS the focused
-//! task fills the screen and Ctrl+Alt+Tab cycles (the DOS 5 task swapper).
+//! task fills the screen and Ctrl+Alt+Tab cycles (the DOS 5 task swapper);
+//! in the Desktop the most recently focused window is on top.
 
 use smithay::desktop::Window;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::utils::{Logical, Rectangle, Size};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskKind {
@@ -23,7 +25,28 @@ pub struct Task {
     pub name: String,
     /// Has a parent toplevel (dialogs are not full-screen).
     pub dialog: bool,
+    /// Where the window sits in the Desktop.
+    pub place: Place,
 }
+
+/// A window's state in the Desktop personality (kept while in RetroDOS, so
+/// windows come back where they were).
+#[derive(Clone, Debug, Default)]
+pub struct Place {
+    /// Client area in its normal (not maximised) state; valid once `placed`.
+    pub rect: Rectangle<i32, Logical>,
+    pub placed: bool,
+    pub maximized: bool,
+    pub minimized: bool,
+    pub fullscreen: bool,
+    /// Icon position (slot number) while minimised.
+    pub slot: Option<usize>,
+    /// A resize asked for and not yet committed (the opposite edges stay put).
+    pub resizing: Option<Resizing>,
+}
+
+/// The edges that moved, the client area asked for, and the size before.
+pub type Resizing = (u8, Rectangle<i32, Logical>, Size<i32, Logical>);
 
 #[derive(Default)]
 pub struct Tasks {
@@ -73,6 +96,71 @@ impl Tasks {
     pub fn set_focus(&mut self, id: u64) {
         self.mru.retain(|i| *i != id);
         self.mru.insert(0, id);
+    }
+
+    /// Most-recently-focused first (never-focused tasks last).
+    pub fn mru(&self) -> Vec<u64> {
+        let mut v = self.mru.clone();
+        v.extend(
+            self.list
+                .iter()
+                .map(|t| t.id)
+                .filter(|id| !self.mru.contains(id)),
+        );
+        v
+    }
+
+    /// Put a task at the bottom of the stack (Alt+Esc, minimise).
+    pub fn send_to_back(&mut self, id: u64) {
+        self.mru.retain(|i| *i != id);
+        self.mru.push(id);
+    }
+
+    pub fn get_mut(&mut self, id: u64) -> Option<&mut Task> {
+        self.list.iter_mut().find(|t| t.id == id)
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Task> {
+        self.list.iter_mut()
+    }
+
+    /// The task a dialog belongs to.
+    pub fn parent_of(&self, id: u64) -> Option<u64> {
+        let t = self.get(id).filter(|t| t.dialog)?;
+        let p = t.window.toplevel()?.parent()?;
+        self.find_surface(&p).filter(|p| *p != id)
+    }
+
+    /// The top-level task a dialog (or a dialog of a dialog) belongs to.
+    pub fn root_of(&self, id: u64) -> u64 {
+        let mut cur = id;
+        for _ in 0..8 {
+            match self.parent_of(cur) {
+                Some(p) => cur = p,
+                None => break,
+            }
+        }
+        cur
+    }
+
+    /// Desktop stacking order, top first: windows in focus order, each
+    /// with its dialogs just above it.
+    pub fn z_order(&self) -> Vec<u64> {
+        let order = self.mru();
+        let roots: Vec<u64> = order.iter().map(|id| self.root_of(*id)).collect();
+        let mut out = Vec::with_capacity(order.len());
+        for (i, r) in roots.iter().enumerate() {
+            if roots[..i].contains(r) {
+                continue;
+            }
+            for (d, rd) in order.iter().zip(&roots) {
+                if rd == r && d != r {
+                    out.push(*d);
+                }
+            }
+            out.push(*r);
+        }
+        out
     }
 
     pub fn find_surface(&self, s: &WlSurface) -> Option<u64> {

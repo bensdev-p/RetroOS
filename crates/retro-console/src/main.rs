@@ -30,6 +30,7 @@ use smithay_client_toolkit::reexports::client::protocol::{
 };
 use smithay_client_toolkit::reexports::client::Proxy;
 use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
+use smithay_client_toolkit::reexports::csd_frame::WindowState;
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::{
     wp_viewport::WpViewport, wp_viewporter::WpViewporter,
 };
@@ -72,6 +73,8 @@ struct App {
     logical: (u32, u32),
     scale: i32,
     configured: bool,
+    /// The last configure was not full screen.
+    windowed: bool,
     frame_pending: bool,
     needs_draw: bool,
     mods: Modifiers,
@@ -200,7 +203,7 @@ impl App {
             self.write_pty(&w);
         }
         if let Some(t) = title {
-            self.title = if t.is_empty() { "RetroDOS".into() } else { t };
+            self.title = if t.is_empty() { "DOS Prompt".into() } else { t };
             self.window.set_title(self.title.clone());
         }
     }
@@ -397,6 +400,15 @@ impl WindowHandler for App {
             });
         let first = !self.configured;
         self.configured = true;
+        // A Desktop window keeps its text size when resized; full screen
+        // picks the largest that fits.
+        // A window being resized keeps its text size; coming out of full
+        // screen (or starting) picks the largest that fits 80×25.
+        let windowed = !cfg.state.contains(WindowState::FULLSCREEN);
+        if let Some(s) = self.screen.as_mut() {
+            s.keep_scale = windowed && self.windowed;
+        }
+        self.windowed = windowed;
         if first || (w, h) != self.logical {
             self.logical = (w, h);
             self.relayout();
@@ -676,7 +688,7 @@ fn main() {
     let shm = Shm::bind(&globals, &qh).expect("wl_shm");
     let surface = compositor.create_surface(&qh);
     let window = xdg.create_window(surface, WindowDecorations::RequestServer, &qh);
-    window.set_title("RetroDOS");
+    window.set_title("DOS Prompt");
     window.set_app_id("retroos.console");
     window.commit();
     let viewporter = globals
@@ -708,12 +720,13 @@ fn main() {
         logical: (0, 0),
         scale: 1,
         configured: false,
+        windowed: false,
         frame_pending: false,
         needs_draw: true,
         mods: Modifiers::default(),
         respawns: Vec::new(),
         exit: false,
-        title: "RetroDOS".into(),
+        title: "DOS Prompt".into(),
         once,
         exit_code: 0,
     };

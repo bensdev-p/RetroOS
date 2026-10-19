@@ -12,6 +12,8 @@ repository = "https://github.com/bensdev-p/RetroOS"
 [workspace.dependencies]
 retro-gfx = { path = "crates/retro-gfx" }
 retro-dosfs = { path = "crates/retro-dosfs" }
+retro-apps = { path = "crates/retro-apps" }
+retro-ui = { path = "crates/retro-ui" }
 retro-ipc = { path = "crates/retro-ipc" }
 retro-kms = { path = "crates/retro-kms" }
 png = "0.17"

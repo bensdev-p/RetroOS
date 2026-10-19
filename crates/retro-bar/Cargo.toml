@@ -1,0 +1,15 @@
+[package]
+name = "retro-bar"
+description = "The System Bar of the RetroOS Desktop: Phosphor menu, Programs, Window, clock"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+retro-gfx.workspace = true
+retro-ui.workspace = true
+retro-apps.workspace = true
+libc = "0.2"
+
+[lints]
+workspace = true

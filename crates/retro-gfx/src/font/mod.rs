@@ -96,6 +96,24 @@ impl Font {
 
     /// Parse the `.glyphs` source format (see the header of the font file).
     pub fn parse_glyphs(name: &str, cell_w: u8, cell_h: u8, src: &str) -> Result<Font, String> {
+        Font::parse(name, cell_w, cell_h, src, false)
+    }
+
+    /// The same format for a proportional font: each glyph is as wide as its
+    /// rows (all rows of a glyph the same length, at most 16), or `w<N>` in
+    /// its header line for glyphs without rows (space). `cell_w` becomes the
+    /// width of the replacement glyph.
+    pub fn parse_proportional(name: &str, cell_h: u8, src: &str) -> Result<Font, String> {
+        Font::parse(name, 8, cell_h, src, true)
+    }
+
+    fn parse(
+        name: &str,
+        cell_w: u8,
+        cell_h: u8,
+        src: &str,
+        proportional: bool,
+    ) -> Result<Font, String> {
         let mut font = Font::new(name, cell_w, cell_h);
         let mut cur: Option<(char, Glyph, usize, usize)> = None; // (ch, glyph, next row, line no.)
         let finish = |font: &mut Font, cur: &mut Option<(char, Glyph, usize, usize)>| {
@@ -113,7 +131,13 @@ impl Font {
             let comment = line == "#" || line.starts_with("# ");
             let art_only =
                 !comment && !line.is_empty() && line.chars().all(|c| c == '#' || c == '.');
-            let is_row = art_only && line.chars().count() == cell_w as usize;
+            let len = line.chars().count();
+            let is_row = art_only
+                && if proportional {
+                    len <= 16
+                } else {
+                    len == cell_w as usize
+                };
             if comment || (line.starts_with('#') && !art_only) {
                 continue; // comment
             }
@@ -127,14 +151,23 @@ impl Font {
                     .map_err(|e| format!("line {line_no}: bad codepoint {cp}: {e}"))?;
                 let ch = char::from_u32(cp).ok_or(format!("line {line_no}: invalid char"))?;
                 let mut top = 0usize;
+                let mut width = if proportional { 0 } else { cell_w };
                 for p in parts {
                     if let Some(n) = p.strip_prefix('+') {
                         top = n
                             .parse()
                             .map_err(|_| format!("line {line_no}: bad offset {p}"))?;
                     }
+                    let digits = |n: &&str| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit());
+                    if let Some(n) = p.strip_prefix('w').filter(digits).filter(|_| proportional) {
+                        width = n
+                            .parse()
+                            .ok()
+                            .filter(|w| *w <= 16)
+                            .ok_or(format!("line {line_no}: bad width {p}"))?;
+                    }
                 }
-                cur = Some((ch, Glyph::blank(cell_w, cell_h), top, line_no));
+                cur = Some((ch, Glyph::blank(width, cell_h), top, line_no));
                 continue;
             }
             if line.is_empty() {
@@ -147,6 +180,16 @@ impl Font {
                 return Err(format!(
                     "line {line_no}: row must be exactly {cell_w} of '#' or '.': {line:?}"
                 ));
+            }
+            if proportional {
+                if g.width == 0 {
+                    g.width = len as u8;
+                } else if g.width as usize != len {
+                    return Err(format!(
+                        "line {line_no}: rows of a glyph must all be {} wide: {line:?}",
+                        g.width
+                    ));
+                }
             }
             if *row >= cell_h as usize {
                 return Err(format!("line {line_no}: too many rows"));
@@ -307,6 +350,27 @@ pub fn build_phosphor_mono() -> Result<Font, String> {
 pub fn phosphor_mono() -> &'static Font {
     static FONT: OnceLock<Font> = OnceLock::new();
     FONT.get_or_init(|| build_phosphor_mono().expect("Phosphor Mono source is valid"))
+}
+
+const LANTERN_12_SRC: &str = include_str!("../../../../assets/fonts/lantern-12.glyphs");
+
+/// Lantern 12, the proportional system font of the Desktop (menus, title
+/// bars, buttons, dialogs). 13 rows tall.
+pub fn lantern_12() -> &'static Font {
+    static FONT: OnceLock<Font> = OnceLock::new();
+    FONT.get_or_init(|| {
+        Font::parse_proportional("Lantern 12", 13, LANTERN_12_SRC)
+            .expect("Lantern 12 source is valid")
+    })
+}
+
+impl Font {
+    /// Width in pixels of `s` set in this font (at scale 1).
+    pub fn text_width(&self, s: &str) -> u32 {
+        s.chars()
+            .map(|c| self.glyph_or_replacement(c).width as u32)
+            .sum()
+    }
 }
 
 /// CP437 code page → Unicode, for the DOS character set and PSF export ordering.

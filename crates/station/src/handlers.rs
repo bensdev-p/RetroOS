@@ -1,8 +1,14 @@
 //! Wayland protocol handlers.
 
-use crate::state::{ClientState, Station};
+use crate::desktop::DragKind;
+use crate::state::{ClientState, Personality, Station};
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
-use smithay::desktop::{find_popup_root_surface, get_popup_toplevel_coords, PopupKind};
+use smithay::desktop::{
+    find_popup_root_surface, get_popup_toplevel_coords, PopupKeyboardGrab, PopupKind,
+    PopupPointerGrab, PopupUngrabStrategy,
+};
+use smithay::input::pointer::Focus;
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode;
@@ -42,7 +48,9 @@ impl CompositorHandler for Station {
             while let Some(parent) = get_parent(&root) {
                 root = parent;
             }
-            if let Some(id) = self.tasks.find_surface(&root) {
+            if self.layer_commit(&root) {
+                // A layer surface (layers.rs).
+            } else if let Some(id) = self.tasks.find_surface(&root) {
                 let t = self.tasks.get(id).unwrap();
                 t.window.on_commit();
                 // Initial configure, sent once the client has committed its first state.
@@ -51,7 +59,9 @@ impl CompositorHandler for Station {
                         top.send_configure();
                     }
                 }
-                if t.dialog && self.tasks.focused() == Some(id) {
+                if self.personality == Personality::Desktop {
+                    self.desktop_commit(id);
+                } else if t.dialog && self.tasks.focused() == Some(id) {
                     // Recentre dialogs as their size settles.
                     let w = t.window.clone();
                     let geo = w.geometry().size;
@@ -151,7 +161,43 @@ impl XdgShellHandler for Station {
         surface.send_repositioned(token);
     }
 
-    fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {}
+    /// A menu wants the mouse and keyboard until it closes (a click
+    /// elsewhere dismisses it).
+    fn grab(&mut self, surface: PopupSurface, seat: wl_seat::WlSeat, serial: Serial) {
+        let Some(seat) = Seat::<Station>::from_resource(&seat) else {
+            return;
+        };
+        let kind = PopupKind::Xdg(surface);
+        let Ok(root) = find_popup_root_surface(&kind) else {
+            return;
+        };
+        if self.tasks.find_surface(&root).is_none() && !self.is_layer_surface(&root) {
+            return;
+        }
+        let Ok(mut grab) = self.popups.grab_popup(root, kind, &seat, serial) else {
+            return;
+        };
+        if let Some(kb) = seat.get_keyboard() {
+            if kb.is_grabbed()
+                && !(kb.has_grab(serial) || kb.has_grab(grab.previous_serial().unwrap_or(serial)))
+            {
+                grab.ungrab(PopupUngrabStrategy::All);
+                return;
+            }
+            kb.set_focus(self, grab.current_grab(), serial);
+            kb.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
+        }
+        if let Some(ptr) = seat.get_pointer() {
+            if ptr.is_grabbed()
+                && !(ptr.has_grab(serial)
+                    || ptr.has_grab(grab.previous_serial().unwrap_or_else(|| grab.serial())))
+            {
+                grab.ungrab(PopupUngrabStrategy::All);
+                return;
+            }
+            ptr.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
+        }
+    }
 
     fn fullscreen_request(
         &mut self,
@@ -160,19 +206,93 @@ impl XdgShellHandler for Station {
     ) {
         // Text mode: everything is already full-screen.
         if let Some(id) = self.tasks.find_surface(surface.wl_surface()) {
-            self.configure_task(id);
+            if self.personality == Personality::Desktop {
+                self.set_fullscreen(id, true);
+            } else {
+                self.configure_task(id);
+            }
         }
     }
 
     fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
         if let Some(id) = self.tasks.find_surface(surface.wl_surface()) {
-            self.configure_task(id);
+            if self.personality == Personality::Desktop {
+                self.set_fullscreen(id, false);
+            } else {
+                self.configure_task(id);
+            }
         }
     }
 
     fn maximize_request(&mut self, surface: ToplevelSurface) {
         if let Some(id) = self.tasks.find_surface(surface.wl_surface()) {
-            self.configure_task(id);
+            if self.personality == Personality::Desktop {
+                self.maximize(id);
+            } else {
+                self.configure_task(id);
+            }
+        }
+    }
+
+    fn unmaximize_request(&mut self, surface: ToplevelSurface) {
+        if let Some(id) = self.tasks.find_surface(surface.wl_surface()) {
+            let max = self.tasks.get(id).is_some_and(|t| t.place.maximized);
+            if self.personality == Personality::Desktop && max {
+                self.restore(id);
+            } else {
+                self.configure_task(id);
+            }
+        }
+    }
+
+    fn minimize_request(&mut self, surface: ToplevelSurface) {
+        if self.personality != Personality::Desktop {
+            return;
+        }
+        if let Some(id) = self.tasks.find_surface(surface.wl_surface()) {
+            self.minimize(id);
+        }
+    }
+
+    /// Programs that draw their own title bars move and size through us.
+    fn move_request(&mut self, surface: ToplevelSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
+        self.client_drag(&surface, DragKind::Move);
+    }
+
+    fn resize_request(
+        &mut self,
+        surface: ToplevelSurface,
+        _seat: wl_seat::WlSeat,
+        _serial: Serial,
+        edges: ResizeEdge,
+    ) {
+        use crate::chrome::{BOTTOM, LEFT, RIGHT, TOP};
+        let e = match edges {
+            ResizeEdge::Top => TOP,
+            ResizeEdge::Bottom => BOTTOM,
+            ResizeEdge::Left => LEFT,
+            ResizeEdge::Right => RIGHT,
+            ResizeEdge::TopLeft => TOP | LEFT,
+            ResizeEdge::TopRight => TOP | RIGHT,
+            ResizeEdge::BottomLeft => BOTTOM | LEFT,
+            ResizeEdge::BottomRight => BOTTOM | RIGHT,
+            _ => return,
+        };
+        self.client_drag(&surface, DragKind::Resize(e));
+    }
+
+    fn show_window_menu(
+        &mut self,
+        surface: ToplevelSurface,
+        _seat: wl_seat::WlSeat,
+        _serial: Serial,
+        _location: smithay::utils::Point<i32, smithay::utils::Logical>,
+    ) {
+        if self.personality != Personality::Desktop {
+            return;
+        }
+        if let Some(id) = self.tasks.find_surface(surface.wl_surface()) {
+            self.open_window_menu(id, false);
         }
     }
 
@@ -182,6 +302,26 @@ impl XdgShellHandler for Station {
 }
 
 impl Station {
+    /// A move or resize the program asked for while a button is held.
+    fn client_drag(&mut self, surface: &ToplevelSurface, kind: DragKind) {
+        if self.personality != Personality::Desktop {
+            return;
+        }
+        let Some(id) = self.tasks.find_surface(surface.wl_surface()) else {
+            return;
+        };
+        let Some(ptr) = self.seat.get_pointer() else {
+            return;
+        };
+        // Station takes the pointer from the program for the drag.
+        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+        ptr.unset_grab(self, serial, self.now_ms());
+        self.begin_drag(id, kind);
+        let loc = self.pointer_location;
+        let t = self.now_ms();
+        self.pointer_motion(loc, t);
+    }
+
     fn unconstrain_popup(&self, popup: &PopupSurface) {
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
             return;

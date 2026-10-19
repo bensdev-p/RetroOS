@@ -159,6 +159,22 @@ impl Broker {
         }
         Ok(out)
     }
+
+    /// The WINDOWS reply: one line per window, top first, fields as Station
+    /// sent them (id, x, y, w, h, state, title).
+    pub fn windows(&mut self) -> Result<Vec<Vec<String>>, String> {
+        let r = self.request(&["WINDOWS"])?;
+        let n: usize = r.first().and_then(|s| s.parse().ok()).unwrap_or(0);
+        let mut out = Vec::new();
+        for _ in 0..n {
+            let l = self.line().ok_or("The display server is not responding")?;
+            let f: Vec<String> = l.split('\t').map(String::from).collect();
+            if f.len() >= 8 && f[0] == "WINDOW" {
+                out.push(f[1..].to_vec());
+            }
+        }
+        Ok(out)
+    }
 }
 
 /// How to run a program: decided by what it is, or forced by RUN /TEXT, RUN /GUI.
@@ -249,9 +265,17 @@ impl Shell {
 
     fn launch_gui(&mut self, b: &mut Broker, argv: &[String], wait: bool, label: &str) -> i32 {
         let cwd = self.dos.cwd_path().to_string_lossy().into_owned();
+        // In the Desktop the program opens in a window of its own.
+        let desktop = b
+            .request(&["PERSONALITY"])
+            .is_ok_and(|r| r.first().is_some_and(|p| p == "desktop"));
         match b.launch(label, argv, &cwd, wait) {
             Ok((lid, _)) if wait => {
-                println!("Running {label}...  Ctrl+Alt+Tab switches back, Ctrl+C ends it.");
+                if desktop {
+                    println!("Running {label}...  Ctrl+C ends it.");
+                } else {
+                    println!("Running {label}...  Ctrl+Alt+Tab switches back, Ctrl+C ends it.");
+                }
                 let _ = std::io::stdout().flush();
                 term::clear_interrupt();
                 let quiet = term::Quiet::enable();
@@ -261,7 +285,11 @@ impl Shell {
                 code
             }
             Ok(_) => {
-                println!("Started {label}.  Ctrl+Alt+Tab switches to it.");
+                if desktop {
+                    println!("Started {label}.");
+                } else {
+                    println!("Started {label}.  Ctrl+Alt+Tab switches to it.");
+                }
                 0
             }
             Err(e) => {

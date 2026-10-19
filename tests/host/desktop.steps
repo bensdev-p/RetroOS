@@ -1,0 +1,101 @@
+# Window management alone: run with RETROOS_NO_BAR=1 (bar.steps covers the bar).
+# Desktop personality, entered live with DESKTOP: the DOS Prompt becomes a
+# window; a second program cascades; move, minimise, restore, maximise,
+# the window menu, Alt+Tab, and Exit to DOS (Ctrl+Alt+F1) and back.
+wait 1500
+type DESKTOP
+key enter
+wait 800
+shot 50-desktop
+expect PERSONALITY => desktop
+windows
+type START DEMO
+key enter
+wait 2000
+expect-task 2
+shot 51-two-windows
+windows
+# Drag the new window by its title bar: an outline follows, the window
+# moves when the button is let go.
+pointer 372 70
+button down
+pointer 500 150
+pointer 672 270
+shot 52-move-outline
+button up
+expect WINDOWS => WINDOW 2 352 290 640 400 normal
+# Minimise it to an icon, then double-click the icon to restore it.
+pointer 936 270
+button click
+wait 300
+expect WINDOWS => minimized
+shot 53-minimised
+pointer 88 1000
+button click
+button click
+wait 300
+expect WINDOWS => WINDOW 2 352 290 640 400 normal
+# Maximise, then double-click the title bar to restore.
+pointer 970 270
+button click
+wait 500
+expect WINDOWS => WINDOW 2 0 38 1920 1042 maximized
+shot 54-maximised
+pointer 960 18
+button click
+button click
+wait 500
+expect WINDOWS => WINDOW 2 352 290 640 400 normal
+# The window menu (Alt+Space).
+key alt+space
+wait 300
+shot 55-window-menu
+key esc
+# Click the DOS Prompt's title bar to bring it forward, size it from the
+# bottom-right corner.
+pointer 200 26
+button click
+wait 200
+pointer 1294 852
+button down
+pointer 1194 752
+pointer 1094 652
+button up
+wait 600
+expect WINDOWS => WINDOW 1 8 46 1080 600 normal
+shot 56-resized
+# Alt+F4 on the main DOS Prompt explains instead of closing it.
+key alt+f4
+wait 300
+shot 57-cannot-close
+key enter
+# Alt+Tab to the other window: the box shows while Alt is held.
+key down:alt
+key tab
+wait 300
+shot 57b-alt-tab
+key up:alt
+wait 300
+expect WINDOWS => WINDOW 2 352 290 640 400 normal
+# Exit to DOS (Ctrl+Alt+F1): the DOS Prompt fills the screen again, the
+# program keeps running.
+key ctrl+alt+f1
+wait 600
+expect PERSONALITY => text
+expect-task 2
+type ECHO back in DOS
+key enter
+wait 300
+shot 58-exit-to-dos
+# And back: windows return where they were.
+type DESKTOP
+key enter
+wait 800
+expect WINDOWS => WINDOW 2 352 290 640 400 normal
+expect WINDOWS => WINDOW 1 8 46 1080 600 normal
+type CLS
+key enter
+type TASKS /W
+key enter
+wait 500
+shot 59-desktop-again

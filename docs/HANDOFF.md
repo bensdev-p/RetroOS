@@ -5,6 +5,34 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
 `docs/STYLE.md` §4, and the decisions D-007/D-023/D-029 (GPU), D-025
 (Xwayland), D-027 (scales) and D-028 (memory budget) in `docs/DECISIONS.md`.
 
+## 0. M3 progress (updated as steps land)
+
+- Work continues on branch `claude/retroos-m3-desktop-32rra9` (based on the
+  M2 branch).
+- **Step 1 done** (desktop personality in Station): `desktop.rs` (window
+  manager: placement, stacking = focus order, move/resize with an outline,
+  minimise to icons, maximise, window menu, Alt+Tab/Esc/F4/Space/Enter,
+  Exit to DOS on Ctrl+Alt+F1, live personality switch) and `chrome.rs`
+  (frames, title bars, pattern, icons, menus, boxes — pure drawing with unit
+  tests). Broker: `PERSONALITY [text|desktop]`, `WINDOWS`; test-only
+  `POINTER x y`, `BUTTON down|up|click`, `KEY down:alt` / `up:alt`.
+  RetroDOS: `DESKTOP`/`WIN`, `TASKS /W`. Decisions D-030, D-031.
+- Tests: `tests/host/desktop.steps`, `tests/host/desktop-start.steps`
+  (run with `STATION_ARGS="--personality desktop"`), `tests/qemu/test_m3.py`.
+- **Lantern 12** (`assets/fonts/lantern-12.glyphs`, proportional bold, ASCII
+  + UI symbols) is used by Station's frames and menus; shared menu/button
+  drawing is `retro_gfx::widgets`.
+- **Step 2 done** (D-032): layer-shell in Station (`layers.rs`).
+- **Steps 3–4 begun**: `crates/retro-ui` (toolkit: bars, popups, windows at
+  1× art pixels via viewporter; `station` broker client), `crates/retro-apps`
+  (.desktop parsing, shared with RetroDOS), `crates/retro-bar` (System Bar:
+  ◆ menu, Programs by category, Window list, clock, Restart / Shut Down /
+  Exit to DOS dialogs). Host test `tests/host/bar.steps`; the WM-only
+  scenarios run with `RETROOS_NO_BAR=1`.
+- Next: Lantern 9 and Latin-1 for Lantern; Program Manager; File Cabinet,
+  Jot, About This Computer; Xwayland; icons and cursors (HANDOFF §7 steps
+  3–8).
+
 ## 1. Where things stand
 
 - **M1 and M2 are complete** and verified on real hardware: a Raspberry Pi 5

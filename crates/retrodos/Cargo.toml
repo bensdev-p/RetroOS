@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 retro-dosfs.workspace = true
+retro-apps.workspace = true
 libc = "0.2"
 
 [lints]

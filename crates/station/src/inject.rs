@@ -111,8 +111,16 @@ impl Station {
         }
     }
 
-    /// "ctrl+alt+tab", "enter", "f3"…
+    /// "ctrl+alt+tab", "enter", "f3"…; "down:alt" / "up:alt" press or
+    /// release one key (to hold Alt across steps).
     pub fn inject_combo(&mut self, combo: &str) -> bool {
+        for (prefix, state) in [("down:", KeyState::Pressed), ("up:", KeyState::Released)] {
+            if let Some(k) = combo.strip_prefix(prefix) {
+                let Some(code) = named(k) else { return false };
+                self.tap(code, state);
+                return true;
+            }
+        }
         let codes: Option<Vec<u32>> = combo.split('+').map(named).collect();
         let Some(codes) = codes else { return false };
         for c in &codes {

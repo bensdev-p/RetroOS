@@ -4,7 +4,7 @@
 #   make image.xz     the same, compressed for distribution
 #   make qemu         boot the QEMU variant interactively (VNC on :5901)
 #   make test         unit tests + host (headless Station) tests
-#   make test-qemu    Milestone end-to-end test in QEMU (slow without KVM)
+#   make test-qemu    Milestone end-to-end tests in QEMU (slow without KVM)
 #   make deb          just the retroos .deb
 #   make container    build everything inside the pinned Debian build container
 #   make clean
@@ -44,16 +44,20 @@ test: test-host
 	cargo test --workspace
 
 test-host:
-	cargo build -p station -p retro-console -p retrodos -p retro-login -p retro-edit -p retro-filer -p retro-net
+	cargo build -p station -p retro-console -p retrodos -p retro-login -p retro-edit -p retro-filer -p retro-net -p retro-bar
 	python3 tests/host/station.py target/debug $(OUT)/test-host
 	python3 tests/host/station.py target/debug $(OUT)/test-host-launch tests/host/launch.steps
 	python3 tests/host/station.py target/debug $(OUT)/test-host-edit tests/host/edit.steps
 	python3 tests/host/station.py target/debug $(OUT)/test-host-filer tests/host/filer.steps
 	python3 tests/host/station.py target/debug $(OUT)/test-host-tasklist tests/host/tasklist.steps
+	RETROOS_NO_BAR=1 python3 tests/host/station.py target/debug $(OUT)/test-host-desktop tests/host/desktop.steps
+	RETROOS_NO_BAR=1 STATION_ARGS="--personality desktop" python3 tests/host/station.py target/debug $(OUT)/test-host-desktop-start tests/host/desktop-start.steps
+	python3 tests/host/station.py target/debug $(OUT)/test-host-bar tests/host/bar.steps
 
 test-qemu:
 	python3 tests/qemu/test_m1.py $(OUT)
 	python3 tests/qemu/test_m2.py $(OUT)
+	python3 tests/qemu/test_m3.py $(OUT)
 
 container:
 	docker build -t $(CONTAINER_IMAGE) -f build/Containerfile build

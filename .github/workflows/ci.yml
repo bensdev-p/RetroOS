@@ -29,12 +29,15 @@ jobs:
       - run: cargo test --workspace
       - name: Headless Station end-to-end
         run: |
-          cargo build -p station -p retro-console -p retrodos -p retro-login -p retro-edit -p retro-filer -p retro-net
+          cargo build -p station -p retro-console -p retrodos -p retro-login -p retro-edit -p retro-filer -p retro-net -p retro-bar
           python3 tests/host/station.py target/debug out/test-host
           python3 tests/host/station.py target/debug out/test-host-launch tests/host/launch.steps
           python3 tests/host/station.py target/debug out/test-host-edit tests/host/edit.steps
           python3 tests/host/station.py target/debug out/test-host-filer tests/host/filer.steps
           python3 tests/host/station.py target/debug out/test-host-tasklist tests/host/tasklist.steps
+          RETROOS_NO_BAR=1 python3 tests/host/station.py target/debug out/test-host-desktop tests/host/desktop.steps
+          RETROOS_NO_BAR=1 STATION_ARGS="--personality desktop" python3 tests/host/station.py target/debug out/test-host-desktop-start tests/host/desktop-start.steps
+          python3 tests/host/station.py target/debug out/test-host-bar tests/host/bar.steps
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -45,6 +48,9 @@ jobs:
             out/test-host-edit
             out/test-host-filer
             out/test-host-tasklist
+            out/test-host-desktop
+            out/test-host-desktop-start
+            out/test-host-bar
 
   image:
     name: Build image and boot it in QEMU
@@ -68,6 +74,8 @@ jobs:
         run: sudo env "PATH=$PATH" python3 tests/qemu/test_m1.py out
       - name: Milestone 2 test (QEMU)
         run: sudo env "PATH=$PATH" python3 tests/qemu/test_m2.py out
+      - name: Milestone 3 test (QEMU)
+        run: sudo env "PATH=$PATH" python3 tests/qemu/test_m3.py out
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -85,3 +93,7 @@ jobs:
             out/test-m2/report.json
             out/test-m2/*.log
             out/test-m2/qemu.err
+            out/test-m3/*.png
+            out/test-m3/report.json
+            out/test-m3/*.log
+            out/test-m3/qemu.err

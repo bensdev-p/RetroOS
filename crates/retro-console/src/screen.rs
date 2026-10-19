@@ -157,6 +157,9 @@ pub struct Screen {
     pub zoom: u32,
     /// The physical size the screen fills.
     pub phys: (u32, u32),
+    /// In a Desktop window: keep the text size when the window is resized
+    /// (instead of re-picking the largest scale that fits 80×25).
+    pub keep_scale: bool,
 }
 
 impl Screen {
@@ -196,6 +199,7 @@ impl Screen {
             compact,
             zoom: 1,
             phys: (phys_w, phys_h),
+            keep_scale: false,
         }
         .laid_out()
     }
@@ -215,7 +219,16 @@ impl Screen {
     }
 
     fn relayout(&mut self, phys_w: u32, phys_h: u32) {
-        let (cols, rows, fs, origin) = geometry(phys_w, phys_h, self.fixed);
+        let keep = (self.keep_scale && self.fixed.is_none()).then_some(self.zoom * self.font_scale);
+        let (cols, rows, fs, origin) = match keep {
+            Some(fs) if phys_w / (8 * fs) >= 20 && phys_h / (16 * fs) >= 5 => {
+                let (c, r) = ((phys_w / (8 * fs)) as usize, (phys_h / (16 * fs)) as usize);
+                let ox = ((phys_w - c as u32 * 8 * fs) / 2) as i32;
+                let oy = ((phys_h - r as u32 * 16 * fs) / 2) as i32;
+                (c, r, fs, (ox, oy))
+            }
+            _ => geometry(phys_w, phys_h, self.fixed),
+        };
         self.phys = (phys_w, phys_h);
         self.cols = cols;
         self.rows = rows;
