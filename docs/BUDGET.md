@@ -35,7 +35,7 @@ copy of the screen. Those are M5 tuning items, prioritised by the Pi numbers.
 | Metric | Value | Notes |
 |---|---|---|
 | Power-on → POST screen | _to measure_ | HW_CHECKLIST 1.1 |
-| Power-on → `C:\>` | _to measure_ | HW_CHECKLIST 1.8 |
+| Power-on → `C:\>` | 17.7 s (cold, 2026-11-04; see Milestone 3) | HW_CHECKLIST 1.8 |
 | Idle RAM, text mode | _see Milestone 2_ | HW_CHECKLIST 1.18 |
 
 ## Milestone 2
@@ -126,7 +126,8 @@ textures. (Headless Station also holds its 8 MB off-screen image.)
 |---|---|---|
 | Desktop idle, MemTotal − MemAvailable (QEMU TCG) | _from CI (test_m3 report.json)_ | |
 | Desktop idle, RetroOS userspace (Pi 5) | **79.4 MB** (AnonPages 63.8 + Shmem 15.6) | HW_CHECKLIST 3.12, CI run 30; target < 160 MB (D-028) ✅ |
-| Firefox windowed, GPU (Pi 5) | _to measure_ | HW_CHECKLIST 3.9 |
+| Firefox windowed, GPU (Pi 5): Enter → window | **~7 s first start, 2.4 s second** | HW_CHECKLIST 3.9, CI run 30; target ~5 s. The second start (files cached) shows the M2 start-up fix works; the first is mostly reading Firefox from the SD card |
+| Power-off → `C:\>` (Pi 5, cold) | **17.7 s** | HW_CHECKLIST 3.15 / 1.8, CI run 30; target ≤ 10 s (aim 7) ❌ — breakdown requested |
 
 ### Raspberry Pi 5 (8 GB), Desktop idle (2026-11-04, CI run 30)
 
