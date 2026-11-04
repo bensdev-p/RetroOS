@@ -87,10 +87,10 @@ if [ -n "${RETRO_DEB_CACHE:-}" ]; then
         --customize-hook="sync-out /var/cache/apt/archives $RETRO_DEB_CACHE"
 fi
 
-echo ">> mmdebstrap (snapshot $SNAPSHOT)"
+bootstrap() {
 mmdebstrap --mode=root --variant=apt --architectures=arm64 "$@" \
     --aptopt='Acquire::Check-Valid-Until "false"' \
-    --aptopt='Acquire::Retries "8"' \
+    --aptopt='Acquire::Retries "20"' \
     --aptopt='APT::Install-Recommends "false"' \
     --dpkgopt='path-exclude=/usr/share/doc/*' \
     --dpkgopt='path-include=/usr/share/doc/*/copyright' \
@@ -108,6 +108,32 @@ mmdebstrap --mode=root --variant=apt --architectures=arm64 "$@" \
     "deb [signed-by=$KR/debian-archive-keyring.gpg] $SEC trixie-security main contrib non-free-firmware" \
     "deb [signed-by=$KR/raspberrypi-archive-keyring.gpg] $RPI trixie main" \
     "deb [trusted=yes] copy:$OUT/repo ./"
+}
+
+# The snapshot server drops requests under load: try the whole bootstrap
+# three times, keeping every package already downloaded (in the cache, which
+# CI saves even when the build fails).
+attempt=1
+echo ">> mmdebstrap (snapshot $SNAPSHOT)"
+until bootstrap "$@"; do
+    if [ -n "${RETRO_DEB_CACHE:-}" ]; then
+        find "$WORK/rootfs/var/cache/apt/archives" -maxdepth 1 -name '*.deb' \
+            -exec cp -n {} "$RETRO_DEB_CACHE"/ \; 2>/dev/null || true
+        echo ">> kept $(ls "$RETRO_DEB_CACHE" | grep -c '\.deb$' || true) packages"
+    fi
+    if [ $attempt -ge 3 ]; then
+        echo "!! mmdebstrap failed $attempt times" >&2
+        exit 1
+    fi
+    attempt=$((attempt + 1))
+    # Never delete through a mount left behind (/proc, /dev of the host).
+    if grep -q " $WORK/rootfs/" /proc/mounts; then
+        grep " $WORK/rootfs/" /proc/mounts | awk '{print $2}' | sort -r | xargs -r umount -l
+    fi
+    rm -rf --one-file-system "$WORK/rootfs"
+    echo ">> mmdebstrap again (attempt $attempt) in 60 s"
+    sleep 60
+done
 
 # Our own package changes every build: not worth keeping.
 [ -n "${RETRO_DEB_CACHE:-}" ] && rm -f "$RETRO_DEB_CACHE"/retroos_*.deb
