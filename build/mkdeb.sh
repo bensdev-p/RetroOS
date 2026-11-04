@@ -4,6 +4,8 @@
 #
 #   build/mkdeb.sh [OUT]          (default OUT=out)
 set -eu
+# snapshot.debian.org answers 504 under load: retry downloads with backoff.
+RETRY="--retry 6 --retry-all-errors --retry-delay 15 --connect-timeout 30"
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-$ROOT/out}
@@ -47,7 +49,7 @@ install -m 755 "$BIN/retro-post" "$STAGE/usr/libexec/retroos/retro-post"
 UNIFONT_DEB=unifont_15.1.01-1_all.deb
 UNIFONT_SHA=$(awk -v f="$UNIFONT_DEB" '$1==f {print $2}' "$ROOT/build/lock/assets.lock")
 if [ ! -f "$OUT/cache/$UNIFONT_DEB" ]; then
-    curl -fsSL -o "$OUT/cache/$UNIFONT_DEB.part" \
+    curl -fsSL $RETRY -o "$OUT/cache/$UNIFONT_DEB.part" \
         "https://snapshot.debian.org/archive/debian/$SNAPSHOT/pool/main/u/unifont/$UNIFONT_DEB"
     mv "$OUT/cache/$UNIFONT_DEB.part" "$OUT/cache/$UNIFONT_DEB"
 fi

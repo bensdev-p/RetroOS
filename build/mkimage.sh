@@ -12,6 +12,8 @@
 # Needs: mmdebstrap, qemu-user-static (binfmt) on non-arm64 hosts, dosfstools,
 # mtools, e2fsprogs, fdisk, xz-utils. Runs as root (or inside the build container).
 set -eu
+# snapshot.debian.org answers 504 under load: retry downloads with backoff.
+RETRY="--retry 6 --retry-all-errors --retry-delay 15 --connect-timeout 30"
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$(mkdir -p "${1:-$ROOT/out}" && cd "${1:-$ROOT/out}" && pwd)
@@ -53,9 +55,9 @@ PKGS=$(list "$ROOT/build/packages/base.list" "$ROOT/build/packages/rpi.list")
 fetch_qemu_kernel() {
     d=$WORK/qemu-debs
     mkdir -p "$d"
-    curl -fsSL -o "$WORK/InRelease" "$DEB/dists/trixie/InRelease"
+    curl -fsSL $RETRY -o "$WORK/InRelease" "$DEB/dists/trixie/InRelease"
     gpgv --keyring "$KR/debian-archive-keyring.gpg" "$WORK/InRelease" 2>/dev/null
-    curl -fsSL -o "$WORK/Packages.xz" "$DEB/dists/trixie/main/binary-arm64/Packages.xz"
+    curl -fsSL $RETRY -o "$WORK/Packages.xz" "$DEB/dists/trixie/main/binary-arm64/Packages.xz"
     want=$(awk '/^SHA256:/{s=1;next} /^[A-Z]/{s=0} s && $3=="main/binary-arm64/Packages.xz"{print $1}' "$WORK/InRelease")
     echo "$want  $WORK/Packages.xz" | sha256sum -c --quiet
     xz -dc "$WORK/Packages.xz" > "$WORK/Packages"
@@ -64,7 +66,7 @@ fetch_qemu_kernel() {
     image=$(field "$meta" Depends | tr ',' '\n' | sed 's/^ *//; s/ .*//' | grep '^linux-image-[0-9]' | head -1)
     for p in $meta $image; do
         file=$(field "$p" Filename); sum=$(field "$p" SHA256)
-        curl -fsSL -o "$d/$(basename "$file")" "$DEB/$file"
+        curl -fsSL $RETRY -o "$d/$(basename "$file")" "$DEB/$file"
         echo "$sum  $d/$(basename "$file")" | sha256sum -c --quiet
     done
     echo ">> QEMU kernel: $image"
@@ -74,7 +76,7 @@ fetch_qemu_kernel
 echo ">> mmdebstrap (snapshot $SNAPSHOT)"
 mmdebstrap --mode=root --variant=apt --architectures=arm64 \
     --aptopt='Acquire::Check-Valid-Until "false"' \
-    --aptopt='Acquire::Retries "3"' \
+    --aptopt='Acquire::Retries "8"' \
     --aptopt='APT::Install-Recommends "false"' \
     --dpkgopt='path-exclude=/usr/share/doc/*' \
     --dpkgopt='path-include=/usr/share/doc/*/copyright' \
