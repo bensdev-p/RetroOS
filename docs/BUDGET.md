@@ -125,5 +125,25 @@ textures. (Headless Station also holds its 8 MB off-screen image.)
 | Metric | Value | Notes |
 |---|---|---|
 | Desktop idle, MemTotal − MemAvailable (QEMU TCG) | _from CI (test_m3 report.json)_ | |
-| Desktop idle, RetroOS userspace (Pi 5) | _to measure_ | HW_CHECKLIST 3.12; target < 160 MB (D-028) |
+| Desktop idle, RetroOS userspace (Pi 5) | **79.4 MB** (AnonPages 63.8 + Shmem 15.6) | HW_CHECKLIST 3.12, CI run 30; target < 160 MB (D-028) ✅ |
 | Firefox windowed, GPU (Pi 5) | _to measure_ | HW_CHECKLIST 3.9 |
+
+### Raspberry Pi 5 (8 GB), Desktop idle (2026-11-04, CI run 30)
+
+Desktop with the System Bar and the DOS Prompt window (maximised), Firefox
+closed, from `/proc/meminfo` on the Pi:
+
+| Metric | Desktop idle | Text mode (run 24) | Target |
+|---|---:|---:|---:|
+| RetroOS userspace: AnonPages + Shmem | **79.4 MB** (63.8 + 15.6) | 44.4 MB | GUI < 160 MB ✅ |
+| MemTotal − MemAvailable ("used") | 272.5 MB | 224.4 MB | — |
+| Slab (unreclaimable) | 64.0 (39.7) MB | — (31.0) | |
+| VmallocUsed | 20.0 MB | 20.1 MB | |
+| CMA in use | 10.0 MB | — | |
+| station RSS | 112.2 MB | 31.8 MB | |
+| retro-console RSS | 13.4 MB | 9.9 MB | |
+
+station's RSS includes the Mesa/V3D libraries it mapped while Firefox ran
+on the GPU; those are file pages (counted as available, not in "used").
+Whether Station had already dropped back to the CPU renderer when this was
+taken (60 s after the last graphical program) is to be confirmed.
