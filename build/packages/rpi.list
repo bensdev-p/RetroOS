@@ -5,3 +5,5 @@ linux-image-rpi-2712
 linux-image-rpi-v8
 firmware-brcm80211
 bluez-firmware
+# vcgencmd and vclog: firmware/bootloader diagnostics (boot-time breakdown, BUDGET.md).
+raspi-utils-core

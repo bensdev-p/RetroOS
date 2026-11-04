@@ -148,3 +148,24 @@ station's RSS includes the Mesa/V3D libraries it mapped while Firefox ran
 on the GPU; those are file pages (counted as available, not in "used").
 Whether Station had already dropped back to the CPU renderer when this was
 taken (60 s after the last graphical program) is to be confirmed.
+
+### Raspberry Pi 5 boot breakdown (2026-11-04, CI run 30, cold power-on, text mode)
+
+The stopwatch says power-off → `C:\>` **17.7 s**. From the Pi's own logs:
+
+| Stage | Time | From |
+|---|---:|---|
+| Kernel start → userspace | 1.23 s | `systemd-analyze` |
+| Userspace → graphical.target (greetd starts) | 2.91 s | `systemd-analyze`, critical chain: zram swap → local-fs → sysinit → dbus → iwd → network.target → greetd |
+| POST screen on display | 2.85 s → 3.88 s after kernel start (1.03 s shown) | `RETRO-POST` markers |
+| retro-post.service | 2.14 s, of which ~1.1 s waiting for the display | `systemd-analyze blame` |
+| User manager ready (autologin) | 4.42 s after kernel start | journal |
+| **Linux total, kernel start → `C:\>`** | **≈ 4.5–5 s** | (prompt shortly after the user manager) |
+| **Before the kernel: firmware/bootloader (and the monitor waking up)** | **≈ 12–13 s** (by subtraction) | to be measured: `vclog -m` (raspi-utils-core, now in the image) and the power-on → POST stopwatch |
+
+So the Linux side is already inside the 7 s aim; the gap to the 10 s target
+is all before the kernel starts. Candidates, to check against the firmware
+log: the monitor being powered by (and starting with) the Pi, HDMI/EDID
+waits in the bootloader, the bootloader's boot-order and power-supply
+checks. None of these can be fixed in config.txt alone; EEPROM settings
+(`BOOT_ORDER`, `DISABLE_HDMI`…) are the likely lever.
