@@ -53,6 +53,7 @@ test-host:
 	RETROOS_NO_BAR=1 python3 tests/host/station.py target/debug $(OUT)/test-host-desktop tests/host/desktop.steps
 	RETROOS_NO_BAR=1 STATION_ARGS="--personality desktop" python3 tests/host/station.py target/debug $(OUT)/test-host-desktop-start tests/host/desktop-start.steps
 	python3 tests/host/station.py target/debug $(OUT)/test-host-bar tests/host/bar.steps
+	python3 tests/host/station.py target/debug $(OUT)/test-host-scheme tests/host/scheme.steps
 
 test-qemu:
 	python3 tests/qemu/test_m1.py $(OUT)

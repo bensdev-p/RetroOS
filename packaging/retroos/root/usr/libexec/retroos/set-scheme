@@ -1,0 +1,19 @@
+#!/bin/sh
+# Set the colour scheme of the whole system (run as root).
+#
+#   set-scheme classic|paper|amber|green|high
+#
+# Writes scheme= in /etc/retroos/startup.conf, which the POST screen, the
+# login screen, Station and every RetroOS program read. Used by COLOR; the
+# admin group may run it without a password (sudoers.d/retroos).
+set -eu
+case ${1:-} in
+    classic|paper|amber|green|high) ;;
+    *) echo "Unknown colour scheme" >&2; exit 2 ;;
+esac
+f=/etc/retroos/startup.conf
+mkdir -p /etc/retroos
+[ -f $f ] || : > $f
+{ grep -v '^[[:space:]]*scheme=' $f || true; echo "scheme=$1"; } > $f.new
+chmod 644 $f.new
+mv $f.new $f

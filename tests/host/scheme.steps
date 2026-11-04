@@ -1,0 +1,42 @@
+# COLOR sets the colour scheme of the whole system: the DOS Prompt, the
+# Desktop's frames, menus and pattern, the System Bar, other consoles and
+# the Task List all follow at once.
+wait 1500
+type DESKTOP
+key enter
+wait 1500
+type START DEMO
+key enter
+wait 2000
+shot 80-classic
+# Classic: White bar, Cobalt active title, Cobalt/Black desktop.
+expect-pixel 80-classic 1000 10 F5F5F0
+expect-pixel 80-classic 1900 1070 0A0A0F
+type COLOR AMBER
+key enter
+wait 1200
+shot 81-amber
+# Amber: black bar, a dark-amber/black dither (2-px cells at 1080p).
+expect-pixel 81-amber 1000 10 0A0702
+expect-pixel 81-amber 1900 1070 0A0702
+expect-pixel 81-amber 1902 1070 5A3A00
+expect SCHEME => amber
+key alt+space
+wait 300
+shot 82-amber-menu
+key esc
+key ctrl+alt+esc
+wait 300
+shot 83-amber-task-list
+key esc
+type COLOR PAPER
+key enter
+wait 1200
+shot 84-paper
+expect-pixel 84-paper 1900 1070 0A0A0F
+expect-pixel 84-paper 1902 1070 F5F5F0
+type COLOR CLASSIC
+key enter
+wait 1200
+shot 85-classic-again
+expect-pixel 85-classic-again 1000 10 F5F5F0

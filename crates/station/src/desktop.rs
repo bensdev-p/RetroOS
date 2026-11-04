@@ -211,7 +211,7 @@ impl Station {
     ];
 
     pub fn metrics(&self) -> Metrics {
-        Metrics::new(self.scale, self.art_scale)
+        Metrics::new(self.scale, self.art_scale).with_theme(self.theme)
     }
 
     /// The screen minus reserved strips (the System Bar's exclusive zone).
@@ -1488,7 +1488,7 @@ impl Station {
             if menu.buffer.is_none() {
                 let only: Vec<MenuItem> = menu.items.iter().map(|(i, _)| i.clone()).collect();
                 menu.buffer = Some(chrome::to_buffer(
-                    &retro_gfx::widgets::draw_menu(&only, menu.sel, m.px),
+                    &retro_gfx::widgets::draw_menu(&only, menu.sel, m.px, &m.theme),
                     m.scale,
                 ));
             }

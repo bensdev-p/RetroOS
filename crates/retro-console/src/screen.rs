@@ -176,7 +176,7 @@ impl Screen {
             &Size { cols, lines: rows },
             Listener(outbox.clone()),
         );
-        let scheme = Scheme::CLASSIC;
+        let scheme = Scheme::system().clone();
         Screen {
             term,
             parser: Processor::new(),
@@ -260,19 +260,18 @@ impl Screen {
         }
     }
 
+    /// Switch to a colour scheme by its short name (COLOR, or Station
+    /// telling every console that the system's scheme changed).
+    pub fn set_scheme(&mut self, key: &str) {
+        self.scheme = Scheme::by_key(key).unwrap_or(&Scheme::CLASSIC).clone();
+        self.attr = None;
+        self.full_redraw = true;
+    }
+
     fn retro_command(&mut self, cmd: &str) {
         let (k, v) = cmd.split_once('=').unwrap_or((cmd, ""));
         match k {
-            "scheme" => {
-                self.scheme = match v {
-                    "paper" => Scheme::PAPER,
-                    "amber" => Scheme::AMBER,
-                    "green" => Scheme::GREEN,
-                    "high" => Scheme::HIGH_CONTRAST,
-                    _ => Scheme::CLASSIC,
-                };
-                self.attr = None;
-            }
+            "scheme" => self.set_scheme(v),
             "grid" => {
                 self.fixed = v.split_once('x').and_then(|(c, r)| {
                     let (c, r) = (c.parse::<usize>().ok()?, r.parse::<usize>().ok()?);

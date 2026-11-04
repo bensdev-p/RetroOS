@@ -29,6 +29,10 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   ◆ menu, Programs by category, Window list, clock, Restart / Shut Down /
   Exit to DOS dialogs). Host test `tests/host/bar.steps`; the WM-only
   scenarios run with `RETROOS_NO_BAR=1`.
+- **System-wide colour scheme** (D-033): `retro_gfx::Theme` per scheme;
+  `scheme=` in startup.conf; broker `SCHEME`, `WATCH` (EVENT lines);
+  `COLOR` saves it via `/usr/libexec/retroos/set-scheme`. Host test
+  `tests/host/scheme.steps` (with `expect-pixel`).
 - Next: Lantern 9 and Latin-1 for Lantern; Program Manager; File Cabinet,
   Jot, About This Computer; Xwayland; icons and cursors (HANDOFF §7 steps
   3–8).

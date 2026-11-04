@@ -38,6 +38,7 @@ jobs:
           RETROOS_NO_BAR=1 python3 tests/host/station.py target/debug out/test-host-desktop tests/host/desktop.steps
           RETROOS_NO_BAR=1 STATION_ARGS="--personality desktop" python3 tests/host/station.py target/debug out/test-host-desktop-start tests/host/desktop-start.steps
           python3 tests/host/station.py target/debug out/test-host-bar tests/host/bar.steps
+          python3 tests/host/station.py target/debug out/test-host-scheme tests/host/scheme.steps
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -51,6 +52,7 @@ jobs:
             out/test-host-desktop
             out/test-host-desktop-start
             out/test-host-bar
+            out/test-host-scheme
 
   image:
     name: Build image and boot it in QEMU

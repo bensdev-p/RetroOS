@@ -219,8 +219,8 @@ const DOS_TO_ANSI: [u8; 8] = [0, 4, 2, 6, 1, 5, 3, 7];
 
 pub const COLOR: Builtin = Builtin {
     names: &["COLOR"],
-    summary: "Sets the default console foreground and background colors.",
-    usage: "COLOR [scheme | attr]\n\n  scheme  CLASSIC, PAPER, AMBER, GREEN or CONTRAST.\n  attr    Two hex digits: the first is the background, the second the\n          foreground.  Each digit can be any of these values:\n\n    0 = Black    4 = Brick    8 = Slate    C = Coral\n    1 = Cobalt   5 = Plum     9 = Sky      D = Orchid\n    2 = Fern     6 = Ochre    A = Lime     E = Lemon\n    3 = Teal     7 = Silver   B = Aqua     F = White\n\nType COLOR without an argument to restore the scheme's default colors.\nExample: \"COLOR 1E\" gives Lemon on Cobalt.",
+    summary: "Sets the colour scheme of RetroOS, or this console's colors.",
+    usage: "COLOR [scheme | attr]\n\n  scheme  CLASSIC, PAPER, AMBER, GREEN or CONTRAST: the colours of the\n          whole system (every DOS Prompt, the Desktop, the POST and\n          login screens). Kept for the next start.\n  attr    Two hex digits: the first is the background, the second the\n          foreground.  Each digit can be any of these values:\n\n    0 = Black    4 = Brick    8 = Slate    C = Coral\n    1 = Cobalt   5 = Plum     9 = Sky      D = Orchid\n    2 = Fern     6 = Ochre    A = Lime     E = Lemon\n    3 = Teal     7 = Silver   B = Aqua     F = White\n\nType COLOR without an argument to restore the scheme's default colors.\nExample: \"COLOR 1E\" gives Lemon on Cobalt.",
     run: |_, a, io| {
         let arg = a.words.first().map(|s| s.to_ascii_uppercase());
         let retro = std::env::var_os("RETROOS_CONSOLE").is_some();
@@ -253,6 +253,18 @@ pub const COLOR: Builtin = Builtin {
                     _ => return err(io, "Invalid parameter - try COLOR /?"),
                 };
                 let _ = write!(io.out, "\x1b]7701;scheme={scheme}\x07");
+                if retro {
+                    let _ = write!(io.out, "\x1b[H\x1b[2J");
+                }
+                // Every other console and the Desktop follow at once; the
+                // system keeps it for the next start.
+                let live = crate::launch::Broker::connect()
+                    .map(|mut b| b.request(&["SCHEME", scheme]).is_ok())
+                    .unwrap_or(false);
+                if !save_scheme(scheme) && live {
+                    let _ = writeln!(io.out, "The colours apply until you log off (only an administrator's COLOR is kept).");
+                }
+                return 0;
             }
         }
         if retro {
@@ -261,6 +273,22 @@ pub const COLOR: Builtin = Builtin {
         0
     },
 };
+
+/// Keep the system's colour scheme (startup.conf), through the helper the
+/// admin group may run without a password.
+fn save_scheme(key: &str) -> bool {
+    const HELPER: &str = "/usr/libexec/retroos/set-scheme";
+    if !std::path::Path::new(HELPER).exists() {
+        return false;
+    }
+    std::process::Command::new("sudo")
+        .args(["-n", HELPER, key])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
 
 pub const BEEP: Builtin = Builtin {
     names: &["BEEP"],

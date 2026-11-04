@@ -10,6 +10,7 @@ private XDG_RUNTIME_DIR and HOME, then runs a script of steps:
     expect <REQUEST> => <text>  (the reply, all lines, contains text)
     pointer <x> <y> | button <down|up|click> [right]   (mouse, logical pixels)
     windows                     (print the WINDOWS reply)
+    expect-pixel <shot> <x> <y> <RRGGBB>   (a pixel of an earlier shot)
 Extra Station arguments come from $STATION_ARGS (e.g. --personality desktop).
 """
 import os, socket, subprocess, sys, tempfile, time, glob
@@ -98,6 +99,13 @@ def main():
                 print("FAIL request", arg, r); ok = False
         elif cmd == "tasks":
             print("\n".join(req("TASKS")))
+        elif cmd == "expect-pixel":
+            from PIL import Image
+            name, x, y, want = arg.split()
+            px = Image.open(os.path.join(outdir, name + ".png")).convert("RGB").getpixel((int(x), int(y)))
+            got = "%02X%02X%02X" % px
+            if got != want.upper():
+                print("FAIL pixel", name, x, y, "want", want, "got", got); ok = False
         elif cmd == "windows":
             print("\n".join(req("WINDOWS")))
         elif cmd == "expect":

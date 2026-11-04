@@ -8,9 +8,11 @@ pub mod font;
 pub mod grid;
 pub mod palette;
 mod surface;
+pub mod theme;
 pub mod widgets;
 
 pub use font::{Font, Glyph};
 pub use grid::{Cell, Grid};
 pub use palette::{Rgb, Scheme};
 pub use surface::{Canvas, Surface};
+pub use theme::Theme;

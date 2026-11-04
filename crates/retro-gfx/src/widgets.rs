@@ -1,10 +1,11 @@
 //! The widgets every RetroOS GUI shares (docs/STYLE.md §4): Lantern 12
 //! text, menus, bevelled buttons. Sizes are art pixels; `p` is the number
 //! of output pixels per art pixel. Station draws its window menu with these,
-//! retro-ui programs (the System Bar) their menus.
+//! retro-ui programs (the System Bar) their menus. Colours come from the
+//! [`Theme`] of the current colour scheme.
 
 use crate::font::lantern_12;
-use crate::palette::{BLACK, SILVER, SKY, SLATE, WHITE};
+use crate::theme::Theme;
 use crate::{Canvas, Rgb, Surface};
 
 /// A pixel value meaning "transparent" in canvases that need it.
@@ -93,30 +94,30 @@ pub fn menu_layout(items: &[MenuItem]) -> (i32, i32, Vec<(i32, i32)>) {
 }
 
 /// The menu with a 1-px drop shadow (right and bottom), selection `sel`.
-pub fn draw_menu(items: &[MenuItem], sel: Option<usize>, p: i32) -> Canvas {
+pub fn draw_menu(items: &[MenuItem], sel: Option<usize>, p: i32, t: &Theme) -> Canvas {
     let (w, h, rows) = menu_layout(items);
     let mut c = Canvas::new(((w + 1) * p) as u32, ((h + 1) * p) as u32, CLEAR_PX);
     let mut sf = c.surface();
-    sf.fill_rect(p, p, (w * p) as u32, (h * p) as u32, BLACK);
-    sf.fill_rect(0, 0, (w * p) as u32, (h * p) as u32, SILVER);
-    sf.frame(0, 0, (w * p) as u32, (h * p) as u32, p as u32, BLACK);
+    sf.fill_rect(p, p, (w * p) as u32, (h * p) as u32, t.line);
+    sf.fill_rect(0, 0, (w * p) as u32, (h * p) as u32, t.face);
+    sf.frame(0, 0, (w * p) as u32, (h * p) as u32, p as u32, t.line);
     let font = lantern_12();
     for (i, (it, (y, ih))) in items.iter().zip(rows).enumerate() {
         if it.is_separator() {
-            sf.fill_rect(p, (y + 3) * p, ((w - 2) * p) as u32, p as u32, SLATE);
-            sf.fill_rect(p, (y + 4) * p, ((w - 2) * p) as u32, p as u32, WHITE);
+            sf.fill_rect(p, (y + 3) * p, ((w - 2) * p) as u32, p as u32, t.dark);
+            sf.fill_rect(p, (y + 4) * p, ((w - 2) * p) as u32, p as u32, t.light);
             continue;
         }
         let selected = sel == Some(i);
         let fg = if !it.enabled {
-            SLATE
+            t.disabled
         } else if selected {
-            WHITE
+            t.sel_text
         } else {
-            BLACK
+            t.text
         };
         if selected {
-            sf.fill_rect(2 * p, y * p, ((w - 4) * p) as u32, (ih * p) as u32, SKY);
+            sf.fill_rect(2 * p, y * p, ((w - 4) * p) as u32, (ih * p) as u32, t.sel);
         }
         let ty = (y + TEXT_Y) * p;
         if it.checked {
@@ -163,22 +164,22 @@ pub fn menu_hit(items: &[MenuItem], x: i32, y: i32) -> Option<usize> {
         .filter(|i| items[*i].enabled && !items[*i].is_separator())
 }
 
-/// A bevelled face (1 px White top-left, Slate bottom-right; inverted when
+/// A bevelled face (1 px light top-left, dark bottom-right; inverted when
 /// pressed), `w`×`h` art pixels at (x, y) art pixels.
-pub fn bevel(sf: &mut Surface, x: i32, y: i32, w: i32, h: i32, p: i32, pressed: bool) {
+pub fn bevel(sf: &mut Surface, x: i32, y: i32, w: i32, h: i32, p: i32, pressed: bool, t: &Theme) {
     let (hi, lo) = if pressed {
-        (SLATE, WHITE)
+        (t.dark, t.light)
     } else {
-        (WHITE, SLATE)
+        (t.light, t.dark)
     };
-    sf.fill_rect(x * p, y * p, (w * p) as u32, (h * p) as u32, SILVER);
+    sf.fill_rect(x * p, y * p, (w * p) as u32, (h * p) as u32, t.face);
     sf.fill_rect(x * p, y * p, (w * p) as u32, p as u32, hi);
     sf.fill_rect(x * p, y * p, p as u32, (h * p) as u32, hi);
     sf.fill_rect(x * p, (y + h - 1) * p, (w * p) as u32, p as u32, lo);
     sf.fill_rect((x + w - 1) * p, y * p, p as u32, (h * p) as u32, lo);
 }
 
-/// A push button with a Black outline (two lines for the default button)
+/// A push button with an outline (two lines for the default button)
 /// and a centred Lantern 12 label.
 pub fn push_button(
     sf: &mut Surface,
@@ -190,6 +191,7 @@ pub fn push_button(
     label: &str,
     default: bool,
     pressed: bool,
+    t: &Theme,
 ) {
     let ring = if default { 2 } else { 1 };
     for i in 0..ring {
@@ -199,7 +201,7 @@ pub fn push_button(
             ((w - 2 * i) * p) as u32,
             ((h - 2 * i) * p) as u32,
             p as u32,
-            BLACK,
+            t.line,
         );
     }
     bevel(
@@ -210,16 +212,18 @@ pub fn push_button(
         h - 2 * ring,
         p,
         pressed,
+        t,
     );
     let off = if pressed { 1 } else { 0 };
     let tx = x + (w - text_width(label)) / 2 + off;
     let ty = y + (h - 13) / 2 + off;
-    sf.text(lantern_12(), tx * p, ty * p, p as u32, BLACK, None, label);
+    sf.text(lantern_12(), tx * p, ty * p, p as u32, t.text, None, label);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::palette::{BLACK, SKY, WHITE};
 
     #[test]
     fn menus() {
@@ -238,7 +242,7 @@ mod tests {
         assert_eq!(menu_hit(&items, 20, 25), Some(1));
         assert_eq!(menu_hit(&items, 20, 42), None); // separator
         assert_eq!(menu_hit(&items, 20, 50), Some(3));
-        let c = draw_menu(&items, Some(1), 2);
+        let c = draw_menu(&items, Some(1), 2, &Theme::default());
         assert_eq!(c.get(c.width - 1, 0), CLEAR_PX);
         assert_eq!(c.get(10, 22 * 2), SKY);
         let cut = ellipsize("Program Manager", 60);
@@ -249,7 +253,18 @@ mod tests {
     #[test]
     fn buttons() {
         let mut c = Canvas::new(80, 30, 0);
-        push_button(&mut c.surface(), 0, 0, 40, 15, 2, "OK", true, false);
+        push_button(
+            &mut c.surface(),
+            0,
+            0,
+            40,
+            15,
+            2,
+            "OK",
+            true,
+            false,
+            &Theme::default(),
+        );
         assert_eq!(c.get(0, 0), BLACK);
         assert_eq!(c.get(2, 2), BLACK); // the default button's second ring
         assert_eq!(c.get(4, 4), WHITE); // bevel highlight

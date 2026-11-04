@@ -14,7 +14,7 @@
 pub mod station;
 
 use retro_gfx::widgets::CLEAR_PX;
-use retro_gfx::Canvas;
+use retro_gfx::{Canvas, Scheme, Theme};
 use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::calloop::timer::{TimeoutAction, Timer};
@@ -120,6 +120,9 @@ pub trait Program {
     fn event(&mut self, ui: &mut Ui, id: SurfaceId, ev: Event);
     /// A timer set with [`Ui::timer`] fired.
     fn timer(&mut self, _ui: &mut Ui, _token: u32) {}
+    /// The system's colour scheme changed ([`Ui::theme`] has the new one;
+    /// every surface is redrawn anyway).
+    fn theme_changed(&mut self, _ui: &mut Ui) {}
 }
 
 enum Role {
@@ -178,6 +181,8 @@ pub struct Ui {
     pub output_scale: i32,
     /// Output size in art pixels.
     pub screen: (i32, i32),
+    /// Colours of the system's scheme (followed live from Station).
+    pub theme: Theme,
     quit: bool,
 }
 
@@ -459,6 +464,7 @@ pub fn run(program: Box<dyn Program>) -> Result<(), String> {
         art_scale: 1,
         output_scale: 1,
         screen: (960, 540),
+        theme: Theme::system(),
         quit: false,
     };
     let mut st = State { ui, program };
@@ -483,6 +489,19 @@ pub fn run(program: Box<dyn Program>) -> Result<(), String> {
     WaylandSource::new(conn.clone(), queue)
         .insert(event_loop.handle())
         .map_err(|e| format!("wayland source: {e}"))?;
+    station::watch(&event_loop.handle(), |st: &mut State, f: &[&str]| {
+        if let ["SCHEME", key] = f {
+            let theme = Theme::for_scheme(Scheme::by_key(key).unwrap_or(&Scheme::CLASSIC));
+            if theme != st.ui.theme {
+                st.ui.theme = theme;
+                for s in st.ui.surfaces.values_mut() {
+                    s.dirty = true;
+                }
+                let State { ui, program } = st;
+                program.theme_changed(ui);
+            }
+        }
+    });
     {
         let State { ui, program } = &mut st;
         program.start(ui);

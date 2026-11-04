@@ -1,2 +1,4 @@
 # Members of the admin group may run any command (ADMIN in RetroDOS).
 %admin ALL=(ALL:ALL) ALL
+# COLOR saves the colour scheme for the whole system without asking.
+%admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-scheme

@@ -35,11 +35,12 @@ const LIME: u8 = 10;
 const LEMON: u8 = 14;
 const WHITE: u8 = 15;
 
-/// The BIOS look: Silver on Black.
+/// The BIOS look: Silver on Black, in the colours of the system's scheme
+/// (COLOR; black on white in Paper, amber on black in Amber…).
 fn bios_scheme() -> Scheme {
     Scheme {
         name: "BIOS",
-        palette: palette::PHOSPHOR16,
+        palette: Scheme::system().palette,
         fg: SILVER,
         bg: BLACK,
         border: BLACK,
@@ -116,6 +117,7 @@ fn draw_logo(c: &mut Canvas, g: &Grid, scale: u32) {
     let cx = ox + (COLS as i32 - 9) * cw as i32;
     let cy = oy + 2 * ch as i32;
     let mut s = c.surface();
+    let th = retro_gfx::Theme::system();
     let rings = [
         (size, palette::COBALT),
         (size - 3, palette::SKY),
@@ -130,7 +132,7 @@ fn draw_logo(c: &mut Canvas, g: &Grid, scale: u32) {
                 cy + dy * px,
                 ((2 * w + 1) * px) as u32,
                 px as u32,
-                col,
+                th.picture(col),
             );
         }
     }
@@ -141,7 +143,7 @@ fn draw_logo(c: &mut Canvas, g: &Grid, scale: u32) {
         lx,
         cy + (size + 2) * px,
         scale,
-        palette::LEMON,
+        th.picture(palette::LEMON),
         None,
         label,
     );
@@ -246,7 +248,7 @@ fn run_menu(
 // ---------------------------------------------------------------- setup
 
 fn setup_grid(cfg: &Config, sel: usize, saved: bool) -> Grid {
-    let mut g = Grid::new(COLS, ROWS, &Scheme::CLASSIC);
+    let mut g = Grid::new(COLS, ROWS, Scheme::system());
     g.fill(0, 0, COLS, 1, ' ', BLACK, TEAL);
     g.put(2, 0, "Phosphor BIOS Setup — Startup", BLACK, TEAL);
     g.dialog(10, 4, 60, 13, "Startup Options", SILVER, COBALT, true);
