@@ -5,7 +5,7 @@
 #   build/mkdeb.sh [OUT]          (default OUT=out)
 set -eu
 # snapshot.debian.org answers 504 under load: retry downloads with backoff.
-RETRY="--retry 6 --retry-all-errors --retry-delay 15 --connect-timeout 30"
+RETRY="--retry 20 --retry-all-errors --retry-delay 60 --connect-timeout 30"
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-$ROOT/out}

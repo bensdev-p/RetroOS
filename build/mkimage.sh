@@ -13,7 +13,7 @@
 # mtools, e2fsprogs, fdisk, xz-utils. Runs as root (or inside the build container).
 set -eu
 # snapshot.debian.org answers 504 under load: retry downloads with backoff.
-RETRY="--retry 6 --retry-all-errors --retry-delay 15 --connect-timeout 30"
+RETRY="--retry 20 --retry-all-errors --retry-delay 60 --connect-timeout 30"
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$(mkdir -p "${1:-$ROOT/out}" && cd "${1:-$ROOT/out}" && pwd)
@@ -73,8 +73,22 @@ fetch_qemu_kernel() {
 }
 fetch_qemu_kernel
 
+# Optional package cache (CI keeps it between runs): .debs are copied in
+# before apt downloads and out again before customize.sh empties the cache,
+# so a build fetches only what changed and is not at the mercy of the
+# snapshot server for every package.
+set --
+if [ -n "${RETRO_DEB_CACHE:-}" ]; then
+    mkdir -p "$RETRO_DEB_CACHE"
+    echo ">> package cache $RETRO_DEB_CACHE ($(ls "$RETRO_DEB_CACHE" | grep -c '\.deb$' || true) packages)"
+    set -- --skip=download/empty --skip=essential/unlink \
+        --setup-hook='mkdir -p "$1"/var/cache/apt/archives' \
+        --setup-hook="sync-in $RETRO_DEB_CACHE /var/cache/apt/archives" \
+        --customize-hook="sync-out /var/cache/apt/archives $RETRO_DEB_CACHE"
+fi
+
 echo ">> mmdebstrap (snapshot $SNAPSHOT)"
-mmdebstrap --mode=root --variant=apt --architectures=arm64 \
+mmdebstrap --mode=root --variant=apt --architectures=arm64 "$@" \
     --aptopt='Acquire::Check-Valid-Until "false"' \
     --aptopt='Acquire::Retries "8"' \
     --aptopt='APT::Install-Recommends "false"' \
@@ -94,6 +108,9 @@ mmdebstrap --mode=root --variant=apt --architectures=arm64 \
     "deb [signed-by=$KR/debian-archive-keyring.gpg] $SEC trixie-security main contrib non-free-firmware" \
     "deb [signed-by=$KR/raspberrypi-archive-keyring.gpg] $RPI trixie main" \
     "deb [trusted=yes] copy:$OUT/repo ./"
+
+# Our own package changes every build: not worth keeping.
+[ -n "${RETRO_DEB_CACHE:-}" ] && rm -f "$RETRO_DEB_CACHE"/retroos_*.deb
 
 R=$WORK/rootfs
 chroot "$R" dpkg-query -W -f='${Package}\t${Version}\t${Architecture}\n' | sort > "$OUT/manifest.txt"
