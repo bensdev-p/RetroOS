@@ -181,3 +181,30 @@ checks. None of these can be fixed in config.txt alone; EEPROM settings
 | Firmware: loading and unpacking the kernel | 7.65 → 10.90 s ("Starting OS 10902 ms") | the kernel was gzip-compressed (10.3 MB, ~3× unpacked) and the firmware unpacked it: the image now ships it unpacked; expected saving ~2–2.5 s, to be measured |
 | Linux and RetroOS to `C:\>` | 10.9 → ≈ 16 s | ≈ 5 s, as measured above |
 | Monitor locks on to the signal | ≈ 1.5 s | the tester's monitor, separately powered |
+
+### Raspberry Pi 5 after the bootloader update (2026-11-05, CI run 40)
+
+The tester installed the *SD Card Boot* bootloader and flashed run 40 (unpacked
+kernels). The new bootloader's screen reads `Boot mode: SD (01) order f4`
+(SD first, then USB, then retry) and `M.2 PCIe HAT not detected`, so the NVMe
+wait is gone. The "Configure this Raspberry Pi 5" screen with SHIFT / SPACE /
+ESC prompts is this bootloader's own splash, shown on every boot; it is not
+part of RetroOS.
+
+| Observation | Value | Note |
+|---|---|---|
+| Pi screen visible | 7–8 s after power-on | stopwatch; includes the monitor waking up |
+| RetroOS picture | ≈ 22 s after power-on | **first boot after flashing**: the journal shows `retro-setup.service` (first-boot Setup, only started while `/var/lib/retroos/setup-done` is missing) starting 3.54 s after the kernel, so not a normal boot; a second boot is to be timed |
+| RETRO-POST done | 3.29 s after the kernel starts | journal, `short-monotonic` |
+| `vcgencmd get_throttled` | `0x0` | no under-voltage or throttling since boot |
+| `pmic_read_adc EXT5V_V` | 4.983 V | idle |
+| USB-PD current limit | **3 A** (`usb_max_current_enable default 0 max-current 3000`, "Selecting USB low current limit") | the supply did not offer 5 V / 5 A; see below |
+
+**Power-offs.** The tester reports the Pi sometimes switching off during boot
+with no LEDs at all. The bootloader says the supply only negotiated 3 A. A
+supply rated or negotiated for 3 A can trip its own protection on the
+boot-time current spikes (CPU at full clock, HDMI, SD) and cut out, which
+leaves both LEDs dark; a kernel crash or a RetroOS fault would leave the power
+LED on. The official 27 W USB-C supply (5.1 V / 5 A) is the fix to try first;
+`get_throttled` right after a recovered episode (bit 0 or bit 16 set) would
+confirm it. Not a software issue.
