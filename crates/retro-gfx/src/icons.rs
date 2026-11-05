@@ -17,6 +17,13 @@ pub enum IconArt {
     Folder,
     /// A document: a white page with its corner folded.
     Document,
+    /// A hard disk (the home drive, the system).
+    Drive,
+    /// A removable drive (USB stick, SD card).
+    Removable,
+    /// The Wastebasket, empty or with something in it.
+    Wastebasket,
+    WastebasketFull,
 }
 
 /// The 32×32 picture of an icon at physical (x, y), in the theme's colours.
@@ -25,6 +32,49 @@ pub fn icon_picture(sf: &mut Surface, art: IconArt, x: i32, y: i32, p: i32, th: 
         let col = th.picture(col);
         sf.fill_rect(x + ax * p, y + ay * p, (w * p) as u32, (h * p) as u32, col)
     };
+    match art {
+        IconArt::Drive | IconArt::Removable => {
+            // A front-facing box with a slot and a light.
+            let (top, h) = if art == IconArt::Drive {
+                (9, 16)
+            } else {
+                (5, 22)
+            };
+            at(3, top, 26, h, BLACK);
+            at(4, top + 1, 24, h - 2, SILVER);
+            at(4, top + 1, 24, 1, WHITE);
+            at(4, top + 1, 1, h - 2, WHITE);
+            at(4, top + h - 2, 24, 1, SLATE);
+            if art == IconArt::Drive {
+                at(7, top + 9, 14, 2, BLACK);
+                at(23, top + 9, 2, 2, LIME);
+            } else {
+                at(9, top + 4, 14, 6, COBALT);
+                at(10, top + 5, 4, 1, WHITE);
+                at(11, top + 15, 10, 2, BLACK);
+            }
+            return;
+        }
+        IconArt::Wastebasket | IconArt::WastebasketFull => {
+            // A ribbed bin, wider at the top; paper sticks out when full.
+            if art == IconArt::WastebasketFull {
+                at(10, 2, 9, 8, BLACK);
+                at(11, 3, 7, 6, WHITE);
+                at(17, 4, 7, 6, BLACK);
+                at(18, 5, 5, 4, WHITE);
+            }
+            at(6, 8, 20, 3, BLACK);
+            at(7, 9, 18, 1, SILVER);
+            at(8, 11, 16, 19, BLACK);
+            at(9, 11, 14, 18, SILVER);
+            for x in [11, 15, 19] {
+                at(x, 13, 1, 14, SLATE);
+            }
+            at(9, 11, 1, 18, WHITE);
+            return;
+        }
+        _ => {}
+    }
     if art == IconArt::Folder {
         at(2, 6, 12, 4, BLACK);
         at(3, 7, 10, 3, OCHRE);
@@ -76,7 +126,6 @@ pub fn icon_picture(sf: &mut Surface, art: IconArt, x: i32, y: i32, p: i32, th: 
             at(5, 13, 18, 1, SLATE);
             at(5, 15, 15, 1, SLATE);
         }
-        IconArt::Computer | IconArt::Folder | IconArt::Document => {}
         IconArt::Dos => {
             at(3, 9, 25, 17, BLACK);
             // "C:\>_" in tiny letters, 5 pixels tall.
@@ -99,6 +148,7 @@ pub fn icon_picture(sf: &mut Surface, art: IconArt, x: i32, y: i32, p: i32, th: 
                 lx += l[0].len() as i32 + 1;
             }
         }
+        _ => {}
     }
 }
 

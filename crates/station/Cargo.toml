@@ -10,6 +10,7 @@ name = "station"
 path = "src/main.rs"
 
 [dependencies]
+retro-dosfs.workspace = true
 retro-gfx.workspace = true
 libc = "0.2"
 tracing = "0.1"

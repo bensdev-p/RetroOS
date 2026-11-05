@@ -111,7 +111,17 @@ pub struct Message {
 pub enum Hit {
     Window(u64, Part),
     Icon(u64),
+    /// A drive or the Wastebasket on the desktop's right edge.
+    Shell(usize),
     Desktop,
+}
+
+/// An icon of the desktop itself: a drive or the Wastebasket.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShellIcon {
+    pub label: String,
+    pub art: IconArt,
+    pub path: std::path::PathBuf,
 }
 
 /// What a drawn icon shows: label, selected, position, metrics.
@@ -138,6 +148,12 @@ pub struct Desktop {
     cascade: i32,
     decor: HashMap<u64, Decor>,
     icons: HashMap<u64, (IconKey, MemoryRenderBuffer)>,
+    /// Drives and the Wastebasket (looked at again every few seconds), the
+    /// selected one, and their drawn buffers.
+    shell: Vec<ShellIcon>,
+    shell_at: Option<std::time::Instant>,
+    shell_sel: Option<usize>,
+    shell_bufs: HashMap<usize, ((IconArt, IconKey), MemoryRenderBuffer)>,
     band: Option<((i32, i32, Metrics), MemoryRenderBuffer)>,
     band_ids: Vec<Id>,
     outline_ids: Vec<Id>,
@@ -462,7 +478,8 @@ impl Station {
             )
                 .into(),
             None if self.desktop.progman_task == Some(id) => (
-                (work.loc.x + work.size.w - size.w - m.border()).max(work.loc.x + m.border()),
+                (work.loc.x + work.size.w - self.shell_column() - size.w - m.border())
+                    .max(work.loc.x + m.border()),
                 work.loc.y + m.top(),
             )
                 .into(),
@@ -1230,6 +1247,16 @@ impl Station {
                 return Hit::Window(id, Part::Client);
             }
         }
+        for k in 0..self.desktop.shell.len() {
+            let p = self.shell_pos(k);
+            let r = Rectangle::<i32, Logical>::new(
+                p,
+                (chrome::ICON_W * m.u, chrome::ICON_H * m.u).into(),
+            );
+            if r.to_f64().contains(pos) {
+                return Hit::Shell(k);
+            }
+        }
         for t in self.tasks.iter() {
             if let (true, Some(slot)) = (t.place.minimized, t.place.slot) {
                 let p = self.icon_pos(slot);
@@ -1406,10 +1433,110 @@ impl Station {
                 }
                 true
             }
-            Hit::Desktop => {
+            Hit::Shell(k) => {
                 self.desktop.grab = true;
+                if double {
+                    self.open_shell(k);
+                } else {
+                    self.desktop.shell_sel = Some(k);
+                    self.dirty = true;
+                }
                 true
             }
+            Hit::Desktop => {
+                self.desktop.grab = true;
+                if self.desktop.shell_sel.take().is_some() {
+                    self.dirty = true;
+                }
+                true
+            }
+        }
+    }
+
+    // ------------------------------------------------- drives, Wastebasket
+
+    /// Width of the column of drive icons along the right edge.
+    fn shell_column(&self) -> i32 {
+        (chrome::ICON_W + 8) * self.metrics().u
+    }
+
+    /// Drives from the top of the right edge; the Wastebasket at the bottom.
+    fn shell_pos(&self, k: usize) -> Point<i32, Logical> {
+        let m = self.metrics();
+        let work = self.work_area();
+        let snap = |v: i32| v - v.rem_euclid(m.u);
+        let x = snap(work.loc.x + work.size.w - (chrome::ICON_W + 4) * m.u);
+        let last = self.desktop.shell.len().saturating_sub(1);
+        let y = if k == last {
+            work.loc.y + work.size.h - (chrome::ICON_H + 4) * m.u
+        } else {
+            work.loc.y + 6 * m.u + k as i32 * (chrome::ICON_H + 10) * m.u
+        };
+        (x, snap(y)).into()
+    }
+
+    /// Look at the drives and the Wastebasket again (at most every 3 s).
+    fn refresh_shell(&mut self) {
+        let fresh = self
+            .desktop
+            .shell_at
+            .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(3));
+        if fresh {
+            return;
+        }
+        self.desktop.shell_at = Some(std::time::Instant::now());
+        let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else {
+            return;
+        };
+        let user = std::env::var("USER").unwrap_or_default();
+        let mut dos = retro_dosfs::Dos::new(&home);
+        dos.refresh_removable(&user);
+        let mut v: Vec<ShellIcon> = dos
+            .drives()
+            .map(|d| ShellIcon {
+                label: format!("{}: {}", d.letter, d.label),
+                art: if d.kind == retro_dosfs::DriveKind::Removable {
+                    IconArt::Removable
+                } else {
+                    IconArt::Drive
+                },
+                path: d.root.clone(),
+            })
+            .collect();
+        let trash = std::env::var_os("XDG_DATA_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| home.join(".local/share"))
+            .join("Trash/files");
+        let full = std::fs::read_dir(&trash).is_ok_and(|mut d| d.next().is_some());
+        v.push(ShellIcon {
+            label: "Wastebasket".into(),
+            art: if full {
+                IconArt::WastebasketFull
+            } else {
+                IconArt::Wastebasket
+            },
+            path: trash,
+        });
+        if v != self.desktop.shell {
+            if self.desktop.shell.len() != v.len() {
+                self.desktop.shell_sel = None;
+            }
+            self.desktop.shell = v;
+            self.dirty = true;
+        }
+    }
+
+    /// Double-click on a drive or the Wastebasket: File Cabinet there.
+    fn open_shell(&mut self, k: usize) {
+        let Some(icon) = self.desktop.shell.get(k).cloned() else {
+            return;
+        };
+        if icon.art == IconArt::Wastebasket || icon.art == IconArt::WastebasketFull {
+            let _ = std::fs::create_dir_all(&icon.path);
+        }
+        let argv = ["file-cabinet".to_string(), icon.path.display().to_string()];
+        if let Err(e) = self.spawn(&argv, None, &[], None) {
+            tracing::warn!("cannot start File Cabinet: {e}");
         }
     }
 
@@ -1651,6 +1778,35 @@ impl Station {
                     .insert(id, (key, chrome::to_buffer(&c, m.scale)));
             }
             if let Some((_, b)) = self.desktop.icons.get(&id) {
+                draw.push(DrawItem::Buffer(b.clone(), pos, None));
+            }
+        }
+
+        // Drives and the Wastebasket along the right edge.
+        if std::env::var_os("RETROOS_NO_DESKTOP_ICONS").is_none() {
+            self.refresh_shell();
+        }
+        for k in 0..self.desktop.shell.len() {
+            let pos = self.shell_pos(k);
+            let icon = &self.desktop.shell[k];
+            let key = (
+                icon.art,
+                (
+                    icon.label.clone(),
+                    self.desktop.shell_sel == Some(k),
+                    pos,
+                    m,
+                ),
+            );
+            let stale = self.desktop.shell_bufs.get(&k).map(|(k, _)| k) != Some(&key);
+            if stale {
+                let (art, (label, sel, _, _)) = &key;
+                let c = chrome::draw_icon(*art, label, *sel, &m, pos.x * m.scale, pos.y * m.scale);
+                self.desktop
+                    .shell_bufs
+                    .insert(k, (key.clone(), chrome::to_buffer(&c, m.scale)));
+            }
+            if let Some((_, b)) = self.desktop.shell_bufs.get(&k) {
                 draw.push(DrawItem::Buffer(b.clone(), pos, None));
             }
         }

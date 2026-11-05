@@ -1,13 +1,13 @@
 # Program Manager: Station starts it with the first Desktop, behind the
 # DOS Prompt that typed DESKTOP (which keeps the keyboard), at the top right.
 # (Art pixels ×2 at 1080p; the window is 500×330 art = 1000×660 px at
-# x = 1920 - 1000 - 8.)
+# x = 1920 - 176 (the drive icons' column) - 1000 - 8.)
 wait 1500
 type DESKTOP
 key enter
 wait 3000
 expect WINDOWS => normal DOS Prompt
-expect WINDOWS => 912 86 1000 660 normal Program Manager
+expect WINDOWS => 736 86 1000 660 normal Program Manager
 expect-task 2
 shot 80-progman
 # The DOS Prompt (1280 px wide) covers its left side: a click on the
@@ -19,7 +19,7 @@ button click
 wait 400
 expect WINDOWS => normal Program Manager
 shot 80b-progman-forward
-pointer 1162 240
+pointer 986 240
 button click
 wait 100
 button click

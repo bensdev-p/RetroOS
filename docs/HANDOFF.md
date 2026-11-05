@@ -56,8 +56,12 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   Manager's Main group; FILER's panel is a library (`retro_filer::panel`);
   retro-apps parses `MimeType=`; `retro_gfx::icons` has Folder and Document
   pictures and `small_icon`. Host test `tests/host/cabinet.steps`.
-- Next: desktop drive/Wastebasket icons; Xwayland; icons and cursors
-  (HANDOFF §7 steps 6–8); then acceptance (step 8).
+- **Desktop icons**: Station draws the RetroDOS drives down the right edge
+  and the Wastebasket at the bottom right (`refresh_shell`, every 3 s;
+  empty/full); a double-click opens File Cabinet there. Program Manager now
+  opens left of that column. `RETROOS_NO_DESKTOP_ICONS=1` leaves them out.
+- Next: Xwayland; icons and cursors (HANDOFF §7 steps 6–8); then
+  acceptance (step 8).
 
 ## 1. Where things stand
 
