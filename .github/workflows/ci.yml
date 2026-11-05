@@ -54,6 +54,21 @@ jobs:
             out/test-host-bar
             out/test-host-scheme
 
+  bootloader:
+    name: Pi 5 bootloader settings card
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dosfstools mtools fdisk zip
+      - run: build/mkeeprom.sh out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retroos-bootloader-rpi5
+          path: out/bootloader/
+
   image:
     name: Build image and boot it in QEMU
     runs-on: ubuntu-24.04-arm

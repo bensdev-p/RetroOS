@@ -442,8 +442,11 @@ fn boot() {
         h
     ));
 
+    // Fast POST still lasts ~2.5 s: monitors go blank for 1-2 s while they
+    // re-sync to the display driver's mode, which would hide a shorter one
+    // (D-034).
     let (count_ms, line_ms, hold_ms) = if cfg.fast_post {
-        (450u64, 45u64, 350u64)
+        (900u64, 150u64, 1000u64)
     } else {
         (1600, 180, 1200)
     };

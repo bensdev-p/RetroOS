@@ -7,8 +7,16 @@ row in the results table at the end (pass/fail).
 Bootloader (once per board): RetroOS boots from the SD card, so the Pi 5's
 EEPROM should try the card first. `ADMIN UNIX "vcgencmd bootloader_config"`
 should show a `BOOT_ORDER` ending in 1 (e.g. `0xf461`); an order that tries
-NVMe first (`0xf416`) adds several seconds to every boot. Fix: Raspberry Pi
-Imager → *Misc utility images* → *Bootloader (Pi 5 family)* → *SD Card Boot*.
+NVMe first (`0xf416`) adds several seconds to every boot, and Raspberry Pi's
+default settings show a network-install screen after every cold boot
+(~10 s in all, BUDGET.md). Fix: the **RetroOS bootloader settings card**
+(D-034): download the `retroos-bootloader-rpi5` artifact of a CI run, flash
+`retroos-bootloader-rpi5.img` to a spare card (Imager → *Use custom*), power
+on with it, wait until the screen turns green (≥ 10 s), power off, put the
+RetroOS card back. `vcgencmd bootloader_config` then shows `BOOT_ORDER=0xf41`,
+`BOOT_UART=0`, `NET_INSTALL_AT_POWER_ON=0`, `NET_INSTALL_ENABLED=0`.
+Raspberry Pi's defaults come back with Imager → *Misc utility images* →
+*Bootloader (Pi 5 family)* → *SD Card Boot*.
 
 Power: use the official 27 W USB-C supply (5.1 V / 5 A). A supply that
 negotiates only 3 A shows "Selecting USB low current limit" / `max-current
@@ -98,6 +106,8 @@ Optional but very useful: a USB-serial adapter on the Pi 5 debug UART
 | 3.20 | Firmware boot log | `ADMIN UNIX vclog -m` right after a cold boot (photo of all of it) | the bootloader's timestamped messages: how long the 12 s before the kernel take |
 | 3.21 | One colour scheme everywhere | in the Desktop, `COLOR AMBER` in a DOS Prompt with a second DOS Prompt open (◆ → DOS Prompt); then `RESTART /Y`; then `COLOR CLASSIC` | at once: both consoles, window frames, menus, the desktop pattern and the System Bar turn amber; after the restart the POST screen, the Startup Menu and RetroDOS are amber too; CLASSIC brings everything back |
 | 3.22 | Boot times in one screen | cold boot (not the first after flashing), then `ADMIN UNIX /usr/libexec/retroos/boot-times` (one photo) | firmware and Linux times, the total from power-on to Station, the supply limit (5000 mA) and `throttled=0x0`; compare the total with the stopwatch: the difference is the monitor |
+| 3.24 | Bootloader settings card | flash the card as above, boot it once, then RetroOS; `ADMIN UNIX "vcgencmd bootloader_config"`; cold boot, `ADMIN UNIX /usr/libexec/retroos/boot-times` and stopwatch | green screen on the settings card; the four settings shown; no network-install screen; `Starting OS` well under 20 s (was 20.6 s) |
+| 3.25 | Fast POST visible | cold boot with `fast_post=yes` (the default) | the POST screen stays ≈ 2.5 s: the end of the memory count, the device lines and a short hold are visible |
 | 3.23 | POST visible | `ADMIN UNIX "sed -i s/fast_post=yes/fast_post=no/ /etc/retroos/startup.conf"`, cold boot; afterwards set it back to `yes` | the POST screen (memory count, devices) stays ≈ 4 s instead of ≈ 1 s; if it shows now, the fast one is hidden while the monitor re-syncs to the display driver's mode |
 | 3.19 | Shut down from the bar | ◆ → Shut Down…, OK | the Pi powers off (green LED off) |
 | 3.15 | Boot times (carried over) | stopwatch, second boot, text mode | record power-on → POST screen (1.1) and power-on → `C:\>` (1.8) |
