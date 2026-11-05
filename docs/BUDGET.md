@@ -238,6 +238,19 @@ NET_INSTALL_AT_POWER_ON=0
 NET_INSTALL_ENABLED=0
 ```
 
+**With the RetroOS bootloader settings card (2026-11-05, CI run 49)**, read
+back by `vcgencmd bootloader_config` (`BOOT_UART=0`, `BOOT_ORDER=0xf41`,
+`NET_INSTALL_AT_POWER_ON=0`, `NET_INSTALL_ENABLED=0`), `boot-times` on the
+first boot (Setup ran, so the Linux part is not a normal boot; the part
+before Linux is): bootloader → 14.48 s (was 16.93 s), `Starting OS` 16.47 s
+(was 20.57 s; firmware 2.0 s instead of 3.6 s), POST 2.25 → 4.78 s after the
+kernel (the new ~2.5 s fast POST, visible), kernel 0.69 s + userspace 4.34 s
+(with Setup). Supply 5.18 V, `throttled=0x0`. The bootloader still spends
+~14 s before the firmware starts, which no setting so far explains; next
+candidates are USB enumeration of the keyboard (the boot menu still looks
+for Space) and the monitor's HDMI hotplug/EDID: a cold boot with the
+keyboard unplugged would tell.
+
 On the firmware's clock `C:\>` is at ≈ 24 s, ≈ 4 s more than the stopwatch;
 the firmware clock probably starts before the stopwatch does (PMIC power-up),
 so the firmware times are upper bounds.

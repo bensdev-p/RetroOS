@@ -16,6 +16,10 @@ post_start=$(mono 'RETRO-POST: start')
 post_done=$(mono 'RETRO-POST: done')
 setup=$(mono 'retro-setup.service')
 station=$(mono 'RETRO-STATION: ready')
+# The session's own output may not reach the journal: logind's line for the
+# user's session (not the login screen's or Setup's) is a few ms earlier.
+[ -n "$station" ] || station=$(grep -E 'New session [^ ]+ of user ' <<<"$j" \
+    | grep -v -E 'of user (root|_greetd)\.?$' | head -1 | sed -n 's/^\[ *\([0-9.]*\)\].*/\1/p')
 startup=$(grep -m1 'Startup finished' <<<"$j" | sed 's/.*Startup finished in //')
 
 row() { # label, value in seconds (may be empty), note
@@ -33,7 +37,7 @@ echo " Linux (since the kernel started):"
 row "Display driver ready" "$drm" "[drm] vc4"
 row "POST screen shown" "$post_start"
 row "POST screen done" "$post_done"
-row "Desktop session ready (C:\\> next)" "$station" "Station"
+row "Session ready (C:\\> next)" "$station" "Station / logind"
 [ -n "$setup" ] && echo "  First-boot Setup ran on this boot: time a later boot instead."
 echo
 if [ -n "$os_ms" ] && [ -n "$station" ]; then
