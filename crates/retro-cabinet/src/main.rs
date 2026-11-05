@@ -461,7 +461,11 @@ impl Cabinet {
             } else {
                 panel::copy_into(f, &dest)
             };
-            let n = f.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let n = f
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
             match r {
                 Ok(()) => pasted.push(n),
                 Err(e) => errors.push(format!("{n}: {e}")),
@@ -472,7 +476,12 @@ impl Cabinet {
         }
         self.reload();
         // What was pasted becomes the selection.
-        if let Some(i) = self.panel.entries.iter().position(|e| pasted.contains(&e.name)) {
+        if let Some(i) = self
+            .panel
+            .entries
+            .iter()
+            .position(|e| pasted.contains(&e.name))
+        {
             self.panel.cursor = i;
             self.panel.marked = pasted.into_iter().collect();
             self.reveal();
