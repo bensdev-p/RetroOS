@@ -81,6 +81,9 @@ jobs:
     # Not after the check job: the image builds its own binaries, and the
     # image is uploaded as soon as it is built, before the QEMU tests.
     runs-on: ubuntu-24.04-arm
+    # A normal run takes ~22 min; a stalled package server should fail the
+    # run, not hold it for the six-hour default.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - name: Dependencies

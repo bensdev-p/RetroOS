@@ -66,7 +66,11 @@ fetch_qemu_kernel() {
     image=$(field "$meta" Depends | tr ',' '\n' | sed 's/^ *//; s/ .*//' | grep '^linux-image-[0-9]' | head -1)
     for p in $meta $image; do
         file=$(field "$p" Filename); sum=$(field "$p" SHA256)
-        curl -fsSL $RETRY -o "$d/$(basename "$file")" "$DEB/$file"
+        # The snapshot has answered 404 for files it lists: then the same
+        # file from deb.debian.org (the hash below decides either way).
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 20 --connect-timeout 30 \
+            -o "$d/$(basename "$file")" "$DEB/$file" \
+            || curl -fsSL $RETRY -o "$d/$(basename "$file")" "https://deb.debian.org/debian/$file"
         echo "$sum  $d/$(basename "$file")" | sha256sum -c --quiet
     done
     echo ">> QEMU kernel: $image"
@@ -113,12 +117,41 @@ mmdebstrap --mode=root --variant=apt --architectures=arm64 "$@" \
 # The snapshot server drops requests under load: try the whole bootstrap
 # three times, keeping every package already downloaded (in the cache, which
 # CI saves even when the build fails).
+#
+# Files the snapshot cannot serve at all (it has answered 404 for packages
+# its own index lists) are fetched from deb.debian.org into the cache, under
+# the name apt gives them; apt still checks each against the hash in the
+# snapshot's signed index, so a different file is refused, not installed.
+fallback_debs() {
+    log=$1
+    grep -o "Failed to fetch https://snapshot\.debian\.org/archive/[a-z-]*/$SNAPSHOT/pool/[^ ]*\.deb" "$log" \
+        | sed 's/^Failed to fetch //' | sort -u | while read -r url; do
+        archive=$(echo "$url" | sed 's|^https://snapshot\.debian\.org/archive/\([a-z-]*\)/.*|\1|')
+        pool=${url#*/$SNAPSHOT/}
+        pkg=$(basename "$url" | sed 's/_.*//')
+        # "Err:N <uri> <suite>/<component> <arch> <package> <arch> <version>"
+        set -- $(awk -v p="$pkg" '$1 ~ /^Err:/ && $5 == p {print $6, $7; exit}' "$log")
+        [ $# -eq 2 ] || continue
+        name="${pkg}_$(echo "$2" | sed 's/:/%3a/')_$1.deb"
+        [ -e "$RETRO_DEB_CACHE/$name" ] && continue
+        echo ">> $name from deb.debian.org (snapshot: not found)"
+        curl $RETRY -fsS -o "$RETRO_DEB_CACHE/$name.part" "https://deb.debian.org/$archive/$pool" \
+            && mv "$RETRO_DEB_CACHE/$name.part" "$RETRO_DEB_CACHE/$name" \
+            || { rm -f "$RETRO_DEB_CACHE/$name.part"; echo "!! $name: not on deb.debian.org either" >&2; }
+    done
+}
+
 attempt=1
 echo ">> mmdebstrap (snapshot $SNAPSHOT)"
-until bootstrap "$@"; do
+while :; do
+    # Shown as it runs and kept for fallback_debs; the last line says whether
+    # it worked (a pipeline's status is tee's).
+    { bootstrap "$@" 2>&1 && echo ">> bootstrap done"; } | tee "$WORK/bootstrap.log"
+    [ "$(tail -n 1 "$WORK/bootstrap.log")" = ">> bootstrap done" ] && break
     if [ -n "${RETRO_DEB_CACHE:-}" ]; then
         find "$WORK/rootfs/var/cache/apt/archives" -maxdepth 1 -name '*.deb' \
             -exec cp -n {} "$RETRO_DEB_CACHE"/ \; 2>/dev/null || true
+        fallback_debs "$WORK/bootstrap.log"
         echo ">> kept $(ls "$RETRO_DEB_CACHE" | grep -c '\.deb$' || true) packages"
     fi
     if [ $attempt -ge 3 ]; then
