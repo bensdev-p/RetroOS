@@ -5,7 +5,8 @@
 
 Runs after test_m1.py, on the disk it leaves behind (Setup already done,
 automatic login). Switches to the Desktop with DESKTOP, checks the frames
-and the dithered desktop on screen, opens a second window, minimises it,
+and the dithered desktop on screen (Program Manager opens behind the DOS
+Prompt, at the top right), opens a second window, minimises it,
 switches with Alt+Tab, leaves with Exit to DOS (Ctrl+Alt+F1), and starts
 Firefox in a window. Results: OUT/test-m3/{report.json,*.png,serial*.log}.
 
@@ -138,6 +139,7 @@ def run(q):
     s = serial_after(q, "RETRO-M3-WIN1", "retrodos /C TASKS /W")
     wins = s[s.rfind("Task  Position"):]
     check("TASKS /W lists it as minimised", "minimized" in wins, wins[-500:])
+    check("Program Manager started with the Desktop", "Program Manager" in wins, wins[-500:])
 
     # Alt+Tab brings it back.
     q.key("alt", "tab")
@@ -152,7 +154,8 @@ def run(q):
     time.sleep(3)
     q.type("CLS\nTASKS\n")
     t = q.wait_text("task(s)", 60, "m3-9-exit-to-dos")
-    check("Exit to DOS (Ctrl+Alt+F1) returns to full-screen RetroDOS", "2 task(s)" in t, t[-400:])
+    # DOS Prompt, the second console and Program Manager.
+    check("Exit to DOS (Ctrl+Alt+F1) returns to full-screen RetroDOS", "3 task(s)" in t, t[-400:])
 
     # Idle memory in the Desktop, without and with Firefox.
     q.type("CLS\nDESKTOP\n")

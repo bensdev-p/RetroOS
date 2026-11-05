@@ -1,0 +1,14 @@
+[package]
+name = "retro-progman"
+description = "Program Manager: the launcher of the RetroOS Desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+retro-gfx.workspace = true
+retro-ui.workspace = true
+retro-apps.workspace = true
+
+[lints]
+workspace = true

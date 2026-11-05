@@ -282,7 +282,20 @@ impl Station {
         });
         self.space.map_element(window, (0, 0), false);
         self.configure_task(id);
-        self.focus_task(id);
+        // Program Manager's first window, started by Station itself, opens
+        // under the window that has the keyboard.
+        let background = pid.is_some()
+            && pid == self.desktop.progman_pid
+            && self.tasks.focused().is_some_and(|f| f != id);
+        if pid.is_some() && pid == self.desktop.progman_pid {
+            self.desktop.progman_pid = None;
+            self.desktop.progman_task = Some(id);
+        }
+        if background {
+            self.tasks.send_to_back(id);
+        } else {
+            self.focus_task(id);
+        }
         tracing::info!(id, ?pid, ?kind, "new task");
     }
 

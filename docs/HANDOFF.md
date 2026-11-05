@@ -38,8 +38,13 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   composed from base letter + drawn mark (`retro_gfx::font::accents`, one
   `Style` per font), symbols, curly quotes and dashes drawn by hand (fractions,
   ¤ ¦ ¶ ª º þ ð are still the replacement box). `widgets::ellipsize_in`.
-- Next: Program Manager; File Cabinet, Jot, About This Computer; Xwayland;
-  icons and cursors (HANDOFF §7 steps 4–8).
+- **Program Manager** (D-035): `crates/retro-progman` (layout in
+  `layout.rs`, unit-tested); Station starts it with the first Desktop,
+  behind the focused window at the top right (`ensure_progman`,
+  `RETROOS_NO_PROGMAN`); ◆ → Program Manager. retro-ui gained `keys`,
+  `Event::Scroll`, `Ui::minimize`. Host test `tests/host/progman.steps`.
+- Next: File Cabinet, Jot, About This Computer; Xwayland; icons and cursors
+  (HANDOFF §7 steps 5–8).
 
 ## 1. Where things stand
 

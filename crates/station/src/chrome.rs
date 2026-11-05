@@ -8,7 +8,8 @@
 //! Text is Lantern 12, the Desktop's system font.
 
 use retro_gfx::font::{lantern_12, lantern_9};
-use retro_gfx::palette::{BLACK, COBALT, SILVER, SLATE, WHITE};
+pub use retro_gfx::icons::{icon_picture, IconArt};
+use retro_gfx::palette::{BLACK, WHITE};
 pub use retro_gfx::widgets::{
     ellipsize, ellipsize_in, menu_hit, menu_layout, text_width, MenuItem, CLEAR_PX, TEXT_Y,
 };
@@ -365,14 +366,6 @@ pub fn pattern_band(width_phys: u32, rows: i32, m: &Metrics) -> Canvas {
     c
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum IconArt {
-    /// A generic program window.
-    Program,
-    /// A DOS Prompt (the RetroDOS console).
-    Dos,
-}
-
 /// A minimised window: icon and label over the desktop pattern, drawn at
 /// physical position (`ox`, `oy`) so the pattern lines up.
 pub fn draw_icon(
@@ -407,49 +400,6 @@ pub fn draw_icon(
     sf.fill_rect(lx * p, 35 * p, ((tw + 4) * p) as u32, (lh * p) as u32, bg);
     sf.text(font, (lx + 2) * p, 36 * p, p as u32, fg, None, &text);
     c
-}
-
-/// The 32×32 picture of an icon at physical (x, y), in the theme's colours.
-pub fn icon_picture(sf: &mut Surface, art: IconArt, x: i32, y: i32, p: i32, th: &Theme) {
-    let mut at = |ax: i32, ay: i32, w: i32, h: i32, col: Rgb| {
-        let col = th.picture(col);
-        sf.fill_rect(x + ax * p, y + ay * p, (w * p) as u32, (h * p) as u32, col)
-    };
-    // A small window: shadow, outline, title bar, client area.
-    at(4, 5, 27, 24, SLATE);
-    at(2, 3, 27, 24, BLACK);
-    at(3, 4, 25, 4, COBALT);
-    at(3, 8, 25, 1, BLACK);
-    match art {
-        IconArt::Program => {
-            at(3, 9, 25, 17, WHITE);
-            at(5, 11, 12, 1, SLATE);
-            at(5, 13, 18, 1, SLATE);
-            at(5, 15, 15, 1, SLATE);
-        }
-        IconArt::Dos => {
-            at(3, 9, 25, 17, BLACK);
-            // "C:\>_" in tiny letters, 5 pixels tall.
-            const LETTERS: [[&str; 5]; 5] = [
-                ["###", "#..", "#..", "#..", "###"],
-                [".", "#", ".", "#", "."],
-                ["#..", "#..", ".#.", "..#", "..#"],
-                ["#..", ".#.", "..#", ".#.", "#.."],
-                ["...", "...", "...", "...", "###"],
-            ];
-            let mut lx = 5;
-            for l in LETTERS {
-                for (ry, row) in l.iter().enumerate() {
-                    for (rx, ch) in row.chars().enumerate() {
-                        if ch == '#' {
-                            at(lx + rx as i32, 12 + ry as i32, 1, 1, SILVER);
-                        }
-                    }
-                }
-                lx += l[0].len() as i32 + 1;
-            }
-        }
-    }
 }
 
 // ------------------------------------------------------------------- boxes
@@ -544,6 +494,7 @@ pub fn to_buffer(c: &Canvas, scale: i32) -> MemoryRenderBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use retro_gfx::palette::{COBALT, SILVER};
 
     fn m2() -> Metrics {
         Metrics::new(1, 2)

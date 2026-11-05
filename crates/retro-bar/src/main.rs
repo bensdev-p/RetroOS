@@ -140,6 +140,10 @@ impl Bar {
                 (MenuItem::new("Software &Library", "", false), Cmd::None),
                 sep(),
                 (MenuItem::new("&DOS Prompt", "", true), Cmd::DosPrompt),
+                (
+                    MenuItem::new("&Program Manager", "", true),
+                    Cmd::Launch("PROGMAN".into(), vec!["retro-progman".into()]),
+                ),
                 sep(),
                 (MenuItem::new("&Restart...", "", true), Cmd::Restart),
                 (MenuItem::new("Shut &Down...", "", true), Cmd::ShutDown),
@@ -447,17 +451,7 @@ impl Bar {
 }
 
 /// Key symbols the bar uses (X11 keysym values).
-mod retro_ui_keys {
-    pub const UP: u32 = 0xff52;
-    pub const DOWN: u32 = 0xff54;
-    pub const LEFT: u32 = 0xff51;
-    pub const RIGHT: u32 = 0xff53;
-    pub const RETURN: u32 = 0xff0d;
-    pub const KP_ENTER: u32 = 0xff8d;
-    pub const ESCAPE: u32 = 0xff1b;
-    pub const SPACE: u32 = 0x20;
-    pub const TAB: u32 = 0xff09;
-}
+use retro_ui::keys as retro_ui_keys;
 
 impl Program for Bar {
     fn start(&mut self, ui: &mut Ui) {

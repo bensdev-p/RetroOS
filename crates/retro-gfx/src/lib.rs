@@ -6,6 +6,7 @@
 
 pub mod font;
 pub mod grid;
+pub mod icons;
 pub mod palette;
 mod surface;
 pub mod theme;

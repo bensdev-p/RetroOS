@@ -145,6 +145,13 @@ pub struct Desktop {
     /// The System Bar process, and how often it was started.
     bar_pid: Option<u32>,
     bar_starts: u32,
+    /// Program Manager is started once per session, with the first Desktop;
+    /// its first window opens behind the focused one (the DOS Prompt that
+    /// typed DESKTOP keeps the keyboard).
+    progman_started: bool,
+    pub progman_pid: Option<u32>,
+    /// That first window: placed at the top right, not in the cascade.
+    pub progman_task: Option<u64>,
 }
 
 impl Desktop {
@@ -454,8 +461,16 @@ impl Station {
                 work.loc.y + (work.size.h - size.h) / 2,
             )
                 .into(),
+            None if self.desktop.progman_task == Some(id) => (
+                (work.loc.x + work.size.w - size.w - m.border()).max(work.loc.x + m.border()),
+                work.loc.y + m.top(),
+            )
+                .into(),
             None => self.cascade_position(size),
         };
+        if self.desktop.progman_task == Some(id) {
+            self.desktop.progman_task = None;
+        }
         if let Some(t) = self.tasks.get_mut(id) {
             t.place.rect = Rectangle::new(loc, size);
             t.place.placed = true;
@@ -521,6 +536,23 @@ impl Station {
         }
     }
 
+    /// Start Program Manager the first time the Desktop opens in this
+    /// session (closing it is then the user's choice: the ◆ menu reopens it).
+    /// RETROOS_NO_PROGMAN=1 leaves it out.
+    pub fn ensure_progman(&mut self) {
+        if self.personality != Personality::Desktop
+            || self.desktop.progman_started
+            || std::env::var_os("RETROOS_NO_PROGMAN").is_some_and(|v| !v.is_empty())
+        {
+            return;
+        }
+        self.desktop.progman_started = true;
+        match self.spawn(&["retro-progman".to_string()], None, &[], None) {
+            Ok(pid) => self.desktop.progman_pid = Some(pid),
+            Err(e) => tracing::warn!("cannot start Program Manager: {e}"),
+        }
+    }
+
     /// Switch personality live: RetroDOS ↔ Desktop (docs/DESIGN.md §5.4).
     pub fn set_personality(&mut self, p: Personality) {
         if p == self.personality {
@@ -568,6 +600,7 @@ impl Station {
                     self.focus_task(f);
                 }
                 self.ensure_bar();
+                self.ensure_progman();
             }
             Personality::Text => {
                 for t in self.tasks.iter_mut() {

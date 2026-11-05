@@ -105,10 +105,34 @@ pub enum Event {
         alt: bool,
         shift: bool,
     },
+    /// Mouse wheel (or touchpad) scroll: positive is down, in wheel steps.
+    Scroll {
+        steps: f64,
+    },
     /// The window's close button or Alt+F4.
     Close,
     /// Station dismissed the popup (a click elsewhere).
     PopupDone,
+}
+
+/// Keysyms of the keys programs react to ([`Event::Key`] `sym`).
+pub mod keys {
+    pub const UP: u32 = 0xff52;
+    pub const DOWN: u32 = 0xff54;
+    pub const LEFT: u32 = 0xff51;
+    pub const RIGHT: u32 = 0xff53;
+    pub const HOME: u32 = 0xff50;
+    pub const END: u32 = 0xff57;
+    pub const PAGE_UP: u32 = 0xff55;
+    pub const PAGE_DOWN: u32 = 0xff56;
+    pub const RETURN: u32 = 0xff0d;
+    pub const KP_ENTER: u32 = 0xff8d;
+    pub const ESCAPE: u32 = 0xff1b;
+    pub const SPACE: u32 = 0x20;
+    pub const TAB: u32 = 0xff09;
+    pub const ISO_LEFT_TAB: u32 = 0xfe20;
+    pub const F6: u32 = 0xffc3;
+    pub const F10: u32 = 0xffc7;
 }
 
 /// What a program does: draw its surfaces and react to events.
@@ -308,6 +332,17 @@ impl Ui {
         }
         w.commit();
         self.add(Role::Window(w), size)
+    }
+
+    /// Ask Station to minimise a window (Program Manager's Minimize on Use).
+    pub fn minimize(&mut self, id: SurfaceId) {
+        if let Some(Surf {
+            role: Role::Window(w),
+            ..
+        }) = self.surfaces.get(&id)
+        {
+            w.set_minimized();
+        }
     }
 
     pub fn close(&mut self, id: SurfaceId) {
@@ -752,7 +787,20 @@ impl PointerHandler for State {
                     x,
                     y,
                 },
-                PointerEventKind::Axis { .. } => continue,
+                PointerEventKind::Axis { vertical, .. } => {
+                    // Wheel steps (120 each), or pixels from a touchpad.
+                    let steps = if vertical.value120 != 0 {
+                        vertical.value120 as f64 / 120.0
+                    } else if vertical.discrete != 0 {
+                        vertical.discrete as f64
+                    } else {
+                        vertical.absolute / 10.0
+                    };
+                    if steps == 0.0 {
+                        continue;
+                    }
+                    Event::Scroll { steps }
+                }
             };
             self.event(id, ev);
         }

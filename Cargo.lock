@@ -1260,6 +1260,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-progman"
+version = "0.1.0"
+dependencies = [
+ "retro-apps",
+ "retro-gfx",
+ "retro-ui",
+]
+
+[[package]]
 name = "retro-session"
 version = "0.1.0"
 dependencies = [
