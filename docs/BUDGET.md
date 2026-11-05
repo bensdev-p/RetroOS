@@ -188,8 +188,8 @@ The tester installed the *SD Card Boot* bootloader and flashed run 40 (unpacked
 kernels). The new bootloader's screen reads `Boot mode: SD (01) order f4`
 (SD first, then USB, then retry) and `M.2 PCIe HAT not detected`, so the NVMe
 wait is gone. The "Configure this Raspberry Pi 5" screen with SHIFT / SPACE /
-ESC prompts is this bootloader's own splash, shown on every boot; it is not
-part of RetroOS.
+ESC prompts is this bootloader's network-install screen, shown after every
+cold boot by default; it is not part of RetroOS, but it costs time (below).
 
 | Observation | Value | Note |
 |---|---|---|
@@ -208,3 +208,36 @@ leaves both LEDs dark; a kernel crash or a RetroOS fault would leave the power
 LED on. The official 27 W USB-C supply (5.1 V / 5 A) is the fix to try first;
 `get_throttled` right after a recovered episode (bit 0 or bit 16 set) would
 confirm it. Not a software issue.
+
+### Raspberry Pi 5 with a 5 A supply (2026-11-05, CI run 40)
+
+The 5 A supply is confirmed (`USB-PD: src-cap PDO object1 … Current 5000 mA
+Voltage 5000 mV`). The stopwatch still says ≈ 20 s. `vclog -m` (firmware clock,
+ms) and the journal (seconds since the kernel started):
+
+| Stage | Time | Run 39 (old bootloader) | Note |
+|---|---:|---:|---|
+| Bootloader | → 16.93 s (`Initial voltage`) | → 7.25 s | its messages are replayed at 16.44 s, ~10 ms apart (UART speed, `BOOT_UART=1`); its `BOOTMODE` line says `stc 8831970` (8.8 s) |
+| Firmware: device tree, overlay | 16.93 → 18.37 s | 7.25 → 7.65 s | `dtb_file` 17.18 → `Loaded overlay` 18.07 s |
+| Firmware: kernel load | 18.37 → 20.57 s (`Starting OS 20570 ms`) | 7.65 → 10.90 s | the unpacked kernel: 2.2 s instead of 3.25 s |
+| Linux to the POST screen | 2.26 s | 2.85 s | `[drm] Initialized vc4` 2.18 s; kernel 0.69 s + userspace 2.83 s |
+| POST (fast) | 2.26 → 3.28 s | | hidden: the monitor is re-syncing to the display driver's mode; with `fast_post=no` (≈ 4 s) the tester sees it |
+
+The bootloader installed with Imager's *SD Card Boot* (release 2026-10-30)
+spends ~10 s more than the old one. Its defaults include
+`NET_INSTALL_AT_POWER_ON=1` ("displays the network install UI briefly after a
+cold boot"; the "Configure this Raspberry Pi 5" screen with SHIFT / SPACE /
+ESC), the keyboard wait for it (`NET_INSTALL_KEYBOARD_WAIT`, 900 ms, needs
+USB), the HDMI diagnostics display, and the board still has `BOOT_UART=1`.
+Proposed bootloader settings (a board setting, applied once):
+
+```
+BOOT_UART=0
+BOOT_ORDER=0xf41
+NET_INSTALL_AT_POWER_ON=0
+NET_INSTALL_ENABLED=0
+```
+
+On the firmware's clock `C:\>` is at ≈ 24 s, ≈ 4 s more than the stopwatch;
+the firmware clock probably starts before the stopwatch does (PMIC power-up),
+so the firmware times are upper bounds.
