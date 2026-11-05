@@ -16,13 +16,20 @@ pub mod station;
 use retro_gfx::widgets::CLEAR_PX;
 use retro_gfx::{Canvas, Scheme, Theme};
 use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
+use smithay_client_toolkit::data_device_manager::data_device::{DataDevice, DataDeviceHandler};
+use smithay_client_toolkit::data_device_manager::data_offer::{DataOfferHandler, DragOffer};
+use smithay_client_toolkit::data_device_manager::data_source::{
+    CopyPasteSource, DataSourceHandler,
+};
+use smithay_client_toolkit::data_device_manager::{DataDeviceManagerState, WritePipe};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 use smithay_client_toolkit::reexports::client::globals::registry_queue_init;
 use smithay_client_toolkit::reexports::client::protocol::{
-    wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface,
+    wl_data_device, wl_data_device_manager::DndAction, wl_data_source, wl_keyboard, wl_output,
+    wl_pointer, wl_seat, wl_shm, wl_surface,
 };
 use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle};
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::{
@@ -208,7 +215,22 @@ pub struct Ui {
     /// Colours of the system's scheme (followed live from Station).
     pub theme: Theme,
     quit: bool,
+    conn: Connection,
+    data_manager: Option<DataDeviceManagerState>,
+    data_device: Option<DataDevice>,
+    /// The clipboard while we own it, and what is on it.
+    copy_source: Option<CopyPasteSource>,
+    copied: String,
 }
+
+/// Text types we offer and accept on the clipboard, preferred first.
+const TEXT_MIMES: [&str; 5] = [
+    "text/plain;charset=utf-8",
+    "UTF8_STRING",
+    "text/plain",
+    "TEXT",
+    "STRING",
+];
 
 impl Ui {
     /// Logical pixels per art pixel.
@@ -345,6 +367,35 @@ impl Ui {
         }
     }
 
+    /// Put text on the clipboard (Cut, Copy).
+    pub fn set_clipboard(&mut self, text: &str) {
+        self.copied = text.to_string();
+        let (Some(m), Some(d)) = (&self.data_manager, &self.data_device) else {
+            return;
+        };
+        let src = m.create_copy_paste_source(&self.qh, TEXT_MIMES);
+        src.set_selection(d, self.last_serial);
+        self.copy_source = Some(src);
+    }
+
+    /// The text on the clipboard (Paste): ours, or another program's
+    /// (read with a two-second limit, so a stuck program cannot hang us).
+    pub fn clipboard(&mut self) -> Option<String> {
+        if self.copy_source.is_some() || self.data_device.is_none() {
+            return (!self.copied.is_empty()).then(|| self.copied.clone());
+        }
+        let offer = self.data_device.as_ref()?.data().selection_offer()?;
+        let mime = offer.with_mime_types(|have| {
+            TEXT_MIMES
+                .iter()
+                .find(|m| have.iter().any(|h| h == *m))
+                .map(|m| m.to_string())
+        })?;
+        let pipe = offer.receive(mime).ok()?;
+        let _ = self.conn.flush();
+        read_with_timeout(pipe, Duration::from_secs(2))
+    }
+
     pub fn close(&mut self, id: SurfaceId) {
         self.surfaces.remove(&id);
     }
@@ -400,6 +451,23 @@ struct State {
 }
 
 impl State {
+    fn key_event(&mut self, ev: KeyEvent) {
+        let Some(id) = self.ui.kb_focus.filter(|id| self.ui.exists(*id)) else {
+            return;
+        };
+        let m = self.ui.mods;
+        self.event(
+            id,
+            Event::Key {
+                sym: ev.keysym.raw(),
+                text: ev.utf8,
+                ctrl: m.ctrl,
+                alt: m.alt,
+                shift: m.shift,
+            },
+        );
+    }
+
     fn event(&mut self, id: SurfaceId, ev: Event) {
         let State { ui, program } = self;
         program.event(ui, id, ev);
@@ -459,6 +527,43 @@ impl State {
 
 /// Pixel scale for our art on an output: the largest that keeps a 960×540
 /// grid (the same rule as Station's frames).
+fn read_with_timeout(
+    pipe: impl std::os::fd::AsRawFd + std::io::Read,
+    limit: Duration,
+) -> Option<String> {
+    let fd = pipe.as_raw_fd();
+    // SAFETY: fcntl and poll on a file descriptor we own for this call.
+    unsafe {
+        let fl = libc::fcntl(fd, libc::F_GETFL);
+        libc::fcntl(fd, libc::F_SETFL, fl | libc::O_NONBLOCK);
+    }
+    let end = std::time::Instant::now() + limit;
+    let mut pipe = pipe;
+    let mut out = Vec::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        match pipe.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => out.extend_from_slice(&buf[..n]),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                let left = end.saturating_duration_since(std::time::Instant::now());
+                if left.is_zero() {
+                    return None;
+                }
+                let mut p = libc::pollfd {
+                    fd,
+                    events: libc::POLLIN,
+                    revents: 0,
+                };
+                // SAFETY: one valid pollfd.
+                unsafe { libc::poll(&mut p, 1, left.as_millis() as i32) };
+            }
+            Err(_) => return None,
+        }
+    }
+    Some(String::from_utf8_lossy(&out).replace("\r\n", "\n"))
+}
+
 pub fn art_scale(w: i32, h: i32) -> i32 {
     (w / 960).min(h / 540).clamp(1, 8)
 }
@@ -501,6 +606,11 @@ pub fn run(program: Box<dyn Program>) -> Result<(), String> {
         screen: (960, 540),
         theme: Theme::system(),
         quit: false,
+        conn: conn.clone(),
+        data_manager: DataDeviceManagerState::bind(&globals, &qh).ok(),
+        data_device: None,
+        copy_source: None,
+        copied: String::new(),
     };
     let mut st = State { ui, program };
     // Learn the output's size and scale before anything is drawn.
@@ -727,8 +837,25 @@ impl SeatHandler for State {
         cap: Capability,
     ) {
         self.ui.seat.get_or_insert(seat.clone());
+        if self.ui.data_device.is_none() {
+            if let Some(m) = &self.ui.data_manager {
+                self.ui.data_device = Some(m.get_data_device(qh, &seat));
+            }
+        }
         if cap == Capability::Keyboard && self.ui.keyboard.is_none() {
-            self.ui.keyboard = self.ui.seat_state.get_keyboard(qh, &seat, None).ok();
+            // Held keys repeat (the compositor's rate and delay).
+            let lh = self.ui.loop_handle.clone();
+            self.ui.keyboard = self
+                .ui
+                .seat_state
+                .get_keyboard_with_repeat(
+                    qh,
+                    &seat,
+                    None,
+                    lh,
+                    Box::new(|st: &mut State, _, ev| st.key_event(ev)),
+                )
+                .ok();
         }
         if cap == Capability::Pointer && self.ui.pointer.is_none() {
             self.ui.pointer = self.ui.seat_state.get_pointer(qh, &seat).ok();
@@ -837,23 +964,12 @@ impl KeyboardHandler for State {
         _: &Connection,
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
-        _: u32,
+        serial: u32,
         ev: KeyEvent,
     ) {
-        let Some(id) = self.ui.kb_focus.filter(|id| self.ui.exists(*id)) else {
-            return;
-        };
-        let m = self.ui.mods;
-        self.event(
-            id,
-            Event::Key {
-                sym: ev.keysym.raw(),
-                text: ev.utf8,
-                ctrl: m.ctrl,
-                alt: m.alt,
-                shift: m.shift,
-            },
-        );
+        // Setting the clipboard needs the serial of a recent input event.
+        self.ui.last_serial = serial;
+        self.key_event(ev);
     }
     fn repeat_key(
         &mut self,
@@ -901,6 +1017,123 @@ impl ProvidesRegistryState for State {
 }
 
 delegate_registry!(State);
+
+// Clipboard. Drag and drop between programs is not used yet.
+impl DataDeviceHandler for State {
+    fn enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_data_device::WlDataDevice,
+        _: f64,
+        _: f64,
+        _: &wl_surface::WlSurface,
+    ) {
+    }
+    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_data_device::WlDataDevice) {}
+    fn motion(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_data_device::WlDataDevice,
+        _: f64,
+        _: f64,
+    ) {
+    }
+    fn selection(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_data_device::WlDataDevice,
+    ) {
+    }
+    fn drop_performed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_data_device::WlDataDevice,
+    ) {
+    }
+}
+
+impl DataOfferHandler for State {
+    fn source_actions(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &mut DragOffer,
+        _: DndAction,
+    ) {
+    }
+    fn selected_action(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &mut DragOffer,
+        _: DndAction,
+    ) {
+    }
+}
+
+impl DataSourceHandler for State {
+    fn accept_mime(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_data_source::WlDataSource,
+        _: Option<String>,
+    ) {
+    }
+    fn send_request(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_data_source::WlDataSource,
+        _: String,
+        mut fd: WritePipe,
+    ) {
+        use std::io::Write;
+        let _ = fd.write_all(self.ui.copied.as_bytes());
+    }
+    fn cancelled(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        source: &wl_data_source::WlDataSource,
+    ) {
+        // Another program took the clipboard.
+        if self
+            .ui
+            .copy_source
+            .as_ref()
+            .is_some_and(|c| c.inner() == source)
+        {
+            self.ui.copy_source = None;
+        }
+    }
+    fn dnd_dropped(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_data_source::WlDataSource,
+    ) {
+    }
+    fn dnd_finished(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_data_source::WlDataSource,
+    ) {
+    }
+    fn action(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_data_source::WlDataSource,
+        _: DndAction,
+    ) {
+    }
+}
 
 /// User data for objects whose events we ignore (viewporter).
 struct NoEvents;

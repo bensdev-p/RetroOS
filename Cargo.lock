@@ -1306,6 +1306,7 @@ dependencies = [
 name = "retro-ui"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "retro-gfx",
  "smithay-client-toolkit",
 ]
