@@ -87,6 +87,7 @@ def main():
                 print("FAIL tasks:", r); ok = False
         elif cmd == "expect-file":
             name, _, want = arg.partition(" ")
+            want = want.replace("\\n", "\n")  # "\n" in a step is a line break
             try:
                 got = open(os.path.join(home, name)).read()
             except OSError as e:

@@ -36,7 +36,7 @@ jobs:
       - run: cargo test --workspace
       - name: Headless Station end-to-end
         run: |
-          cargo build -p station -p retro-console -p retrodos -p retro-login -p retro-edit -p retro-filer -p retro-net -p retro-bar -p retro-progman -p retro-about
+          cargo build -p station -p retro-console -p retrodos -p retro-login -p retro-edit -p retro-filer -p retro-net -p retro-bar -p retro-progman -p retro-about -p retro-jot
           # Program Manager only where a scenario is about it.
           export RETROOS_NO_PROGMAN=1
           python3 tests/host/station.py target/debug out/test-host
@@ -50,6 +50,7 @@ jobs:
           python3 tests/host/station.py target/debug out/test-host-scheme tests/host/scheme.steps
           RETROOS_NO_PROGMAN= python3 tests/host/station.py target/debug out/test-host-progman tests/host/progman.steps
           python3 tests/host/station.py target/debug out/test-host-about tests/host/about.steps
+          RETROOS_NO_BAR=1 python3 tests/host/station.py target/debug out/test-host-jot tests/host/jot.steps
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -66,6 +67,7 @@ jobs:
             out/test-host-scheme
             out/test-host-progman
             out/test-host-about
+            out/test-host-jot
 
   bootloader:
     name: Pi 5 bootloader settings card

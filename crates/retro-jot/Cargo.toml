@@ -1,0 +1,18 @@
+[package]
+name = "retro-jot"
+description = "Jot: the RetroOS text editor for the Desktop (the GUI sibling of EDIT)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "jot"
+path = "src/main.rs"
+
+[dependencies]
+retro-gfx.workspace = true
+retro-ui.workspace = true
+retro-edit = { path = "../retro-edit" }
+
+[lints]
+workspace = true

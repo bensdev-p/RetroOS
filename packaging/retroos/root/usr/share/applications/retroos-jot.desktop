@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Jot
+Comment=Write and edit plain text files
+Exec=jot %f
+Icon=accessories-text-editor
+Terminal=false
+Categories=Utility;TextEditor;
+MimeType=text/plain;

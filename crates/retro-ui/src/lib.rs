@@ -11,6 +11,7 @@
 //!
 //! A program implements [`Program`] and calls [`run`].
 
+pub mod controls;
 pub mod station;
 
 use retro_gfx::widgets::CLEAR_PX;
@@ -138,6 +139,11 @@ pub mod keys {
     pub const SPACE: u32 = 0x20;
     pub const TAB: u32 = 0xff09;
     pub const ISO_LEFT_TAB: u32 = 0xfe20;
+    pub const BACKSPACE: u32 = 0xff08;
+    pub const DELETE: u32 = 0xffff;
+    pub const INSERT: u32 = 0xff63;
+    pub const F1: u32 = 0xffbe;
+    pub const F3: u32 = 0xffc0;
     pub const F6: u32 = 0xffc3;
     pub const F10: u32 = 0xffc7;
 }
@@ -354,6 +360,39 @@ impl Ui {
         }
         w.commit();
         self.add(Role::Window(w), size)
+    }
+
+    /// A dialog of window `parent` (Station centres it over its parent);
+    /// not resizable.
+    pub fn dialog(&mut self, parent: SurfaceId, title: &str, size: (i32, i32)) -> SurfaceId {
+        let id = self.window(title, "retroos.dialog", size, true);
+        let parent_win = match self.surfaces.get(&parent).map(|s| &s.role) {
+            Some(Role::Window(w)) => Some(w.clone()),
+            _ => None,
+        };
+        if let (Some(Role::Window(w)), Some(p)) =
+            (self.surfaces.get(&id).map(|s| &s.role), parent_win)
+        {
+            w.set_parent(Some(&p));
+            w.commit();
+        }
+        id
+    }
+
+    /// Is Shift held (for Shift+click)?
+    pub fn shift(&self) -> bool {
+        self.mods.shift
+    }
+
+    /// Change a window's title.
+    pub fn set_title(&mut self, id: SurfaceId, title: &str) {
+        if let Some(Surf {
+            role: Role::Window(w),
+            ..
+        }) = self.surfaces.get(&id)
+        {
+            w.set_title(title);
+        }
     }
 
     /// Ask Station to minimise a window (Program Manager's Minimize on Use).

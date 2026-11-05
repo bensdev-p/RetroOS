@@ -1233,6 +1233,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-jot"
+version = "0.1.0"
+dependencies = [
+ "retro-edit",
+ "retro-gfx",
+ "retro-ui",
+]
+
+[[package]]
 name = "retro-kms"
 version = "0.1.0"
 dependencies = [

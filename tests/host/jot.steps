@@ -1,0 +1,48 @@
+# Jot: type, copy and paste through the clipboard, Save As, Find.
+wait 1500
+type DESKTOP
+key enter
+wait 1500
+type START jot
+key enter
+wait 2500
+expect WINDOWS => normal Untitled - Jot
+type Hello from Jot
+key enter
+type second line
+key enter
+wait 300
+shot 95-jot-typing
+# Select all, copy, paste at the end: the text twice.
+key ctrl+a
+key ctrl+c
+key ctrl+end
+key ctrl+v
+wait 300
+# Ctrl+S on an untitled file asks for a name (the field starts selected).
+key ctrl+s
+wait 1500
+shot 96-jot-save-as
+type note.txt
+key enter
+wait 1000
+expect-file note.txt Hello from Jot\nsecond line\nHello from Jot\nsecond line\n
+expect WINDOWS => normal note.txt - Jot
+# Find: Ctrl+Home, Ctrl+F, "second", Enter selects it; Esc closes the dialog.
+key ctrl+home
+key ctrl+f
+wait 1200
+type second
+key enter
+wait 400
+shot 97-jot-find
+key escape
+wait 600
+# Typing over the found word, then Alt+F4 asks about the change; N leaves.
+type SECOND
+key alt+f4
+wait 1200
+shot 98-jot-ask
+type n
+wait 1000
+expect-task 1

@@ -46,8 +46,12 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
 - **About This Computer** (D-036): `crates/retro-about`, from ◆ → About
   This Computer…; host test `tests/host/about.steps`. `retro_gfx::icons`
   has a Computer picture.
-- Next: File Cabinet, Jot; Xwayland; icons and cursors (HANDOFF §7 steps
-  5–8).
+- **Jot** (D-037): `crates/retro-jot` (binary `jot`; `editor.rs` is the
+  tested editing core over `retro_edit::buffer`), `.desktop` file in
+  packaging (Accessories); retro-ui `controls`, `Ui::dialog`, keyboard
+  repeat, clipboard. Host test `tests/host/jot.steps` (expect-file now
+  takes `\n`).
+- Next: File Cabinet; Xwayland; icons and cursors (HANDOFF §7 steps 5–8).
 
 ## 1. Where things stand
 

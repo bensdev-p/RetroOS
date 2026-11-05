@@ -5,7 +5,7 @@
 //! RetroDOS runs it for the EDIT command, translating DOS paths first.
 
 mod app;
-mod buffer;
+use retro_edit::buffer;
 
 use app::{App, Mode};
 use buffer::Buffer;
