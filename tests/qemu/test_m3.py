@@ -141,13 +141,14 @@ def run(q):
     check("TASKS /W lists it as minimised", "minimized" in wins, wins[-500:])
     check("Program Manager started with the Desktop", "Program Manager" in wins, wins[-500:])
 
-    # Alt+Tab brings it back.
-    q.key("alt", "tab")
+    # Alt+Tab goes through the windows in stacking order, icons last (Windows
+    # 3.1): DOS Prompt, Program Manager (opened behind it), then the icon.
+    q.hold("alt", "tab", "tab")
     time.sleep(2)
     q.screendump("m3-8-alt-tab")
     s = serial_after(q, "RETRO-M3-WIN2", "retrodos /C TASKS /W")
     wins = s[s.rfind("Task  Position"):]
-    check("Alt+Tab restores the icon", "minimized" not in wins and wins.count("normal") >= 2, wins[-500:])
+    check("Alt+Tab, Tab restores the icon", "minimized" not in wins and wins.count("normal") >= 2, wins[-500:])
 
     # Exit to DOS: the DOS Prompt fills the screen; the other window keeps running.
     q.key("ctrl", "alt", "f1")

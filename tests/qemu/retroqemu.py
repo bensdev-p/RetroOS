@@ -204,6 +204,20 @@ class Qemu:
         self._qmp("send-key", keys=[{"type": "qcode", "data": k} for k in combo])
         time.sleep(0.08)
 
+    def hold(self, mod, *keys):
+        """Hold `mod` while pressing each of `keys` (Alt+Tab, Tab)."""
+        def ev(k, down):
+            return {"type": "key", "data": {"down": down, "key": {"type": "qcode", "data": k}}}
+        self._qmp("input-send-event", events=[ev(mod, True)])
+        time.sleep(0.1)
+        for k in keys:
+            self._qmp("input-send-event", events=[ev(k, True)])
+            time.sleep(0.05)
+            self._qmp("input-send-event", events=[ev(k, False)])
+            time.sleep(0.3)
+        self._qmp("input-send-event", events=[ev(mod, False)])
+        time.sleep(0.08)
+
     def type(self, text):
         for ch in text:
             q, shift = qcode(ch)
