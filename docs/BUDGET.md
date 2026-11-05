@@ -169,3 +169,15 @@ log: the monitor being powered by (and starting with) the Pi, HDMI/EDID
 waits in the bootloader, the bootloader's boot-order and power-supply
 checks. None of these can be fixed in config.txt alone; EEPROM settings
 (`BOOT_ORDER`, `DISABLE_HDMI`…) are the likely lever.
+
+### Raspberry Pi 5 firmware log (2026-11-05, CI run 39, cold power-on)
+
+`vclog -m` timestamps (ms since power-on) split the 17.5 s stopwatch time:
+
+| Stage | Time | Note |
+|---|---:|---|
+| EEPROM bootloader | 0 → 7.25 s | before the firmware's first message ("Initial voltage"); bootloader settings to be checked (`vcgencmd bootloader_config`) |
+| Firmware: voltages, HDMI EDID, device tree + overlay | 7.25 → 7.65 s | |
+| Firmware: loading and unpacking the kernel | 7.65 → 10.90 s ("Starting OS 10902 ms") | the kernel was gzip-compressed (10.3 MB, ~3× unpacked) and the firmware unpacked it: the image now ships it unpacked; expected saving ~2–2.5 s, to be measured |
+| Linux and RetroOS to `C:\>` | 10.9 → ≈ 16 s | ≈ 5 s, as measured above |
+| Monitor locks on to the signal | ≈ 1.5 s | the tester's monitor, separately powered |

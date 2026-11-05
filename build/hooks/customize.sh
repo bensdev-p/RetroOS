@@ -87,8 +87,15 @@ echo ">> customize: boot files"
 # Make sure every kernel is there under the name the firmware expects.
 B="$R/boot/firmware"
 mkdir -p "$B"
-for k in "$R"/boot/vmlinuz-*-rpi-2712; do [ -e "$k" ] && cp "$k" "$B/kernel_2712.img"; done
-for k in "$R"/boot/vmlinuz-*-rpi-v8; do [ -e "$k" ] && cp "$k" "$B/kernel8.img"; done
+# The kernels ship gzip-compressed; the Pi firmware unpacks them itself,
+# which took ~3 s of every Pi 5 boot (vclog: overlay loaded at 7.65 s,
+# "Starting OS" at 10.90 s). Unpacked they are read from the card in well
+# under a second (BUDGET.md, Milestone 3 boot breakdown).
+kernel_img() {
+    if gzip -t "$1" 2>/dev/null; then gzip -dc "$1" > "$2"; else cp "$1" "$2"; fi
+}
+for k in "$R"/boot/vmlinuz-*-rpi-2712; do [ -e "$k" ] && kernel_img "$k" "$B/kernel_2712.img"; done
+for k in "$R"/boot/vmlinuz-*-rpi-v8; do [ -e "$k" ] && kernel_img "$k" "$B/kernel8.img"; done
 for d in "$R"/usr/lib/linux-image-*-rpi-2712 "$R"/usr/lib/linux-image-*-rpi-v8; do
     [ -d "$d/broadcom" ] && cp "$d"/broadcom/bcm27*.dtb "$B/"
     [ -d "$d/overlays" ] && mkdir -p "$B/overlays" && cp -r "$d"/overlays/. "$B/overlays/"
