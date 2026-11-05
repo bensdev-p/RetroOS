@@ -2,7 +2,7 @@
 //! pictures Station shows for minimised windows and Program Manager shows
 //! for programs, in the colours of the current [`Theme`].
 
-use crate::palette::{BLACK, COBALT, SILVER, SLATE, WHITE};
+use crate::palette::{BLACK, COBALT, LIME, SILVER, SLATE, WHITE};
 use crate::{Rgb, Surface, Theme};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -11,6 +11,8 @@ pub enum IconArt {
     Program,
     /// A DOS Prompt (the RetroDOS console).
     Dos,
+    /// The computer itself (About This Computer).
+    Computer,
 }
 
 /// The 32×32 picture of an icon at physical (x, y), in the theme's colours.
@@ -19,6 +21,21 @@ pub fn icon_picture(sf: &mut Surface, art: IconArt, x: i32, y: i32, p: i32, th: 
         let col = th.picture(col);
         sf.fill_rect(x + ax * p, y + ay * p, (w * p) as u32, (h * p) as u32, col)
     };
+    if art == IconArt::Computer {
+        // A monitor on a desktop case, light from the top left.
+        at(5, 1, 22, 18, BLACK);
+        at(6, 2, 20, 16, SILVER);
+        at(8, 4, 16, 11, COBALT);
+        at(9, 5, 5, 1, WHITE);
+        at(13, 19, 6, 2, BLACK);
+        at(2, 21, 28, 9, BLACK);
+        at(3, 22, 26, 7, SILVER);
+        at(3, 22, 26, 1, WHITE);
+        at(17, 25, 9, 1, BLACK);
+        at(5, 25, 2, 1, LIME);
+        at(3, 28, 26, 1, SLATE);
+        return;
+    }
     // A small window: shadow, outline, title bar, client area.
     at(4, 5, 27, 24, SLATE);
     at(2, 3, 27, 24, BLACK);
@@ -31,6 +48,7 @@ pub fn icon_picture(sf: &mut Surface, art: IconArt, x: i32, y: i32, p: i32, th: 
             at(5, 13, 18, 1, SLATE);
             at(5, 15, 15, 1, SLATE);
         }
+        IconArt::Computer => {}
         IconArt::Dos => {
             at(3, 9, 25, 17, BLACK);
             // "C:\>_" in tiny letters, 5 pixels tall.

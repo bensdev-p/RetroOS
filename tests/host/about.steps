@@ -1,0 +1,18 @@
+# About This Computer from the System Bar's diamond menu: its first item.
+wait 1500
+type DESKTOP
+key enter
+wait 1500
+pointer 36 20
+button click
+wait 600
+key down
+key enter
+wait 2500
+expect WINDOWS => normal About This Computer
+expect-task 2
+shot 90-about
+# Esc closes it.
+key escape
+wait 800
+expect-task 1

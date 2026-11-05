@@ -134,7 +134,10 @@ impl Bar {
         let sep = || (MenuItem::separator(), Cmd::None);
         match title {
             0 => vec![
-                (MenuItem::new("&About RetroOS...", "", false), Cmd::None),
+                (
+                    MenuItem::new("&About This Computer...", "", true),
+                    Cmd::Launch("ABOUT".into(), vec!["retro-about".into()]),
+                ),
                 sep(),
                 (MenuItem::new("&Control Panel", "", false), Cmd::None),
                 (MenuItem::new("Software &Library", "", false), Cmd::None),

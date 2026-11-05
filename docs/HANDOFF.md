@@ -43,8 +43,11 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   behind the focused window at the top right (`ensure_progman`,
   `RETROOS_NO_PROGMAN`); ◆ → Program Manager. retro-ui gained `keys`,
   `Event::Scroll`, `Ui::minimize`. Host test `tests/host/progman.steps`.
-- Next: File Cabinet, Jot, About This Computer; Xwayland; icons and cursors
-  (HANDOFF §7 steps 5–8).
+- **About This Computer** (D-036): `crates/retro-about`, from ◆ → About
+  This Computer…; host test `tests/host/about.steps`. `retro_gfx::icons`
+  has a Computer picture.
+- Next: File Cabinet, Jot; Xwayland; icons and cursors (HANDOFF §7 steps
+  5–8).
 
 ## 1. Where things stand
 

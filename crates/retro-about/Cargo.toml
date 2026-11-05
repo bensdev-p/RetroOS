@@ -1,0 +1,13 @@
+[package]
+name = "retro-about"
+description = "About This Computer: RetroOS's version and the memory each program uses"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+retro-gfx.workspace = true
+retro-ui.workspace = true
+
+[lints]
+workspace = true
