@@ -5,6 +5,7 @@
 //! synthesis ([`synth`]): box drawing, block elements and accented letters.
 //! Glyphs we have not drawn can be filled in from GNU Unifont's `.hex` format.
 
+pub mod accents;
 pub mod synth;
 
 use std::collections::HashMap;
@@ -359,10 +360,70 @@ const LANTERN_12_SRC: &str = include_str!("../../../../assets/fonts/lantern-12.g
 pub fn lantern_12() -> &'static Font {
     static FONT: OnceLock<Font> = OnceLock::new();
     FONT.get_or_init(|| {
-        Font::parse_proportional("Lantern 12", 13, LANTERN_12_SRC)
-            .expect("Lantern 12 source is valid")
+        let mut f = Font::parse_proportional("Lantern 12", 13, LANTERN_12_SRC)
+            .expect("Lantern 12 source is valid");
+        accents::complete(&mut f, &LANTERN_12_ACCENTS);
+        f
     })
 }
+
+const LANTERN_9_SRC: &str = include_str!("../../../../assets/fonts/lantern-9.glyphs");
+
+/// Lantern 9, the small proportional font (labels under icons, status text).
+/// 9 rows tall.
+pub fn lantern_9() -> &'static Font {
+    static FONT: OnceLock<Font> = OnceLock::new();
+    FONT.get_or_init(|| {
+        let mut f = Font::parse_proportional("Lantern 9", 9, LANTERN_9_SRC)
+            .expect("Lantern 9 source is valid");
+        accents::complete(&mut f, &LANTERN_9_ACCENTS);
+        f
+    })
+}
+
+/// Lantern 9's marks: one-pixel strokes; a capital gives up one row and
+/// takes a one-row mark (circumflex, tilde and ring touch it).
+const LANTERN_9_ACCENTS: accents::Style = accents::Style {
+    x_top: 3,
+    cap_top: 1,
+    cap_squash: 1,
+    base_row: 6,
+    art: |m, upper| {
+        use accents::Mark::*;
+        match (m, upper) {
+            (Grave, false) => &["#.", ".#"],
+            (Acute, false) => &[".#", "#."],
+            (Grave, true) => &["#.."],
+            (Acute, true) => &["..#"],
+            (Circumflex, _) => &[".#.", "#.#"],
+            (Tilde, _) => &[".#.#", "#.#."],
+            (Diaeresis, _) => &["#.#"],
+            (Ring, false) => &[".#.", "#.#", ".#."],
+            (Ring, true) => &[".#.", "#.#"],
+            (Cedilla, _) => &[".#", "#."],
+        }
+    },
+};
+
+/// Lantern 12's marks: bold, two rows; capitals give up two rows.
+const LANTERN_12_ACCENTS: accents::Style = accents::Style {
+    x_top: 4,
+    cap_top: 1,
+    cap_squash: 2,
+    base_row: 9,
+    art: |m, _| {
+        use accents::Mark::*;
+        match m {
+            Grave => &["##..", ".##."],
+            Acute => &["..##", ".##."],
+            Circumflex => &[".###.", "##.##"],
+            Tilde => &[".##.#", "#.##."],
+            Diaeresis => &["##.##", "##.##"],
+            Ring => &[".##.", "#..#", ".##."],
+            Cedilla => &[".##", "##."],
+        }
+    },
+};
 
 impl Font {
     /// Width in pixels of `s` set in this font (at scale 1).

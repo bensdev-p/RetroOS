@@ -33,9 +33,13 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   `scheme=` in startup.conf; broker `SCHEME`, `WATCH` (EVENT lines);
   `COLOR` saves it via `/usr/libexec/retroos/set-scheme`. Host test
   `tests/host/scheme.steps` (with `expect-pixel`).
-- Next: Lantern 9 and Latin-1 for Lantern; Program Manager; File Cabinet,
-  Jot, About This Computer; Xwayland; icons and cursors (HANDOFF §7 steps
-  3–8).
+- **Lantern 9** (`assets/fonts/lantern-9.glyphs`, regular weight, 9 rows)
+  for icon labels, and **Latin-1 for both Lantern fonts**: accented letters
+  composed from base letter + drawn mark (`retro_gfx::font::accents`, one
+  `Style` per font), symbols, curly quotes and dashes drawn by hand (fractions,
+  ¤ ¦ ¶ ª º þ ð are still the replacement box). `widgets::ellipsize_in`.
+- Next: Program Manager; File Cabinet, Jot, About This Computer; Xwayland;
+  icons and cursors (HANDOFF §7 steps 4–8).
 
 ## 1. Where things stand
 

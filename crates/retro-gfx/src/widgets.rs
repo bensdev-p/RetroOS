@@ -4,7 +4,7 @@
 //! retro-ui programs (the System Bar) their menus. Colours come from the
 //! [`Theme`] of the current colour scheme.
 
-use crate::font::lantern_12;
+use crate::font::{lantern_12, Font};
 use crate::theme::Theme;
 use crate::{Canvas, Rgb, Surface};
 
@@ -19,19 +19,27 @@ pub fn text_width(s: &str) -> i32 {
     lantern_12().text_width(s) as i32
 }
 
-/// `s` cut to fit `max` art pixels, ending in "…" when cut.
+/// `s` cut to fit `max` art pixels of Lantern 12, ending in "…" when cut.
 pub fn ellipsize(s: &str, max: i32) -> String {
-    if text_width(s) <= max {
+    ellipsize_in(lantern_12(), s, max)
+}
+
+/// `s` cut to fit `max` art pixels of `font`, ending in "…" when cut.
+pub fn ellipsize_in(font: &Font, s: &str, max: i32) -> String {
+    let width = |t: &str| font.text_width(t) as i32;
+    if width(s) <= max {
         return s.to_string();
     }
+    let dots = width("…");
     let mut out = String::new();
+    let mut w = 0;
     for ch in s.chars() {
-        let mut next = out.clone();
-        next.push(ch);
-        if text_width(&next) + text_width("…") > max {
+        let cw = font.glyph_or_replacement(ch).width as i32;
+        if w + cw + dots > max {
             break;
         }
-        out = next;
+        out.push(ch);
+        w += cw;
     }
     out.push('…');
     out

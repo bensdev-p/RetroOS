@@ -7,10 +7,10 @@
 //! pixels for drawing, so frames stay pixel-exact at every output scale.
 //! Text is Lantern 12, the Desktop's system font.
 
-use retro_gfx::font::lantern_12;
+use retro_gfx::font::{lantern_12, lantern_9};
 use retro_gfx::palette::{BLACK, COBALT, SILVER, SLATE, WHITE};
 pub use retro_gfx::widgets::{
-    ellipsize, menu_hit, menu_layout, text_width, MenuItem, CLEAR_PX, TEXT_Y,
+    ellipsize, ellipsize_in, menu_hit, menu_layout, text_width, MenuItem, CLEAR_PX, TEXT_Y,
 };
 use retro_gfx::Theme;
 use retro_gfx::{Canvas, Rgb, Surface};
@@ -393,25 +393,19 @@ pub fn draw_icon(
     }
     let mut sf = c.surface();
     icon_picture(&mut sf, art, (ICON_W - 32) / 2 * p, 0, p, &m.theme);
-    // Label: White on Black, the selection colours when selected.
-    let text = ellipsize(label, ICON_W - 6);
-    let tw = text_width(&text);
+    // Label in Lantern 9: White on Black, the selection colours when selected.
+    let font = lantern_9();
+    let text = ellipsize_in(font, label, ICON_W - 6);
+    let tw = font.text_width(&text) as i32;
     let lx = (ICON_W - tw - 4) / 2;
     let (bg, fg) = if selected {
         (m.theme.sel, m.theme.sel_text)
     } else {
         (m.theme.label, m.theme.label_text)
     };
-    sf.fill_rect(lx * p, 35 * p, ((tw + 4) * p) as u32, (15 * p) as u32, bg);
-    sf.text(
-        lantern_12(),
-        (lx + 2) * p,
-        36 * p,
-        p as u32,
-        fg,
-        None,
-        &text,
-    );
+    let lh = font.cell_h as i32 + 2;
+    sf.fill_rect(lx * p, 35 * p, ((tw + 4) * p) as u32, (lh * p) as u32, bg);
+    sf.text(font, (lx + 2) * p, 36 * p, p as u32, fg, None, &text);
     c
 }
 
