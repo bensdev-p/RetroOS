@@ -661,6 +661,50 @@ fn terminfo_name() -> String {
     std::env::var("RETROOS_TERM").unwrap_or_else(|_| "xterm-256color".into())
 }
 
+/// Follow Station's notices (WATCH on its broker): when the system's
+/// colour scheme changes (COLOR in any console), this console follows.
+fn watch_station(handle: &LoopHandle<'static, App>) {
+    use std::os::unix::net::UnixStream;
+    let Some(path) = std::env::var_os("RETROOS_STATION") else {
+        return;
+    };
+    let Ok(mut s) = UnixStream::connect(path) else {
+        return;
+    };
+    if s.write_all(b"WATCH\n").is_err() {
+        return;
+    }
+    let _ = s.set_nonblocking(true);
+    let mut pending = Vec::new();
+    let _ = handle.insert_source(
+        Generic::new(s, Interest::READ, Mode::Level),
+        move |_, s, app: &mut App| {
+            let mut buf = [0u8; 1024];
+            loop {
+                // SAFETY: read-only use of the registered socket.
+                match unsafe { s.get_mut() }.read(&mut buf) {
+                    Ok(0) => return Ok(PostAction::Remove),
+                    Ok(n) => pending.extend_from_slice(&buf[..n]),
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                    Err(_) => return Ok(PostAction::Remove),
+                }
+            }
+            while let Some(nl) = pending.iter().position(|b| *b == b'\n') {
+                let line = String::from_utf8_lossy(&pending[..nl]).into_owned();
+                pending.drain(..=nl);
+                let f: Vec<&str> = line.split('\t').collect();
+                if let ["EVENT", "SCHEME", key] = f.as_slice() {
+                    if let Some(sc) = app.screen.as_mut() {
+                        sc.set_scheme(key);
+                        app.needs_draw = true;
+                    }
+                }
+            }
+            Ok(PostAction::Continue)
+        },
+    );
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let once = args
@@ -730,6 +774,8 @@ fn main() {
         once,
         exit_code: 0,
     };
+
+    watch_station(&event_loop.handle());
 
     // Cursor blink: 2 Hz, 50% duty (docs/STYLE.md §3).
     event_loop

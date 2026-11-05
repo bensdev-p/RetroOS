@@ -124,6 +124,46 @@ impl Scheme {
         })
     }
 
+    /// The scheme's short name, as COLOR and startup.conf spell it.
+    pub fn key(&self) -> &'static str {
+        match self.name {
+            "Paper" => "paper",
+            "Amber" => "amber",
+            "Green Screen" => "green",
+            "High Contrast" => "high",
+            _ => "classic",
+        }
+    }
+
+    /// A scheme by its short name (`classic`, `paper`, `amber`, `green`, `high`).
+    pub fn by_key(key: &str) -> Option<&'static Scheme> {
+        let key = key.trim().to_ascii_lowercase();
+        Scheme::ALL.into_iter().find(|s| s.key() == key)
+    }
+
+    /// The colour scheme of the whole system: `scheme=` in
+    /// /etc/retroos/startup.conf (COLOR, later Control Panel → Display);
+    /// $RETROOS_SCHEME overrides it (tests).
+    pub fn system() -> &'static Scheme {
+        let from_env = std::env::var("RETROOS_SCHEME").ok();
+        let from_conf = || {
+            std::fs::read_to_string("/etc/retroos/startup.conf")
+                .ok()?
+                .lines()
+                .find_map(|l| {
+                    l.split('#')
+                        .next()?
+                        .trim()
+                        .strip_prefix("scheme=")
+                        .map(|v| v.trim().to_string())
+                })
+        };
+        from_env
+            .or_else(from_conf)
+            .and_then(|k| Scheme::by_key(&k))
+            .unwrap_or(&Scheme::CLASSIC)
+    }
+
     pub fn color(&self, idx: u8) -> Rgb {
         self.palette[(idx & 15) as usize]
     }

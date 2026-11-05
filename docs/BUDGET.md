@@ -35,7 +35,7 @@ copy of the screen. Those are M5 tuning items, prioritised by the Pi numbers.
 | Metric | Value | Notes |
 |---|---|---|
 | Power-on → POST screen | _to measure_ | HW_CHECKLIST 1.1 |
-| Power-on → `C:\>` | _to measure_ | HW_CHECKLIST 1.8 |
+| Power-on → `C:\>` | 17.7 s (cold, 2026-11-04; see Milestone 3) | HW_CHECKLIST 1.8 |
 | Idle RAM, text mode | _see Milestone 2_ | HW_CHECKLIST 1.18 |
 
 ## Milestone 2
@@ -125,5 +125,132 @@ textures. (Headless Station also holds its 8 MB off-screen image.)
 | Metric | Value | Notes |
 |---|---|---|
 | Desktop idle, MemTotal − MemAvailable (QEMU TCG) | _from CI (test_m3 report.json)_ | |
-| Desktop idle, RetroOS userspace (Pi 5) | _to measure_ | HW_CHECKLIST 3.12; target < 160 MB (D-028) |
-| Firefox windowed, GPU (Pi 5) | _to measure_ | HW_CHECKLIST 3.9 |
+| Desktop idle, RetroOS userspace (Pi 5) | **79.4 MB** (AnonPages 63.8 + Shmem 15.6) | HW_CHECKLIST 3.12, CI run 30; target < 160 MB (D-028) ✅ |
+| Firefox windowed, GPU (Pi 5): Enter → window | **~7 s first start, 2.4 s second** | HW_CHECKLIST 3.9, CI run 30; target ~5 s. The second start (files cached) shows the M2 start-up fix works; the first is mostly reading Firefox from the SD card |
+| Power-off → `C:\>` (Pi 5, cold) | **17.7 s** | HW_CHECKLIST 3.15 / 1.8, CI run 30; target ≤ 10 s (aim 7) ❌ — breakdown requested |
+
+### Raspberry Pi 5 (8 GB), Desktop idle (2026-11-04, CI run 30)
+
+Desktop with the System Bar and the DOS Prompt window (maximised), Firefox
+closed, from `/proc/meminfo` on the Pi:
+
+| Metric | Desktop idle | Text mode (run 24) | Target |
+|---|---:|---:|---:|
+| RetroOS userspace: AnonPages + Shmem | **79.4 MB** (63.8 + 15.6) | 44.4 MB | GUI < 160 MB ✅ |
+| MemTotal − MemAvailable ("used") | 272.5 MB | 224.4 MB | — |
+| Slab (unreclaimable) | 64.0 (39.7) MB | — (31.0) | |
+| VmallocUsed | 20.0 MB | 20.1 MB | |
+| CMA in use | 10.0 MB | — | |
+| station RSS | 112.2 MB | 31.8 MB | |
+| retro-console RSS | 13.4 MB | 9.9 MB | |
+
+station's RSS includes the Mesa/V3D libraries it mapped while Firefox ran
+on the GPU; those are file pages (counted as available, not in "used").
+Whether Station had already dropped back to the CPU renderer when this was
+taken (60 s after the last graphical program) is to be confirmed.
+
+### Raspberry Pi 5 boot breakdown (2026-11-04, CI run 30, cold power-on, text mode)
+
+The stopwatch says power-off → `C:\>` **17.7 s**. From the Pi's own logs:
+
+| Stage | Time | From |
+|---|---:|---|
+| Kernel start → userspace | 1.23 s | `systemd-analyze` |
+| Userspace → graphical.target (greetd starts) | 2.91 s | `systemd-analyze`, critical chain: zram swap → local-fs → sysinit → dbus → iwd → network.target → greetd |
+| POST screen on display | 2.85 s → 3.88 s after kernel start (1.03 s shown) | `RETRO-POST` markers |
+| retro-post.service | 2.14 s, of which ~1.1 s waiting for the display | `systemd-analyze blame` |
+| User manager ready (autologin) | 4.42 s after kernel start | journal |
+| **Linux total, kernel start → `C:\>`** | **≈ 4.5–5 s** | (prompt shortly after the user manager) |
+| **Before the kernel: firmware/bootloader (and the monitor waking up)** | **≈ 12–13 s** (by subtraction) | to be measured: `vclog -m` (raspi-utils-core, now in the image) and the power-on → POST stopwatch |
+
+So the Linux side is already inside the 7 s aim; the gap to the 10 s target
+is all before the kernel starts. Candidates, to check against the firmware
+log: the monitor being powered by (and starting with) the Pi, HDMI/EDID
+waits in the bootloader, the bootloader's boot-order and power-supply
+checks. None of these can be fixed in config.txt alone; EEPROM settings
+(`BOOT_ORDER`, `DISABLE_HDMI`…) are the likely lever.
+
+### Raspberry Pi 5 firmware log (2026-11-05, CI run 39, cold power-on)
+
+`vclog -m` timestamps (ms since power-on) split the 17.5 s stopwatch time:
+
+| Stage | Time | Note |
+|---|---:|---|
+| EEPROM bootloader | 0 → 7.25 s | before the firmware's first message ("Initial voltage"). The tester's board has bootloader 2024-06-05 with `BOOT_ORDER=0xf416` (NVMe **first**, then SD, USB) and `PCIE_PROBE=1`: it waits for an NVMe drive that is not there before trying the card. SD first (`0xf461` or Raspberry Pi Imager's "SD Card Boot" bootloader) should take this to ~1–2 s; a board setting, not part of the image |
+| Firmware: voltages, HDMI EDID, device tree + overlay | 7.25 → 7.65 s | |
+| Firmware: loading and unpacking the kernel | 7.65 → 10.90 s ("Starting OS 10902 ms") | the kernel was gzip-compressed (10.3 MB, ~3× unpacked) and the firmware unpacked it: the image now ships it unpacked; expected saving ~2–2.5 s, to be measured |
+| Linux and RetroOS to `C:\>` | 10.9 → ≈ 16 s | ≈ 5 s, as measured above |
+| Monitor locks on to the signal | ≈ 1.5 s | the tester's monitor, separately powered |
+
+### Raspberry Pi 5 after the bootloader update (2026-11-05, CI run 40)
+
+The tester installed the *SD Card Boot* bootloader and flashed run 40 (unpacked
+kernels). The new bootloader's screen reads `Boot mode: SD (01) order f4`
+(SD first, then USB, then retry) and `M.2 PCIe HAT not detected`, so the NVMe
+wait is gone. The "Configure this Raspberry Pi 5" screen with SHIFT / SPACE /
+ESC prompts is this bootloader's network-install screen, shown after every
+cold boot by default; it is not part of RetroOS, but it costs time (below).
+
+| Observation | Value | Note |
+|---|---|---|
+| Pi screen visible | 7–8 s after power-on | stopwatch; includes the monitor waking up |
+| RetroOS picture | ≈ 22 s after power-on | **first boot after flashing**: the journal shows `retro-setup.service` (first-boot Setup, only started while `/var/lib/retroos/setup-done` is missing) starting 3.54 s after the kernel, so not a normal boot; a second boot is to be timed |
+| RETRO-POST done | 3.29 s after the kernel starts | journal, `short-monotonic` |
+| `vcgencmd get_throttled` | `0x0` | no under-voltage or throttling since boot |
+| `pmic_read_adc EXT5V_V` | 4.983 V | idle |
+| USB-PD current limit | **3 A** (`usb_max_current_enable default 0 max-current 3000`, "Selecting USB low current limit") | the supply did not offer 5 V / 5 A; see below |
+
+**Power-offs.** The tester reports the Pi sometimes switching off during boot
+with no LEDs at all. The bootloader says the supply only negotiated 3 A. A
+supply rated or negotiated for 3 A can trip its own protection on the
+boot-time current spikes (CPU at full clock, HDMI, SD) and cut out, which
+leaves both LEDs dark; a kernel crash or a RetroOS fault would leave the power
+LED on. The official 27 W USB-C supply (5.1 V / 5 A) is the fix to try first;
+`get_throttled` right after a recovered episode (bit 0 or bit 16 set) would
+confirm it. Not a software issue.
+
+### Raspberry Pi 5 with a 5 A supply (2026-11-05, CI run 40)
+
+The 5 A supply is confirmed (`USB-PD: src-cap PDO object1 … Current 5000 mA
+Voltage 5000 mV`). The stopwatch still says ≈ 20 s. `vclog -m` (firmware clock,
+ms) and the journal (seconds since the kernel started):
+
+| Stage | Time | Run 39 (old bootloader) | Note |
+|---|---:|---:|---|
+| Bootloader | → 16.93 s (`Initial voltage`) | → 7.25 s | its messages are replayed at 16.44 s, ~10 ms apart (UART speed, `BOOT_UART=1`); its `BOOTMODE` line says `stc 8831970` (8.8 s) |
+| Firmware: device tree, overlay | 16.93 → 18.37 s | 7.25 → 7.65 s | `dtb_file` 17.18 → `Loaded overlay` 18.07 s |
+| Firmware: kernel load | 18.37 → 20.57 s (`Starting OS 20570 ms`) | 7.65 → 10.90 s | the unpacked kernel: 2.2 s instead of 3.25 s |
+| Linux to the POST screen | 2.26 s | 2.85 s | `[drm] Initialized vc4` 2.18 s; kernel 0.69 s + userspace 2.83 s |
+| POST (fast) | 2.26 → 3.28 s | | hidden: the monitor is re-syncing to the display driver's mode; with `fast_post=no` (≈ 4 s) the tester sees it |
+
+The bootloader installed with Imager's *SD Card Boot* (release 2026-10-30)
+spends ~10 s more than the old one. Its defaults include
+`NET_INSTALL_AT_POWER_ON=1` ("displays the network install UI briefly after a
+cold boot"; the "Configure this Raspberry Pi 5" screen with SHIFT / SPACE /
+ESC), the keyboard wait for it (`NET_INSTALL_KEYBOARD_WAIT`, 900 ms, needs
+USB), the HDMI diagnostics display, and the board still has `BOOT_UART=1`.
+Proposed bootloader settings (a board setting, applied once):
+
+```
+BOOT_UART=0
+BOOT_ORDER=0xf41
+NET_INSTALL_AT_POWER_ON=0
+NET_INSTALL_ENABLED=0
+```
+
+**With the RetroOS bootloader settings card (2026-11-05, CI run 49)**, read
+back by `vcgencmd bootloader_config` (`BOOT_UART=0`, `BOOT_ORDER=0xf41`,
+`NET_INSTALL_AT_POWER_ON=0`, `NET_INSTALL_ENABLED=0`), `boot-times` on the
+first boot (Setup ran, so the Linux part is not a normal boot; the part
+before Linux is): bootloader → 14.48 s (was 16.93 s), `Starting OS` 16.47 s
+(was 20.57 s; firmware 2.0 s instead of 3.6 s), POST 2.25 → 4.78 s after the
+kernel (the new ~2.5 s fast POST, visible), kernel 0.69 s + userspace 4.34 s
+(with Setup). Supply 5.18 V, `throttled=0x0`. The bootloader still spends
+~14 s before the firmware starts, which no setting so far explains; next
+candidates are USB enumeration of the keyboard (the boot menu still looks
+for Space) and the monitor's HDMI hotplug/EDID: a cold boot with the
+keyboard unplugged would tell.
+
+On the firmware's clock `C:\>` is at ≈ 24 s, ≈ 4 s more than the stopwatch;
+the firmware clock probably starts before the stopwatch does (PMIC power-up),
+so the firmware times are upper bounds.

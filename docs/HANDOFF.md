@@ -29,9 +29,25 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   ◆ menu, Programs by category, Window list, clock, Restart / Shut Down /
   Exit to DOS dialogs). Host test `tests/host/bar.steps`; the WM-only
   scenarios run with `RETROOS_NO_BAR=1`.
-- Next: Lantern 9 and Latin-1 for Lantern; Program Manager; File Cabinet,
-  Jot, About This Computer; Xwayland; icons and cursors (HANDOFF §7 steps
-  3–8).
+- **System-wide colour scheme** (D-033): `retro_gfx::Theme` per scheme;
+  `scheme=` in startup.conf; broker `SCHEME`, `WATCH` (EVENT lines);
+  `COLOR` saves it via `/usr/libexec/retroos/set-scheme`. Host test
+  `tests/host/scheme.steps` (with `expect-pixel`).
+- **Lantern 9** (`assets/fonts/lantern-9.glyphs`, regular weight, 9 rows)
+  for icon labels, and **Latin-1 for both Lantern fonts**: accented letters
+  composed from base letter + drawn mark (`retro_gfx::font::accents`, one
+  `Style` per font), symbols, curly quotes and dashes drawn by hand (fractions,
+  ¤ ¦ ¶ ª º þ ð are still the replacement box). `widgets::ellipsize_in`.
+- **Program Manager** (D-035): `crates/retro-progman` (layout in
+  `layout.rs`, unit-tested); Station starts it with the first Desktop,
+  behind the focused window at the top right (`ensure_progman`,
+  `RETROOS_NO_PROGMAN`); ◆ → Program Manager. retro-ui gained `keys`,
+  `Event::Scroll`, `Ui::minimize`. Host test `tests/host/progman.steps`.
+- **About This Computer** (D-036): `crates/retro-about`, from ◆ → About
+  This Computer…; host test `tests/host/about.steps`. `retro_gfx::icons`
+  has a Computer picture.
+- Next: File Cabinet, Jot; Xwayland; icons and cursors (HANDOFF §7 steps
+  5–8).
 
 ## 1. Where things stand
 
@@ -43,8 +59,12 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   M2 commit `5162352`; the session could not push tags, so it may not exist on
   GitHub.
 - CI (`.github/workflows/ci.yml`) is green: lint, unit and host tests on
-  ubuntu-24.04; image build + QEMU M1 and M2 tests on ubuntu-24.04-arm
-  (~16 min). The flashable image is the `retroos-image` artifact of each run.
+  ubuntu-24.04; image build + QEMU M1, M2 and M3 tests on ubuntu-24.04-arm
+  (~22 min). The flashable image is the `retroos-image` artifact of each run,
+  uploaded ~6 min in, before the QEMU tests (their screens and logs are the
+  `qemu-tests` artifact); the Pi 5 bootloader settings card is
+  `retroos-bootloader-rpi5`. Pushes that only change docs or `*.md` start no
+  run, and a newer push cancels the branch's run still going.
 - Hardware results so far: `docs/HW_CHECKLIST.md` (results table at the end).
   Measured numbers: `docs/BUDGET.md`. Idle text mode on the Pi 5: RetroOS
   userspace (AnonPages + Shmem) **44 MB** (target 60), MemTotal − MemAvailable

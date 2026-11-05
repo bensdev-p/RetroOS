@@ -7,11 +7,13 @@
 //! pixels for drawing, so frames stay pixel-exact at every output scale.
 //! Text is Lantern 12, the Desktop's system font.
 
-use retro_gfx::font::lantern_12;
-use retro_gfx::palette::{BLACK, COBALT, SILVER, SKY, SLATE, WHITE};
+use retro_gfx::font::{lantern_12, lantern_9};
+pub use retro_gfx::icons::{icon_picture, IconArt};
+use retro_gfx::palette::{BLACK, WHITE};
 pub use retro_gfx::widgets::{
-    ellipsize, menu_hit, menu_layout, text_width, MenuItem, CLEAR_PX, TEXT_Y,
+    ellipsize, ellipsize_in, menu_hit, menu_layout, text_width, MenuItem, CLEAR_PX, TEXT_Y,
 };
+use retro_gfx::Theme;
 use retro_gfx::{Canvas, Rgb, Surface};
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
@@ -26,6 +28,8 @@ pub const CORNER: i32 = TITLE + BORDER;
 pub const ICON_W: i32 = 80;
 pub const ICON_H: i32 = 52;
 
+/// How to draw: the pixel scales and the colour scheme's theme (so any
+/// cache keyed by Metrics is redrawn when either changes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Metrics {
     /// Logical pixels per art pixel.
@@ -34,6 +38,7 @@ pub struct Metrics {
     pub px: i32,
     /// Output scale (physical pixels per logical pixel).
     pub scale: i32,
+    pub theme: Theme,
 }
 
 impl Metrics {
@@ -46,7 +51,12 @@ impl Metrics {
             u,
             px: u * scale,
             scale,
+            theme: Theme::default(),
         }
+    }
+
+    pub fn with_theme(self, theme: Theme) -> Metrics {
+        Metrics { theme, ..self }
     }
 
     pub fn border(&self) -> i32 {
@@ -108,10 +118,11 @@ pub fn frame_rects(w: i32, h: i32, m: &Metrics) -> Vec<(Rectangle<i32, Logical>,
         (w - 3 * u, c, 2 * u, u),
         (w - 3 * u, h - c - u, 2 * u, u),
     ] {
-        v.push((r(x, y, nw, nh), BLACK));
+        v.push((r(x, y, nw, nh), m.theme.line));
     }
     // Lines and bands as four strips each: (inset, thickness, colour).
-    for (i, t, col) in [(3 * u, u, BLACK), (u, 2 * u, SILVER), (0, u, BLACK)] {
+    let th = &m.theme;
+    for (i, t, col) in [(3 * u, u, th.line), (u, 2 * u, th.face), (0, u, th.line)] {
         v.push((r(i, i, w - 2 * i, t), col));
         v.push((r(i, h - i - t, w - 2 * i, t), col));
         v.push((r(i, i + t, t, h - 2 * i - 2 * t), col));
@@ -207,30 +218,31 @@ pub struct TitleStyle {
 /// The title bar and the line under it, `w` logical pixels wide.
 pub fn draw_title(w: i32, m: &Metrics, s: &TitleStyle) -> Canvas {
     let p = m.px;
+    let th = &m.theme;
     let wp = (w * m.scale).max(1) as u32;
     let hp = ((TITLE + 1) * p) as u32;
     let (bg, fg) = if s.active {
-        (COBALT, WHITE)
+        (th.active, th.active_text)
     } else {
-        (SILVER, SLATE)
+        (th.inactive, th.inactive_text)
     };
     let mut c = Canvas::new(wp, hp, bg);
     let mut sf = c.surface();
     let wp = wp as i32;
     let t = TITLE * p;
     // Control-menu box and its separator.
-    sf.fill_rect(0, 0, t as u32, t as u32, SILVER);
-    sf.fill_rect(t, 0, p as u32, t as u32, BLACK);
+    sf.fill_rect(0, 0, t as u32, t as u32, th.face);
+    sf.fill_rect(t, 0, p as u32, t as u32, th.line);
     let (bx, by) = (3 * p, 7 * p);
-    sf.fill_rect(bx + p, by + p, (12 * p) as u32, (4 * p) as u32, SLATE);
-    sf.frame(bx, by, (12 * p) as u32, (4 * p) as u32, p as u32, BLACK);
-    sf.fill_rect(bx + p, by + p, (10 * p) as u32, (2 * p) as u32, WHITE);
+    sf.fill_rect(bx + p, by + p, (12 * p) as u32, (4 * p) as u32, th.dark);
+    sf.frame(bx, by, (12 * p) as u32, (4 * p) as u32, p as u32, th.text);
+    sf.fill_rect(bx + p, by + p, (10 * p) as u32, (2 * p) as u32, th.light);
     let mut text_right = wp;
     if s.buttons {
         let max_x = wp - t;
         let min_x = wp - 2 * t - p;
-        sf.fill_rect(max_x - p, 0, p as u32, t as u32, BLACK);
-        sf.fill_rect(min_x - p, 0, p as u32, t as u32, BLACK);
+        sf.fill_rect(max_x - p, 0, p as u32, t as u32, th.line);
+        sf.fill_rect(min_x - p, 0, p as u32, t as u32, th.line);
         let restore = s.maximized;
         button(
             &mut sf,
@@ -238,7 +250,8 @@ pub fn draw_title(w: i32, m: &Metrics, s: &TitleStyle) -> Canvas {
             t,
             p,
             s.pressed == Some(Part::Minimize),
-            |sf, cx, cy| triangle(sf, cx, cy, p, false, 4),
+            th,
+            |sf, cx, cy| triangle(sf, cx, cy, p, false, 4, th.text),
         );
         button(
             &mut sf,
@@ -246,12 +259,13 @@ pub fn draw_title(w: i32, m: &Metrics, s: &TitleStyle) -> Canvas {
             t,
             p,
             s.pressed == Some(Part::Maximize),
+            th,
             |sf, cx, cy| {
                 if restore {
-                    triangle(sf, cx, cy - 2 * p, p, true, 3);
-                    triangle(sf, cx, cy + 2 * p, p, false, 3);
+                    triangle(sf, cx, cy - 2 * p, p, true, 3, th.text);
+                    triangle(sf, cx, cy + 2 * p, p, false, 3, th.text);
                 } else {
-                    triangle(sf, cx, cy, p, true, 4);
+                    triangle(sf, cx, cy, p, true, 4, th.text);
                 }
             },
         );
@@ -263,7 +277,7 @@ pub fn draw_title(w: i32, m: &Metrics, s: &TitleStyle) -> Canvas {
     let tw = text_width(&title) * p;
     let tx = left + ((text_right - left) - tw) / 2;
     sf.text(lantern_12(), tx, TEXT_Y * p, p as u32, fg, None, &title);
-    sf.fill_rect(0, t, wp as u32, p as u32, BLACK);
+    sf.fill_rect(0, t, wp as u32, p as u32, th.line);
     c
 }
 
@@ -274,13 +288,14 @@ fn button(
     t: i32,
     p: i32,
     pressed: bool,
+    th: &Theme,
     glyph: impl Fn(&mut Surface, i32, i32),
 ) {
-    sf.fill_rect(x, 0, t as u32, t as u32, SILVER);
+    sf.fill_rect(x, 0, t as u32, t as u32, th.face);
     let (hi, lo) = if pressed {
-        (SLATE, WHITE)
+        (th.dark, th.light)
     } else {
-        (WHITE, SLATE)
+        (th.light, th.dark)
     };
     sf.fill_rect(x, 0, t as u32, p as u32, hi);
     sf.fill_rect(x, 0, p as u32, t as u32, hi);
@@ -290,8 +305,8 @@ fn button(
     glyph(sf, x + t / 2 + off, t / 2 + off);
 }
 
-/// A Black triangle of `rows` art rows (widths 1, 3, 5…), centred on (cx, cy).
-fn triangle(sf: &mut Surface, cx: i32, cy: i32, p: i32, up: bool, rows: i32) {
+/// A triangle of `rows` art rows (widths 1, 3, 5…), centred on (cx, cy).
+fn triangle(sf: &mut Surface, cx: i32, cy: i32, p: i32, up: bool, rows: i32, col: Rgb) {
     for r in 0..rows {
         let half = if up { r } else { rows - 1 - r };
         let y = cy - rows * p / 2 + r * p;
@@ -300,7 +315,7 @@ fn triangle(sf: &mut Surface, cx: i32, cy: i32, p: i32, up: bool, rows: i32) {
             y,
             ((2 * half + 1) * p) as u32,
             p as u32,
-            BLACK,
+            col,
         );
     }
 }
@@ -329,12 +344,13 @@ pub fn outline_rects(
 // ----------------------------------------------------------------- desktop
 
 /// The desktop pattern at a physical pixel: an 8×8 two-colour dither
-/// (STYLE.md §4), here a 50 % Cobalt/Black checkerboard.
+/// (STYLE.md §4), a 50 % checkerboard of the theme's two desktop colours
+/// (Cobalt/Black in Phosphor Classic).
 pub fn pattern_at(x: i32, y: i32, m: &Metrics) -> Rgb {
     if ((x / m.px) + (y / m.px)) & 1 == 0 {
-        COBALT
+        m.theme.desktop.0
     } else {
-        BLACK
+        m.theme.desktop.1
     }
 }
 
@@ -348,14 +364,6 @@ pub fn pattern_band(width_phys: u32, rows: i32, m: &Metrics) -> Canvas {
         }
     }
     c
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum IconArt {
-    /// A generic program window.
-    Program,
-    /// A DOS Prompt (the RetroDOS console).
-    Dos,
 }
 
 /// A minimised window: icon and label over the desktop pattern, drawn at
@@ -377,104 +385,60 @@ pub fn draw_icon(
         }
     }
     let mut sf = c.surface();
-    icon_picture(&mut sf, art, (ICON_W - 32) / 2 * p, 0, p);
-    // Label: White on Black, Sky when selected.
-    let text = ellipsize(label, ICON_W - 6);
-    let tw = text_width(&text);
+    icon_picture(&mut sf, art, (ICON_W - 32) / 2 * p, 0, p, &m.theme);
+    // Label in Lantern 9: White on Black, the selection colours when selected.
+    let font = lantern_9();
+    let text = ellipsize_in(font, label, ICON_W - 6);
+    let tw = font.text_width(&text) as i32;
     let lx = (ICON_W - tw - 4) / 2;
-    let bg = if selected { SKY } else { BLACK };
-    sf.fill_rect(lx * p, 35 * p, ((tw + 4) * p) as u32, (15 * p) as u32, bg);
-    sf.text(
-        lantern_12(),
-        (lx + 2) * p,
-        36 * p,
-        p as u32,
-        WHITE,
-        None,
-        &text,
-    );
-    c
-}
-
-/// The 32×32 picture of an icon at physical (x, y).
-pub fn icon_picture(sf: &mut Surface, art: IconArt, x: i32, y: i32, p: i32) {
-    let mut at = |ax: i32, ay: i32, w: i32, h: i32, col: Rgb| {
-        sf.fill_rect(x + ax * p, y + ay * p, (w * p) as u32, (h * p) as u32, col)
+    let (bg, fg) = if selected {
+        (m.theme.sel, m.theme.sel_text)
+    } else {
+        (m.theme.label, m.theme.label_text)
     };
-    // A small window: shadow, outline, title bar, client area.
-    at(4, 5, 27, 24, SLATE);
-    at(2, 3, 27, 24, BLACK);
-    at(3, 4, 25, 4, COBALT);
-    at(3, 8, 25, 1, BLACK);
-    match art {
-        IconArt::Program => {
-            at(3, 9, 25, 17, WHITE);
-            at(5, 11, 12, 1, SLATE);
-            at(5, 13, 18, 1, SLATE);
-            at(5, 15, 15, 1, SLATE);
-        }
-        IconArt::Dos => {
-            at(3, 9, 25, 17, BLACK);
-            // "C:\>_" in tiny letters, 5 pixels tall.
-            const LETTERS: [[&str; 5]; 5] = [
-                ["###", "#..", "#..", "#..", "###"],
-                [".", "#", ".", "#", "."],
-                ["#..", "#..", ".#.", "..#", "..#"],
-                ["#..", ".#.", "..#", ".#.", "#.."],
-                ["...", "...", "...", "...", "###"],
-            ];
-            let mut lx = 5;
-            for l in LETTERS {
-                for (ry, row) in l.iter().enumerate() {
-                    for (rx, ch) in row.chars().enumerate() {
-                        if ch == '#' {
-                            at(lx + rx as i32, 12 + ry as i32, 1, 1, SILVER);
-                        }
-                    }
-                }
-                lx += l[0].len() as i32 + 1;
-            }
-        }
-    }
+    let lh = font.cell_h as i32 + 2;
+    sf.fill_rect(lx * p, 35 * p, ((tw + 4) * p) as u32, (lh * p) as u32, bg);
+    sf.text(font, (lx + 2) * p, 36 * p, p as u32, fg, None, &text);
+    c
 }
 
 // ------------------------------------------------------------------- boxes
 
 /// The Alt+Tab box: icon and title of the window that will be switched to.
 pub fn draw_switch_box(art: IconArt, title: &str, m: &Metrics) -> Canvas {
-    let p = m.px;
+    let (p, th) = (m.px, &m.theme);
     let (w, h) = (320, 52);
     let mut c = Canvas::new(((w + 1) * p) as u32, ((h + 1) * p) as u32, CLEAR_PX);
     let mut sf = c.surface();
-    sf.fill_rect(p, p, (w * p) as u32, (h * p) as u32, BLACK);
-    sf.fill_rect(0, 0, (w * p) as u32, (h * p) as u32, SILVER);
-    sf.frame(0, 0, (w * p) as u32, (h * p) as u32, p as u32, BLACK);
+    sf.fill_rect(p, p, (w * p) as u32, (h * p) as u32, th.line);
+    sf.fill_rect(0, 0, (w * p) as u32, (h * p) as u32, th.face);
+    sf.frame(0, 0, (w * p) as u32, (h * p) as u32, p as u32, th.line);
     sf.frame(
         2 * p,
         2 * p,
         ((w - 4) * p) as u32,
         ((h - 4) * p) as u32,
         p as u32,
-        COBALT,
+        th.active,
     );
-    icon_picture(&mut sf, art, 8 * p, 10 * p, p);
+    icon_picture(&mut sf, art, 8 * p, 10 * p, p, th);
     let text = ellipsize(title, w - 64);
-    sf.text(lantern_12(), 52 * p, 20 * p, p as u32, BLACK, None, &text);
+    sf.text(lantern_12(), 52 * p, 20 * p, p as u32, th.text, None, &text);
     c
 }
 
 /// A message box: title bar, lines of text and one OK button.
 /// Returns the canvas and the OK button's art rectangle (x, y, w, h).
 pub fn draw_message(title: &str, lines: &[String], m: &Metrics) -> (Canvas, (i32, i32, i32, i32)) {
-    let p = m.px;
+    let (p, th) = (m.px, &m.theme);
     let tw = lines.iter().map(|l| text_width(l)).max().unwrap_or(0);
     let w = (tw + 32).max(200);
     let h = TITLE + 1 + 16 + lines.len() as i32 * 16 + 16 + 24 + 12;
     let mut c = Canvas::new(((w + 1) * p) as u32, ((h + 1) * p) as u32, CLEAR_PX);
     let mut sf = c.surface();
-    sf.fill_rect(p, p, (w * p) as u32, (h * p) as u32, BLACK);
-    sf.fill_rect(0, 0, (w * p) as u32, (h * p) as u32, SILVER);
-    sf.frame(0, 0, (w * p) as u32, (h * p) as u32, p as u32, BLACK);
+    sf.fill_rect(p, p, (w * p) as u32, (h * p) as u32, th.line);
+    sf.fill_rect(0, 0, (w * p) as u32, (h * p) as u32, th.face);
+    sf.frame(0, 0, (w * p) as u32, (h * p) as u32, p as u32, th.line);
     let tb = draw_title(
         (w - 2) * m.u,
         m,
@@ -490,65 +454,13 @@ pub fn draw_message(title: &str, lines: &[String], m: &Metrics) -> (Canvas, (i32
     let font = lantern_12();
     let mut y = TITLE + 1 + 16;
     for l in lines {
-        sf.text(font, 16 * p, y * p, p as u32, BLACK, None, l);
+        sf.text(font, 16 * p, y * p, p as u32, th.text, None, l);
         y += 16;
     }
-    // OK, the default button: an extra Black ring around the bevelled face.
+    // OK is the default button.
     let (bw, bh) = (64, 24);
     let (bx, by) = ((w - bw) / 2, h - bh - 10);
-    sf.frame(
-        bx * p,
-        by * p,
-        (bw * p) as u32,
-        (bh * p) as u32,
-        p as u32,
-        BLACK,
-    );
-    sf.frame(
-        (bx + 1) * p,
-        (by + 1) * p,
-        ((bw - 2) * p) as u32,
-        ((bh - 2) * p) as u32,
-        p as u32,
-        BLACK,
-    );
-    sf.fill_rect(
-        (bx + 2) * p,
-        (by + 2) * p,
-        ((bw - 4) * p) as u32,
-        p as u32,
-        WHITE,
-    );
-    sf.fill_rect(
-        (bx + 2) * p,
-        (by + 2) * p,
-        p as u32,
-        ((bh - 4) * p) as u32,
-        WHITE,
-    );
-    sf.fill_rect(
-        (bx + 2) * p,
-        (by + bh - 3) * p,
-        ((bw - 4) * p) as u32,
-        p as u32,
-        SLATE,
-    );
-    sf.fill_rect(
-        (bx + bw - 3) * p,
-        (by + 2) * p,
-        p as u32,
-        ((bh - 4) * p) as u32,
-        SLATE,
-    );
-    sf.text(
-        font,
-        (bx + (bw - text_width("OK")) / 2) * p,
-        (by + 6) * p,
-        p as u32,
-        BLACK,
-        None,
-        "OK",
-    );
+    retro_gfx::widgets::push_button(&mut sf, bx, by, bw, bh, p, "OK", true, false, th);
     (c, (bx, by, bw, bh))
 }
 
@@ -582,6 +494,7 @@ pub fn to_buffer(c: &Canvas, scale: i32) -> MemoryRenderBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use retro_gfx::palette::{COBALT, SILVER};
 
     fn m2() -> Metrics {
         Metrics::new(1, 2)
@@ -594,7 +507,8 @@ mod tests {
             Metrics {
                 u: 2,
                 px: 2,
-                scale: 1
+                scale: 1,
+                theme: Theme::default(),
             }
         );
         assert_eq!(
@@ -602,7 +516,8 @@ mod tests {
             Metrics {
                 u: 2,
                 px: 4,
-                scale: 2
+                scale: 2,
+                theme: Theme::default(),
             }
         );
         assert_eq!(
@@ -610,7 +525,8 @@ mod tests {
             Metrics {
                 u: 1,
                 px: 2,
-                scale: 2
+                scale: 2,
+                theme: Theme::default(),
             }
         );
         let m = m2();

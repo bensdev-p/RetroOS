@@ -1,0 +1,41 @@
+# Program Manager: Station starts it with the first Desktop, behind the
+# DOS Prompt that typed DESKTOP (which keeps the keyboard), at the top right.
+# (Art pixels ×2 at 1080p; the window is 500×330 art = 1000×660 px at
+# x = 1920 - 1000 - 8.)
+wait 1500
+type DESKTOP
+key enter
+wait 3000
+expect WINDOWS => normal DOS Prompt
+expect WINDOWS => 912 86 1000 660 normal Program Manager
+expect-task 2
+shot 80-progman
+# The DOS Prompt (1280 px wide) covers its left side: a click on the
+# visible part brings it forward. Then a double-click on the Main group's
+# DOS Prompt icon (art 49,77 in the window) starts a DOS Prompt.
+pointer 1600 500
+button click
+wait 400
+expect WINDOWS => normal Program Manager
+shot 80b-progman-forward
+pointer 1010 240
+button click
+wait 100
+button click
+wait 2500
+expect-task 3
+shot 81-progman-launch
+# Program Manager has the keyboard again after a click: Alt+F opens File.
+pointer 1600 500
+button click
+wait 400
+key alt+f
+wait 500
+shot 82-progman-file-menu
+key escape
+wait 300
+# Ctrl+Tab to the next group (if any) and back; Alt+F4 closes it.
+key alt+f4
+wait 800
+expect-task 2
+shot 83-progman-closed

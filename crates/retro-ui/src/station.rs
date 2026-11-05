@@ -69,3 +69,49 @@ pub fn launch(name: &str, argv: &[String]) -> Result<(), String> {
     f.extend(argv.iter().map(String::as_str));
     request(&f).map(|_| ())
 }
+
+/// Follow Station's notices: `on_event` gets the fields after "EVENT" of
+/// every line (`["SCHEME", "amber"]`, …) on the event loop.
+pub fn watch<D: 'static>(
+    handle: &smithay_client_toolkit::reexports::calloop::LoopHandle<'static, D>,
+    mut on_event: impl FnMut(&mut D, &[&str]) + 'static,
+) {
+    use smithay_client_toolkit::reexports::calloop::generic::Generic;
+    use smithay_client_toolkit::reexports::calloop::{Interest, Mode, PostAction};
+    use std::io::Read;
+    let Some(path) = std::env::var_os("RETROOS_STATION") else {
+        return;
+    };
+    let Ok(mut s) = UnixStream::connect(path) else {
+        return;
+    };
+    if s.write_all(b"WATCH\n").is_err() {
+        return;
+    }
+    let _ = s.set_nonblocking(true);
+    let mut pending = Vec::new();
+    let _ = handle.insert_source(
+        Generic::new(s, Interest::READ, Mode::Level),
+        move |_, s, data: &mut D| {
+            let mut buf = [0u8; 1024];
+            loop {
+                // SAFETY: read-only use of the registered socket.
+                match unsafe { s.get_mut() }.read(&mut buf) {
+                    Ok(0) => return Ok(PostAction::Remove),
+                    Ok(n) => pending.extend_from_slice(&buf[..n]),
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                    Err(_) => return Ok(PostAction::Remove),
+                }
+            }
+            while let Some(nl) = pending.iter().position(|b| *b == b'\n') {
+                let line = String::from_utf8_lossy(&pending[..nl]).into_owned();
+                pending.drain(..=nl);
+                let f: Vec<&str> = line.split('\t').collect();
+                if f.first() == Some(&"EVENT") {
+                    on_event(data, &f[1..]);
+                }
+            }
+            Ok(PostAction::Continue)
+        },
+    );
+}

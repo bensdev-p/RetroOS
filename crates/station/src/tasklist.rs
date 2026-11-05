@@ -29,6 +29,11 @@ pub struct TaskList {
 const BUTTONS: &[&str] = &["Switch To", "End Task", "Cancel"];
 
 impl TaskList {
+    /// Draw again (the colour scheme changed).
+    pub fn invalidate(&mut self) {
+        self.buffer = None;
+    }
+
     /// The rendered list (after `Station::task_list_buffer`).
     pub fn buffer(&self) -> Option<&MemoryRenderBuffer> {
         self.buffer.as_ref()
@@ -176,7 +181,7 @@ impl Station {
         };
         let tl = self.task_list.as_mut()?;
         if tl.buffer.is_none() {
-            let canvas = draw(&lines, tl.cursor, tl.note.as_deref(), pw, ph);
+            let canvas = draw(&lines, tl.cursor, tl.note.as_deref(), pw, ph, self.scheme);
             let mut px = Vec::with_capacity((pw * ph * 4) as usize);
             for p in &canvas.px {
                 px.extend_from_slice(&(p | 0xFF00_0000).to_le_bytes());
@@ -195,12 +200,18 @@ impl Station {
 }
 
 /// Draw the list into a canvas of the output's physical size.
-fn draw(lines: &[String], cursor: usize, note: Option<&str>, w: u32, h: u32) -> Canvas {
+fn draw(
+    lines: &[String],
+    cursor: usize,
+    note: Option<&str>,
+    w: u32,
+    h: u32,
+    scheme: &Scheme,
+) -> Canvas {
     let f = phosphor_mono();
     let scale = fit_scale(w.max(8), h.max(16), 8, 16, 80, 25);
     let (cols, rows) = (w / (8 * scale), h / (16 * scale));
-    let scheme = Scheme::CLASSIC;
-    let mut g = Grid::new(cols, rows, &scheme);
+    let mut g = Grid::new(cols, rows, scheme);
     // Phosphor16 indices: 0 black, 1 cobalt, 3 teal, 7 silver, 14 lemon, 15 white.
     g.fill(0, 0, cols, 1, ' ', 0, 3);
     g.put(1, 0, "RetroOS Task List", 0, 3);
@@ -227,7 +238,13 @@ fn draw(lines: &[String], cursor: usize, note: Option<&str>, w: u32, h: u32) -> 
     {
         let y = by + 2 + i as u32 - top;
         let selected = i == cursor;
-        let (fg, bg) = if selected { (15, 1) } else { (0, 7) };
+        // White on Cobalt in Phosphor Classic; the dialog's colours swapped in
+        // the others, where Cobalt and Silver become the same shade.
+        let (fg, bg) = match (selected, scheme.key()) {
+            (true, "classic") => (15, 1),
+            (true, _) => (7, 0),
+            _ => (0, 7),
+        };
         g.fill(bx + 2, y, bw - 4, 1, ' ', fg, bg);
         let text: String = l.chars().take((bw - 6) as usize).collect();
         g.put(bx + 3, y, &text, fg, bg);

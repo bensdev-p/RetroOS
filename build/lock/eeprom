@@ -1,0 +1,4 @@
+# Raspberry Pi 5 bootloader used by build/mkeeprom.sh (D-034).
+EEPROM_REPO=https://github.com/raspberrypi/rpi-eeprom
+EEPROM_COMMIT=d0cf97a4f6081aef6b479532b4fbc936898abde1
+EEPROM_RELEASE=2026-10-30

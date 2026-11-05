@@ -72,6 +72,24 @@ impl Config {
             b(self.chime),
             self.menu_timeout
         );
+        // Keep the settings this page does not edit (scheme=, renderer=,
+        // ui_scale=, …).
+        let mut body = body;
+        let ours = ["mode", "fast_post", "chime", "menu_timeout"];
+        for line in std::fs::read_to_string(path).unwrap_or_default().lines() {
+            let key = line
+                .split('#')
+                .next()
+                .unwrap_or("")
+                .split('=')
+                .next()
+                .unwrap_or("")
+                .trim();
+            if !key.is_empty() && line.contains('=') && !ours.contains(&key) {
+                body.push_str(line);
+                body.push('\n');
+            }
+        }
         let tmp = path.with_extension("tmp");
         std::fs::write(&tmp, body)?;
         std::fs::rename(tmp, path)
@@ -93,6 +111,11 @@ mod tests {
         };
         c.save(&p).unwrap();
         assert_eq!(Config::load(&p), c);
+        std::fs::write(&p, "mode=bogus\nchime=off\nscheme=amber\n").unwrap();
+        c.save(&p).unwrap();
+        assert!(std::fs::read_to_string(&p)
+            .unwrap()
+            .contains("scheme=amber\n"));
         std::fs::write(&p, "mode=bogus\nchime=off\n").unwrap();
         let d = Config::load(&p);
         assert_eq!(d.mode, "text");

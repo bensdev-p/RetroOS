@@ -12,6 +12,8 @@
 # Needs: mmdebstrap, qemu-user-static (binfmt) on non-arm64 hosts, dosfstools,
 # mtools, e2fsprogs, fdisk, xz-utils. Runs as root (or inside the build container).
 set -eu
+# snapshot.debian.org answers 504 under load: retry downloads with backoff.
+RETRY="--retry 20 --retry-all-errors --retry-delay 60 --connect-timeout 30"
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$(mkdir -p "${1:-$ROOT/out}" && cd "${1:-$ROOT/out}" && pwd)
@@ -53,9 +55,9 @@ PKGS=$(list "$ROOT/build/packages/base.list" "$ROOT/build/packages/rpi.list")
 fetch_qemu_kernel() {
     d=$WORK/qemu-debs
     mkdir -p "$d"
-    curl -fsSL -o "$WORK/InRelease" "$DEB/dists/trixie/InRelease"
+    curl -fsSL $RETRY -o "$WORK/InRelease" "$DEB/dists/trixie/InRelease"
     gpgv --keyring "$KR/debian-archive-keyring.gpg" "$WORK/InRelease" 2>/dev/null
-    curl -fsSL -o "$WORK/Packages.xz" "$DEB/dists/trixie/main/binary-arm64/Packages.xz"
+    curl -fsSL $RETRY -o "$WORK/Packages.xz" "$DEB/dists/trixie/main/binary-arm64/Packages.xz"
     want=$(awk '/^SHA256:/{s=1;next} /^[A-Z]/{s=0} s && $3=="main/binary-arm64/Packages.xz"{print $1}' "$WORK/InRelease")
     echo "$want  $WORK/Packages.xz" | sha256sum -c --quiet
     xz -dc "$WORK/Packages.xz" > "$WORK/Packages"
@@ -64,17 +66,35 @@ fetch_qemu_kernel() {
     image=$(field "$meta" Depends | tr ',' '\n' | sed 's/^ *//; s/ .*//' | grep '^linux-image-[0-9]' | head -1)
     for p in $meta $image; do
         file=$(field "$p" Filename); sum=$(field "$p" SHA256)
-        curl -fsSL -o "$d/$(basename "$file")" "$DEB/$file"
+        # The snapshot has answered 404 for files it lists: then the same
+        # file from deb.debian.org (the hash below decides either way).
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 20 --connect-timeout 30 \
+            -o "$d/$(basename "$file")" "$DEB/$file" \
+            || curl -fsSL $RETRY -o "$d/$(basename "$file")" "https://deb.debian.org/debian/$file"
         echo "$sum  $d/$(basename "$file")" | sha256sum -c --quiet
     done
     echo ">> QEMU kernel: $image"
 }
 fetch_qemu_kernel
 
-echo ">> mmdebstrap (snapshot $SNAPSHOT)"
-mmdebstrap --mode=root --variant=apt --architectures=arm64 \
+# Optional package cache (CI keeps it between runs): .debs are copied in
+# before apt downloads and out again before customize.sh empties the cache,
+# so a build fetches only what changed and is not at the mercy of the
+# snapshot server for every package.
+set --
+if [ -n "${RETRO_DEB_CACHE:-}" ]; then
+    mkdir -p "$RETRO_DEB_CACHE"
+    echo ">> package cache $RETRO_DEB_CACHE ($(ls "$RETRO_DEB_CACHE" | grep -c '\.deb$' || true) packages)"
+    set -- --skip=download/empty --skip=essential/unlink \
+        --setup-hook='mkdir -p "$1"/var/cache/apt/archives' \
+        --setup-hook="sync-in $RETRO_DEB_CACHE /var/cache/apt/archives" \
+        --customize-hook="sync-out /var/cache/apt/archives $RETRO_DEB_CACHE"
+fi
+
+bootstrap() {
+mmdebstrap --mode=root --variant=apt --architectures=arm64 "$@" \
     --aptopt='Acquire::Check-Valid-Until "false"' \
-    --aptopt='Acquire::Retries "3"' \
+    --aptopt='Acquire::Retries "20"' \
     --aptopt='APT::Install-Recommends "false"' \
     --dpkgopt='path-exclude=/usr/share/doc/*' \
     --dpkgopt='path-include=/usr/share/doc/*/copyright' \
@@ -92,6 +112,64 @@ mmdebstrap --mode=root --variant=apt --architectures=arm64 \
     "deb [signed-by=$KR/debian-archive-keyring.gpg] $SEC trixie-security main contrib non-free-firmware" \
     "deb [signed-by=$KR/raspberrypi-archive-keyring.gpg] $RPI trixie main" \
     "deb [trusted=yes] copy:$OUT/repo ./"
+}
+
+# The snapshot server drops requests under load: try the whole bootstrap
+# three times, keeping every package already downloaded (in the cache, which
+# CI saves even when the build fails).
+#
+# Files the snapshot cannot serve at all (it has answered 404 for packages
+# its own index lists) are fetched from deb.debian.org into the cache, under
+# the name apt gives them; apt still checks each against the hash in the
+# snapshot's signed index, so a different file is refused, not installed.
+fallback_debs() {
+    log=$1
+    grep -o "Failed to fetch https://snapshot\.debian\.org/archive/[a-z-]*/$SNAPSHOT/pool/[^ ]*\.deb" "$log" \
+        | sed 's/^Failed to fetch //' | sort -u | while read -r url; do
+        archive=$(echo "$url" | sed 's|^https://snapshot\.debian\.org/archive/\([a-z-]*\)/.*|\1|')
+        pool=${url#*/$SNAPSHOT/}
+        pkg=$(basename "$url" | sed 's/_.*//')
+        # "Err:N <uri> <suite>/<component> <arch> <package> <arch> <version>"
+        set -- $(awk -v p="$pkg" '$1 ~ /^Err:/ && $5 == p {print $6, $7; exit}' "$log")
+        [ $# -eq 2 ] || continue
+        name="${pkg}_$(echo "$2" | sed 's/:/%3a/')_$1.deb"
+        [ -e "$RETRO_DEB_CACHE/$name" ] && continue
+        echo ">> $name from deb.debian.org (snapshot: not found)"
+        curl $RETRY -fsS -o "$RETRO_DEB_CACHE/$name.part" "https://deb.debian.org/$archive/$pool" \
+            && mv "$RETRO_DEB_CACHE/$name.part" "$RETRO_DEB_CACHE/$name" \
+            || { rm -f "$RETRO_DEB_CACHE/$name.part"; echo "!! $name: not on deb.debian.org either" >&2; }
+    done
+}
+
+attempt=1
+echo ">> mmdebstrap (snapshot $SNAPSHOT)"
+while :; do
+    # Shown as it runs and kept for fallback_debs; the last line says whether
+    # it worked (a pipeline's status is tee's).
+    { bootstrap "$@" 2>&1 && echo ">> bootstrap done"; } | tee "$WORK/bootstrap.log"
+    [ "$(tail -n 1 "$WORK/bootstrap.log")" = ">> bootstrap done" ] && break
+    if [ -n "${RETRO_DEB_CACHE:-}" ]; then
+        find "$WORK/rootfs/var/cache/apt/archives" -maxdepth 1 -name '*.deb' \
+            -exec cp -n {} "$RETRO_DEB_CACHE"/ \; 2>/dev/null || true
+        fallback_debs "$WORK/bootstrap.log"
+        echo ">> kept $(ls "$RETRO_DEB_CACHE" | grep -c '\.deb$' || true) packages"
+    fi
+    if [ $attempt -ge 3 ]; then
+        echo "!! mmdebstrap failed $attempt times" >&2
+        exit 1
+    fi
+    attempt=$((attempt + 1))
+    # Never delete through a mount left behind (/proc, /dev of the host).
+    if grep -q " $WORK/rootfs/" /proc/mounts; then
+        grep " $WORK/rootfs/" /proc/mounts | awk '{print $2}' | sort -r | xargs -r umount -l
+    fi
+    rm -rf --one-file-system "$WORK/rootfs"
+    echo ">> mmdebstrap again (attempt $attempt) in 60 s"
+    sleep 60
+done
+
+# Our own package changes every build: not worth keeping.
+[ -n "${RETRO_DEB_CACHE:-}" ] && rm -f "$RETRO_DEB_CACHE"/retroos_*.deb
 
 R=$WORK/rootfs
 chroot "$R" dpkg-query -W -f='${Package}\t${Version}\t${Architecture}\n' | sort > "$OUT/manifest.txt"

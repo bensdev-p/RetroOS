@@ -14,6 +14,10 @@
 //!   KEYMAP                        → OK | ERR <msg>   (reload /etc/default/keyboard)
 //!   SCREENSHOT <path>             → OK | ERR <msg>
 //!   PERSONALITY [text|desktop]    → OK <current>     (switch live; DESKTOP / Exit to DOS)
+//!   SCHEME [name]                 → OK <current>    (colour scheme of the session:
+//!                                   classic paper amber green high)
+//!   WATCH                         → OK, then EVENT lines as things change:
+//!                                   EVENT SCHEME <name> (sent at once, too)
 //!   WINDOWS                       → OK <n>, then n lines, top first:
 //!                                   WINDOW <id> <x> <y> <w> <h> <state> <title>
 //!                                   (state: normal maximized minimized fullscreen hidden)
@@ -39,6 +43,8 @@ pub struct Broker {
     names: HashMap<u64, String>,
     next: u64,
     pub test_ipc: bool,
+    /// Connections that asked for EVENT lines (WATCH).
+    watchers: Vec<u64>,
 }
 
 impl Broker {
@@ -73,6 +79,7 @@ impl Broker {
             names: HashMap::new(),
             next: 0,
             test_ipc: false,
+            watchers: Vec::new(),
         }
     }
 
@@ -86,6 +93,15 @@ impl Broker {
                 self.conns.remove(&conn);
             }
         }
+    }
+
+    /// Tell every WATCH connection.
+    pub fn event(&mut self, fields: &[&str]) {
+        let line = format!("EVENT\t{}", fields.join("\t"));
+        for c in self.watchers.clone() {
+            self.send(c, &line);
+        }
+        self.watchers.retain(|c| self.conns.contains_key(c));
     }
 
     pub fn launch_name(&self, launch: u64) -> Option<String> {
@@ -305,6 +321,23 @@ impl Station {
                 };
                 format!("OK\t{p}")
             }
+            "SCHEME" => {
+                if let Some(name) = f.get(1) {
+                    let Some(s) = retro_gfx::Scheme::by_key(name) else {
+                        self.broker.send(conn, "ERR\tunknown colour scheme");
+                        return;
+                    };
+                    self.set_scheme(s);
+                }
+                format!("OK\t{}", self.scheme.key())
+            }
+            "WATCH" => {
+                self.broker.watchers.push(conn);
+                let key = self.scheme.key();
+                self.broker.send(conn, "OK");
+                self.broker.send(conn, &format!("EVENT\tSCHEME\t{key}"));
+                return;
+            }
             "WINDOWS" => {
                 let ids = self.tasks.z_order();
                 let mut lines = vec![format!("OK\t{}", ids.len())];
@@ -413,5 +446,19 @@ impl Station {
             }
         }
         None
+    }
+}
+
+impl Station {
+    /// Switch the colour scheme of the whole session: Station's own
+    /// drawing now, every watching program (consoles, the System Bar) told.
+    pub fn set_scheme(&mut self, s: &'static retro_gfx::Scheme) {
+        self.scheme = s;
+        self.theme = retro_gfx::Theme::for_scheme(s);
+        if let Some(tl) = self.task_list.as_mut() {
+            tl.invalidate();
+        }
+        self.broker.event(&["SCHEME", s.key()]);
+        self.dirty = true;
     }
 }

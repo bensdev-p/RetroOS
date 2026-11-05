@@ -1,0 +1,52 @@
+#!/bin/bash
+# boot-times: where the last boot's time went, on one screen.
+#   ADMIN UNIX /usr/libexec/retroos/boot-times
+# Firmware times come from the VideoCore log (ms since power-on), the rest
+# from the journal (seconds since the kernel started). HW_CHECKLIST 3.22.
+fw=$(vclog -m 2>/dev/null)
+j=$(journalctl -b -o short-monotonic --no-pager 2>/dev/null)
+
+# Seconds since kernel start of the first journal line matching $1.
+mono() { grep -m1 -E "$1" <<<"$j" | sed -n 's/^\[ *\([0-9.]*\)\].*/\1/p'; }
+os_ms=$(sed -n 's/.*Starting OS \([0-9][0-9]*\) *ms.*/\1/p' <<<"$fw" | tail -1)
+volt_ms=$(grep -m1 -i 'initial voltage' <<<"$fw" | grep -o -m1 '[0-9][0-9]*' | head -1)
+
+drm=$(mono '\[drm\] Initialized vc4')
+post_start=$(mono 'RETRO-POST: start')
+post_done=$(mono 'RETRO-POST: done')
+setup=$(mono 'retro-setup.service')
+station=$(mono 'RETRO-STATION: ready')
+# The session's own output may not reach the journal: logind's line for the
+# user's session (not the login screen's or Setup's) is a few ms earlier.
+[ -n "$station" ] || station=$(grep -E 'New session [^ ]+ of user ' <<<"$j" \
+    | grep -v -E 'of user (root|_greetd)\.?$' | head -1 | sed -n 's/^\[ *\([0-9.]*\)\].*/\1/p')
+startup=$(grep -m1 'Startup finished' <<<"$j" | sed 's/.*Startup finished in //')
+
+row() { # label, value in seconds (may be empty), note
+    if [ -n "$2" ]; then printf '  %-36s %7.2f s  %s\n' "$1" "$2" "$3"
+    else printf '  %-36s %9s  %s\n' "$1" "-" "$3"; fi
+}
+s() { [ -n "$1" ] && awk "BEGIN{print $1/1000}"; }
+
+echo "RetroOS boot times (this boot)"
+echo
+echo " Before Linux (since power-on):"
+row "Bootloader done (firmware starts)" "$(s "$volt_ms")" "vclog: Initial voltage"
+row "Linux starts" "$(s "$os_ms")" "vclog: Starting OS"
+echo " Linux (since the kernel started):"
+row "Display driver ready" "$drm" "[drm] vc4"
+row "POST screen shown" "$post_start"
+row "POST screen done" "$post_done"
+row "Session ready (C:\\> next)" "$station" "Station / logind"
+[ -n "$setup" ] && echo "  First-boot Setup ran on this boot: time a later boot instead."
+echo
+if [ -n "$os_ms" ] && [ -n "$station" ]; then
+    row "Total, power-on -> Station ready" "$(awk "BEGIN{print $os_ms/1000 + $station}")"
+fi
+[ -n "$startup" ] && echo "  systemd: $startup"
+echo
+echo " Power:"
+grep -m1 -o -i 'max-current [0-9]*' <<<"$fw" | sed 's/^/  supply limit: /;s/$/ mA (5000 = 5 A)/'
+printf '  %s   %s\n' "$(vcgencmd get_throttled 2>/dev/null)" "$(vcgencmd pmic_read_adc EXT5V_V 2>/dev/null | sed 's/^ *//')"
+[ -z "$fw" ] && echo "  (no firmware log: run with ADMIN)"
+exit 0

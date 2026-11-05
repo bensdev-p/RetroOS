@@ -4,6 +4,28 @@ Run on a **Raspberry Pi 5** (primary) and, when available, a Pi 4, for every
 milestone image. Record results in `docs/BUDGET.md` (numbers) and as a dated
 row in the results table at the end (pass/fail).
 
+Bootloader (once per board): RetroOS boots from the SD card, so the Pi 5's
+EEPROM should try the card first. `ADMIN UNIX "vcgencmd bootloader_config"`
+should show a `BOOT_ORDER` ending in 1 (e.g. `0xf461`); an order that tries
+NVMe first (`0xf416`) adds several seconds to every boot, and Raspberry Pi's
+default settings show a network-install screen after every cold boot
+(~10 s in all, BUDGET.md). Fix: the **RetroOS bootloader settings card**
+(D-034): download the `retroos-bootloader-rpi5` artifact of a CI run, flash
+`retroos-bootloader-rpi5.img` to a spare card (Imager → *Use custom*), power
+on with it, wait until the screen turns green (≥ 10 s), power off, put the
+RetroOS card back. `vcgencmd bootloader_config` then shows `BOOT_ORDER=0xf41`,
+`BOOT_UART=0`, `NET_INSTALL_AT_POWER_ON=0`, `NET_INSTALL_ENABLED=0`.
+Raspberry Pi's defaults come back with Imager → *Misc utility images* →
+*Bootloader (Pi 5 family)* → *SD Card Boot*.
+
+Power: use the official 27 W USB-C supply (5.1 V / 5 A). A supply that
+negotiates only 3 A shows "Selecting USB low current limit" / `max-current
+3000` on the bootloader screen and can cut out under load (both LEDs off).
+After an unexpected power-off: `ADMIN UNIX "vcgencmd get_throttled"` (bit 0
+or 16 set = under-voltage).
+
+Time boots on the **second** boot after flashing: the first one runs Setup.
+
 Flash: Raspberry Pi Imager → *Use custom* → `retroos-<ver>-rpi-arm64.img(.xz)`,
 or `xz -dc retroos-*.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress`.
 
@@ -81,6 +103,12 @@ Optional but very useful: a USB-serial adapter on the Pi 5 debug UART
 | 3.16 | System Bar | look at the top of the screen in the Desktop | White bar, ◆ Programs Window at left, the right time at right; windows start below it |
 | 3.17 | Bar menus | click ◆, then DOS Prompt; click Programs → a group → a program; click Window → another window | menus drop down under the title; a second DOS Prompt window opens; the program starts; the window comes to the front |
 | 3.18 | Exit to DOS from the bar | ◆ → Exit to DOS…, tick "Close all programs first", OK | dialog in the middle of the screen; programs close; full-screen RetroDOS |
+| 3.20 | Firmware boot log | `ADMIN UNIX vclog -m` right after a cold boot (photo of all of it) | the bootloader's timestamped messages: how long the 12 s before the kernel take |
+| 3.21 | One colour scheme everywhere | in the Desktop, `COLOR AMBER` in a DOS Prompt with a second DOS Prompt open (◆ → DOS Prompt); then `RESTART /Y`; then `COLOR CLASSIC` | at once: both consoles, window frames, menus, the desktop pattern and the System Bar turn amber; after the restart the POST screen, the Startup Menu and RetroDOS are amber too; CLASSIC brings everything back |
+| 3.22 | Boot times in one screen | cold boot (not the first after flashing), then `ADMIN UNIX /usr/libexec/retroos/boot-times` (one photo) | firmware and Linux times, the total from power-on to Station, the supply limit (5000 mA) and `throttled=0x0`; compare the total with the stopwatch: the difference is the monitor |
+| 3.24 | Bootloader settings card | flash the card as above, boot it once, then RetroOS; `ADMIN UNIX "vcgencmd bootloader_config"`; cold boot, `ADMIN UNIX /usr/libexec/retroos/boot-times` and stopwatch | green screen on the settings card; the four settings shown; no network-install screen; `Starting OS` well under 20 s (was 20.6 s) |
+| 3.25 | Fast POST visible | cold boot with `fast_post=yes` (the default) | the POST screen stays ≈ 2.5 s: the end of the memory count, the device lines and a short hold are visible |
+| 3.23 | POST visible | `ADMIN UNIX "sed -i s/fast_post=yes/fast_post=no/ /etc/retroos/startup.conf"`, cold boot; afterwards set it back to `yes` | the POST screen (memory count, devices) stays ≈ 4 s instead of ≈ 1 s; if it shows now, the fast one is hidden while the monitor re-syncs to the display driver's mode |
 | 3.19 | Shut down from the bar | ◆ → Shut Down…, OK | the Pi powers off (green LED off) |
 | 3.15 | Boot times (carried over) | stopwatch, second boot, text mode | record power-on → POST screen (1.1) and power-on → `C:\>` (1.8) |
 
@@ -92,3 +120,9 @@ Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|S
 |---|---|---|---|---|
 | 2026-10-17 | CI run 15 (d22b35a) | Pi 5 8 GB, Raspberry Pi monitor 1080p | 2.1, 2.3, 2.8–2.14 | 2.2 Wi-Fi joins but `ping` lacks permission (fixed: ping_group_range); 2.4 not tested (no cable); 2.5 Firefox "huge, unusable" (fixed: D-027) so 2.6/2.7 untested; 2.15 KEYB "Access denied" from localectl (fixed: own helper, applies at once); 2.16 idle 276 MB (target 100); 2.17 1,247 MB with YouTube |
 | 2026-10-17 | CI run 24 (ade8015) | Pi 5 8 GB, Raspberry Pi monitor 1080p | 2.2, 2.5–2.7, 2.15, 2.16; boot times within target | idle userspace 44 MB (target 60), "used" 224 MB; Firefox normal size with GPU, but it opened a little late (fixed after: the GPU switch now overlaps Firefox's start-up, and the GPU stays up 60 s after the last program) |
+| 2026-11-04 | CI run 30 (711b9eb) | Pi 5 8 GB, Raspberry Pi monitor 1080p | 3.1–3.14, 3.16–3.19 (all M3 checks); 3.15 measured | sheet: `docs/hw/2026-11-04-m3-pi5.csv`. 3.9 Firefox window after ~7 s the first time, 2.4 s the second (start-up fix confirmed; the first start reads Firefox from the card); 3.12 idle userspace 79.4 MB (target 160), "used" 272.5 MB; 3.16 clock 6 h off — the time zone is still the image default (UTC, Setup was left at it); 3.15 power-off → `C:\>` **17.7 s** (target ≤ 10 s; POST-screen time not taken) — breakdown requested |
+| 2026-11-05 | CI run 39 (8e9f458) | Pi 5 8 GB, Raspberry Pi monitor 1080p | 3.20, 3.21; time zone set | 3.21 one colour scheme everywhere: good. 3.20 firmware log: bootloader until 7.25 s, kernel load/unpack 7.65–10.90 s (unpacked kernel in the next image), Linux ≈ 5 s; stopwatch 17.5 s (monitor separately powered, sometimes slow to show a picture) |
+| 2026-11-05 | CI run 39 (8e9f458) | Pi 5 8 GB | — | bootloader 2024-06-05, BOOT_ORDER=0xf416 (NVMe first), PCIE_PROBE=1, BOOT_UART=1: explains most of the 7.25 s before the firmware; SD-first bootloader suggested |
+| 2026-11-05 | CI run 40 (8796fe1) | Pi 5 8 GB, 5 A supply | supply, 3.20, 3.23 | 5000 mA confirmed. Stopwatch ≈ 20 s. vclog: Starting OS 20.57 s (was 10.90 s): the 2026-10-30 bootloader shows its network-install screen after every cold boot (`NET_INSTALL_AT_POWER_ON=1`), `BOOT_UART=1` still set. 3.23: the slow POST is visible, the fast one is hidden by the monitor re-syncing |
+| 2026-11-05 | CI run 49 (5690705) | Pi 5 8 GB, 5 A supply | 3.22, 3.24, 3.25 | 3.24 settings card: the four settings read back. 3.25 fast POST visible ("maybe a hair longer, but good"). 3.22 (first boot, Setup ran): bootloader 14.48 s, Starting OS 16.47 s (was 20.57 s), POST 2.25–4.78 s after the kernel; 5.18 V, throttled 0x0. Power loss earlier the same day traced to the outlet/plug, not the Pi |
+| 2026-11-05 | CI run 40 (8796fe1) | Pi 5 8 GB, wall plug + USB-C cable | bootloader screen, journal, throttling | SD Card Boot bootloader installed (order f4, SD first). Pi screen at 7–8 s, RetroOS at ≈ 22 s, but that boot ran first-boot Setup (journal); second boot to be timed. throttled 0x0, EXT5V 4.98 V, but the supply negotiated only 3 A: occasional power-offs with no LEDs, official 27 W supply recommended |

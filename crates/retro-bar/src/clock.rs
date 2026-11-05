@@ -2,9 +2,15 @@
 
 use std::time::Duration;
 
+extern "C" {
+    fn tzset();
+}
+
 fn local() -> libc::tm {
-    // SAFETY: time() and localtime_r() only write to the values we pass.
+    // SAFETY: tzset() re-reads /etc/localtime (so a new time zone shows at
+    // the next minute); time() and localtime_r() only write to our values.
     unsafe {
+        tzset();
         let t = libc::time(std::ptr::null_mut());
         let mut tm: libc::tm = std::mem::zeroed();
         libc::localtime_r(&t, &mut tm);

@@ -8,9 +8,8 @@
 
 mod clock;
 
-use retro_gfx::palette::{BLACK, SILVER, SKY, WHITE};
 use retro_gfx::widgets::{draw_menu, menu_hit, menu_layout, push_button, text_width, MenuItem};
-use retro_gfx::{font::lantern_12, Canvas};
+use retro_gfx::{font::lantern_12, Canvas, Theme};
 use retro_ui::station;
 use retro_ui::{Event, Program, Rect, SurfaceId, Ui};
 use std::time::Duration;
@@ -135,12 +134,19 @@ impl Bar {
         let sep = || (MenuItem::separator(), Cmd::None);
         match title {
             0 => vec![
-                (MenuItem::new("&About RetroOS...", "", false), Cmd::None),
+                (
+                    MenuItem::new("&About This Computer...", "", true),
+                    Cmd::Launch("ABOUT".into(), vec!["retro-about".into()]),
+                ),
                 sep(),
                 (MenuItem::new("&Control Panel", "", false), Cmd::None),
                 (MenuItem::new("Software &Library", "", false), Cmd::None),
                 sep(),
                 (MenuItem::new("&DOS Prompt", "", true), Cmd::DosPrompt),
+                (
+                    MenuItem::new("&Program Manager", "", true),
+                    Cmd::Launch("PROGMAN".into(), vec!["retro-progman".into()]),
+                ),
                 sep(),
                 (MenuItem::new("&Restart...", "", true), Cmd::Restart),
                 (MenuItem::new("Shut &Down...", "", true), Cmd::ShutDown),
@@ -372,40 +378,41 @@ impl Bar {
         }
     }
 
-    fn draw_bar(&self, c: &mut Canvas) {
+    fn draw_bar(&self, c: &mut Canvas, t: &Theme) {
         let w = c.width as i32;
         let mut sf = c.surface();
-        sf.fill_rect(0, 0, w as u32, HEIGHT as u32, WHITE);
-        sf.fill_rect(0, HEIGHT - 1, w as u32, 1, BLACK);
+        sf.fill_rect(0, 0, w as u32, HEIGHT as u32, t.bar);
+        sf.fill_rect(0, HEIGHT - 1, w as u32, 1, t.bar_text);
         let open = self.menus.first().and_then(|m| m.title);
         let font = lantern_12();
-        for (i, ((x, tw), t)) in title_rects().into_iter().zip(TITLES).enumerate() {
+        for (i, ((x, tw), title)) in title_rects().into_iter().zip(TITLES).enumerate() {
             let (fg, bg) = if open == Some(i) {
-                (WHITE, SKY)
+                (t.sel_text, t.sel)
             } else {
-                (BLACK, WHITE)
+                (t.bar_text, t.bar)
             };
             sf.fill_rect(x, 0, tw as u32, (HEIGHT - 1) as u32, bg);
-            sf.text(font, x + 7, 3, 1, fg, None, t);
+            sf.text(font, x + 7, 3, 1, fg, None, title);
         }
         let now = clock::now_text();
-        sf.text(font, w - 8 - text_width(&now), 3, 1, BLACK, None, &now);
+        sf.text(font, w - 8 - text_width(&now), 3, 1, t.bar_text, None, &now);
     }
 
-    fn draw_dialog(&self, d: &Dialog, c: &mut Canvas) {
+    fn draw_dialog(&self, d: &Dialog, c: &mut Canvas, t: &Theme) {
         let mut sf = c.surface();
-        sf.clear(SILVER);
+        sf.clear(t.face);
         let font = lantern_12();
         let (_, question) = ask_text(d.ask);
-        sf.text(font, 16, 14, 1, BLACK, None, question);
+        sf.text(font, 16, 14, 1, t.text, None, question);
         if d.ask == Ask::ExitToDos {
-            // A check box: Black frame, White inside, an X when set.
-            sf.fill_rect(CHECK.x, CHECK.y, 13, 13, WHITE);
-            sf.frame(CHECK.x, CHECK.y, 13, 13, 1, BLACK);
+            // A check box: outlined, light inside, an X when set.
+            sf.fill_rect(CHECK.x, CHECK.y, 13, 13, t.light);
+            sf.frame(CHECK.x, CHECK.y, 13, 13, 1, t.line);
+            let mark = if t.light == t.text { t.face } else { t.text };
             if d.close_all {
                 for i in 2..11 {
-                    sf.put(CHECK.x + i, CHECK.y + i, BLACK);
-                    sf.put(CHECK.x + 12 - i, CHECK.y + i, BLACK);
+                    sf.put(CHECK.x + i, CHECK.y + i, mark);
+                    sf.put(CHECK.x + 12 - i, CHECK.y + i, mark);
                 }
             }
             sf.text(
@@ -413,11 +420,11 @@ impl Bar {
                 CHECK.x + 20,
                 CHECK.y,
                 1,
-                BLACK,
+                t.text,
                 None,
                 "Close all programs first",
             );
-            sf.fill_rect(CHECK.x + 20, CHECK.y + 11, 8, 1, BLACK); // C: the key that ticks it
+            sf.fill_rect(CHECK.x + 20, CHECK.y + 11, 8, 1, t.text); // C: the key that ticks it
         }
         push_button(
             &mut sf,
@@ -429,6 +436,7 @@ impl Bar {
             "OK",
             true,
             d.pressed == Some(0),
+            t,
         );
         push_button(
             &mut sf,
@@ -440,22 +448,13 @@ impl Bar {
             "Cancel",
             false,
             d.pressed == Some(1),
+            t,
         );
     }
 }
 
 /// Key symbols the bar uses (X11 keysym values).
-mod retro_ui_keys {
-    pub const UP: u32 = 0xff52;
-    pub const DOWN: u32 = 0xff54;
-    pub const LEFT: u32 = 0xff51;
-    pub const RIGHT: u32 = 0xff53;
-    pub const RETURN: u32 = 0xff0d;
-    pub const KP_ENTER: u32 = 0xff8d;
-    pub const ESCAPE: u32 = 0xff1b;
-    pub const SPACE: u32 = 0x20;
-    pub const TAB: u32 = 0xff09;
-}
+use retro_ui::keys as retro_ui_keys;
 
 impl Program for Bar {
     fn start(&mut self, ui: &mut Ui) {
@@ -468,18 +467,18 @@ impl Program for Bar {
         ui.timer(CLOCK_TIMER, clock::until_next_minute());
     }
 
-    fn draw(&mut self, _ui: &Ui, id: SurfaceId, c: &mut Canvas) {
+    fn draw(&mut self, ui: &Ui, id: SurfaceId, c: &mut Canvas) {
         if Some(id) == self.bar {
-            return self.draw_bar(c);
+            return self.draw_bar(c, &ui.theme);
         }
         if let Some(m) = self.menus.iter().find(|m| m.surface == id) {
             let only: Vec<MenuItem> = m.items.iter().map(|(i, _)| i.clone()).collect();
-            let menu = draw_menu(&only, m.sel, 1);
+            let menu = draw_menu(&only, m.sel, 1, &ui.theme);
             c.surface().blit(&menu, 0, 0);
             return;
         }
         if let Some(d) = self.dialog.as_ref().filter(|d| d.surface == id) {
-            self.draw_dialog(d, c);
+            self.draw_dialog(d, c, &ui.theme);
         }
     }
 

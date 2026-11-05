@@ -196,6 +196,7 @@ fn main() {
         }
     }
     st.ensure_bar();
+    st.ensure_progman();
     for s in spawns {
         if let Err(e) = st.spawn(&split_cmd(&s), None, &[], None) {
             tracing::warn!("cannot start {s}: {e}");
