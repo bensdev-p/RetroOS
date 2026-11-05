@@ -3,8 +3,15 @@ name: CI
 on:
   push:
     branches: [main, "claude/**"]
+    # Notes and checklists need no image (a full run takes ~25 min).
+    paths-ignore: ["docs/**", "*.md"]
   pull_request:
   workflow_dispatch:
+
+# A newer push to the same branch cancels the run still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -71,8 +78,9 @@ jobs:
 
   image:
     name: Build image and boot it in QEMU
+    # Not after the check job: the image builds its own binaries, and the
+    # image is uploaded as soon as it is built, before the QEMU tests.
     runs-on: ubuntu-24.04-arm
-    needs: check
     steps:
       - uses: actions/checkout@v4
       - name: Dependencies
@@ -111,6 +119,13 @@ jobs:
         with:
           path: debcache
           key: debs-${{ hashFiles('build/lock/snapshot', 'build/packages/*.list') }}-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retroos-image
+          path: |
+            out/*.img.xz
+            out/*.sha256
+            out/manifest.txt
       - name: Boot test (QEMU)
         run: sudo env "PATH=$PATH" python3 tests/qemu/test_m1.py out
       - name: Milestone 2 test (QEMU)
@@ -120,11 +135,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: retroos-image
+          name: qemu-tests
           path: |
-            out/*.img.xz
-            out/*.sha256
-            out/manifest.txt
             out/test-m1/*.png
             out/test-m1/report.json
             out/test-m1/diagnostics.txt

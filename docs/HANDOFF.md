@@ -47,8 +47,12 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   M2 commit `5162352`; the session could not push tags, so it may not exist on
   GitHub.
 - CI (`.github/workflows/ci.yml`) is green: lint, unit and host tests on
-  ubuntu-24.04; image build + QEMU M1 and M2 tests on ubuntu-24.04-arm
-  (~16 min). The flashable image is the `retroos-image` artifact of each run.
+  ubuntu-24.04; image build + QEMU M1, M2 and M3 tests on ubuntu-24.04-arm
+  (~22 min). The flashable image is the `retroos-image` artifact of each run,
+  uploaded ~6 min in, before the QEMU tests (their screens and logs are the
+  `qemu-tests` artifact); the Pi 5 bootloader settings card is
+  `retroos-bootloader-rpi5`. Pushes that only change docs or `*.md` start no
+  run, and a newer push cancels the branch's run still going.
 - Hardware results so far: `docs/HW_CHECKLIST.md` (results table at the end).
   Measured numbers: `docs/BUDGET.md`. Idle text mode on the Pi 5: RetroOS
   userspace (AnonPages + Shmem) **44 MB** (target 60), MemTotal − MemAvailable
