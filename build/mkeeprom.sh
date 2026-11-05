@@ -35,8 +35,9 @@ sh "$W/src/rpi-eeprom-digest" -c 2712 -i "$W/files/pieeprom.bin" -o "$W/files/pi
 cp "$ROOT/config/eeprom/README.txt" "$W/files/README.txt"
 # The settings really are in the image.
 python3 "$W/src/rpi-eeprom-config" "$W/files/pieeprom.bin" > "$W/check.conf"
+cat "$W/check.conf"
 grep -v '^[[:space:]]*\(#\|$\)' "$CONF" | while read -r line; do
-    grep -qx "$line" "$W/check.conf" || { echo "not in the image: $line" >&2; exit 1; }
+    grep -Fqx "$line" "$W/check.conf" || { echo "not in the image: $line" >&2; exit 1; }
 done
 
 echo ">> card image"
