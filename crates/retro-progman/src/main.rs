@@ -72,15 +72,22 @@ struct ProgMan {
 fn load_groups() -> Vec<Group> {
     let mut groups = vec![Group {
         name: "Main".into(),
-        items: vec![Item {
-            name: "DOS Prompt".into(),
-            argv: vec!["retro-console".into()],
-            art: IconArt::Dos,
-        }],
+        items: vec![
+            Item {
+                name: "File Cabinet".into(),
+                argv: vec!["file-cabinet".into()],
+                art: IconArt::Folder,
+            },
+            Item {
+                name: "DOS Prompt".into(),
+                argv: vec!["retro-console".into()],
+                art: IconArt::Dos,
+            },
+        ],
     }];
     let mut apps = retro_apps::desktop_apps();
     apps.retain(|a| !a.no_display && !a.terminal && !a.exec.is_empty());
-    apps.retain(|a| a.exec[0] != "retro-console");
+    apps.retain(|a| a.exec[0] != "retro-console" && a.exec[0] != "file-cabinet");
     apps.sort_by_key(|a| a.name.to_lowercase());
     let mut rest: Vec<Group> = Vec::new();
     for a in apps {

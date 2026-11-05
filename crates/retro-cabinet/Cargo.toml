@@ -1,0 +1,21 @@
+[package]
+name = "retro-cabinet"
+description = "File Cabinet: the file manager of the RetroOS Desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "file-cabinet"
+path = "src/main.rs"
+
+[dependencies]
+retro-gfx.workspace = true
+retro-ui.workspace = true
+retro-apps.workspace = true
+retro-dosfs.workspace = true
+retro-filer = { path = "../retro-filer" }
+libc = "0.2"
+
+[lints]
+workspace = true

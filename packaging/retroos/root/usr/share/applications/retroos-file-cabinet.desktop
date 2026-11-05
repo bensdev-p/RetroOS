@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=File Cabinet
+Comment=Look through and organise your files
+Exec=file-cabinet %f
+Icon=system-file-manager
+Terminal=false
+Categories=System;FileManager;
+MimeType=inode/directory;

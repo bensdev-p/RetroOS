@@ -3,7 +3,7 @@
 //!   retro-filer [left-dir [right-dir]]
 
 mod app;
-mod panel;
+use retro_filer::panel;
 
 use app::{Action, App, Mode};
 use retro_dosfs::Dos;

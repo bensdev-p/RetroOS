@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+name = "retro_filer"
+path = "src/lib.rs"
+
 [[bin]]
 name = "retro-filer"
 path = "src/main.rs"

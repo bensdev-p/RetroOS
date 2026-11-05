@@ -12,13 +12,14 @@ expect-task 2
 shot 80-progman
 # The DOS Prompt (1280 px wide) covers its left side: a click on the
 # visible part brings it forward. Then a double-click on the Main group's
-# DOS Prompt icon (art 49,77 in the window) starts a DOS Prompt.
+# DOS Prompt icon (the second, after File Cabinet: art 125,77 in the
+# window) starts a DOS Prompt.
 pointer 1600 500
 button click
 wait 400
 expect WINDOWS => normal Program Manager
 shot 80b-progman-forward
-pointer 1010 240
+pointer 1162 240
 button click
 wait 100
 button click

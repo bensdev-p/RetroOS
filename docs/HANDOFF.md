@@ -51,7 +51,13 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   packaging (Accessories); retro-ui `controls`, `Ui::dialog`, keyboard
   repeat, clipboard. Host test `tests/host/jot.steps` (expect-file now
   takes `\n`).
-- Next: File Cabinet; Xwayland; icons and cursors (HANDOFF §7 steps 5–8).
+- **File Cabinet** (D-038): `crates/retro-cabinet` (binary `file-cabinet`;
+  `open.rs` picks the program, `trash.rs` the Wastebasket), in Program
+  Manager's Main group; FILER's panel is a library (`retro_filer::panel`);
+  retro-apps parses `MimeType=`; `retro_gfx::icons` has Folder and Document
+  pictures and `small_icon`. Host test `tests/host/cabinet.steps`.
+- Next: desktop drive/Wastebasket icons; Xwayland; icons and cursors
+  (HANDOFF §7 steps 6–8); then acceptance (step 8).
 
 ## 1. Where things stand
 

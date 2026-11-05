@@ -1188,6 +1188,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-cabinet"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "retro-apps",
+ "retro-dosfs",
+ "retro-filer",
+ "retro-gfx",
+ "retro-ui",
+]
+
+[[package]]
 name = "retro-console"
 version = "0.1.0"
 dependencies = [

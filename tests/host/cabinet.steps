@@ -1,0 +1,58 @@
+# File Cabinet: list the home folder (C:), make a folder, copy a file into
+# it, throw it in the Wastebasket, icons view, Get Info.
+wait 1500
+type DESKTOP
+key enter
+wait 1500
+type START file-cabinet
+key enter
+wait 2500
+expect WINDOWS => normal File Cabinet - C:\
+shot 100-cabinet-list
+# File → New Folder… (Alt+F, N), "Letters"; the new folder is selected.
+key alt+f
+wait 400
+type n
+wait 1200
+type Letters
+key enter
+wait 800
+# Enter opens it; Backspace goes back up.
+key enter
+wait 800
+expect WINDOWS => normal File Cabinet - C:\Letters
+key backspace
+wait 800
+# R jumps to README.TXT: copy it, L to Letters, open, paste.
+type r
+key ctrl+c
+type l
+key enter
+wait 800
+key ctrl+v
+wait 800
+expect-file Letters/README.TXT RetroOS
+shot 101-cabinet-pasted
+# Del: to the Wastebasket (Yes is the default).
+key delete
+wait 1000
+shot 102-cabinet-delete
+key enter
+wait 800
+expect-file .local/share/Trash/info/README.TXT.trashinfo [Trash Info]\nPath=/
+# View → Icons; Get Info on the folder.
+key backspace
+wait 800
+key alt+v
+wait 400
+type i
+wait 600
+shot 103-cabinet-icons
+key alt+enter
+wait 1200
+shot 104-cabinet-info
+key escape
+wait 600
+key alt+f4
+wait 1000
+expect-task 1
