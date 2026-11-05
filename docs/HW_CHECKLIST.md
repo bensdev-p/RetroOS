@@ -4,6 +4,12 @@ Run on a **Raspberry Pi 5** (primary) and, when available, a Pi 4, for every
 milestone image. Record results in `docs/BUDGET.md` (numbers) and as a dated
 row in the results table at the end (pass/fail).
 
+Bootloader (once per board): RetroOS boots from the SD card, so the Pi 5's
+EEPROM should try the card first. `ADMIN UNIX "vcgencmd bootloader_config"`
+should show a `BOOT_ORDER` ending in 1 (e.g. `0xf461`); an order that tries
+NVMe first (`0xf416`) adds several seconds to every boot. Fix: Raspberry Pi
+Imager → *Misc utility images* → *Bootloader (Pi 5 family)* → *SD Card Boot*.
+
 Flash: Raspberry Pi Imager → *Use custom* → `retroos-<ver>-rpi-arm64.img(.xz)`,
 or `xz -dc retroos-*.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress`.
 
@@ -96,3 +102,4 @@ Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|S
 | 2026-10-17 | CI run 24 (ade8015) | Pi 5 8 GB, Raspberry Pi monitor 1080p | 2.2, 2.5–2.7, 2.15, 2.16; boot times within target | idle userspace 44 MB (target 60), "used" 224 MB; Firefox normal size with GPU, but it opened a little late (fixed after: the GPU switch now overlaps Firefox's start-up, and the GPU stays up 60 s after the last program) |
 | 2026-11-04 | CI run 30 (711b9eb) | Pi 5 8 GB, Raspberry Pi monitor 1080p | 3.1–3.14, 3.16–3.19 (all M3 checks); 3.15 measured | sheet: `docs/hw/2026-11-04-m3-pi5.csv`. 3.9 Firefox window after ~7 s the first time, 2.4 s the second (start-up fix confirmed; the first start reads Firefox from the card); 3.12 idle userspace 79.4 MB (target 160), "used" 272.5 MB; 3.16 clock 6 h off — the time zone is still the image default (UTC, Setup was left at it); 3.15 power-off → `C:\>` **17.7 s** (target ≤ 10 s; POST-screen time not taken) — breakdown requested |
 | 2026-11-05 | CI run 39 (8e9f458) | Pi 5 8 GB, Raspberry Pi monitor 1080p | 3.20, 3.21; time zone set | 3.21 one colour scheme everywhere: good. 3.20 firmware log: bootloader until 7.25 s, kernel load/unpack 7.65–10.90 s (unpacked kernel in the next image), Linux ≈ 5 s; stopwatch 17.5 s (monitor separately powered, sometimes slow to show a picture) |
+| 2026-11-05 | CI run 39 (8e9f458) | Pi 5 8 GB | — | bootloader 2024-06-05, BOOT_ORDER=0xf416 (NVMe first), PCIE_PROBE=1, BOOT_UART=1: explains most of the 7.25 s before the firmware; SD-first bootloader suggested |

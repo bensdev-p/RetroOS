@@ -176,7 +176,7 @@ checks. None of these can be fixed in config.txt alone; EEPROM settings
 
 | Stage | Time | Note |
 |---|---:|---|
-| EEPROM bootloader | 0 → 7.25 s | before the firmware's first message ("Initial voltage"); bootloader settings to be checked (`vcgencmd bootloader_config`) |
+| EEPROM bootloader | 0 → 7.25 s | before the firmware's first message ("Initial voltage"). The tester's board has bootloader 2024-06-05 with `BOOT_ORDER=0xf416` (NVMe **first**, then SD, USB) and `PCIE_PROBE=1`: it waits for an NVMe drive that is not there before trying the card. SD first (`0xf461` or Raspberry Pi Imager's "SD Card Boot" bootloader) should take this to ~1–2 s; a board setting, not part of the image |
 | Firmware: voltages, HDMI EDID, device tree + overlay | 7.25 → 7.65 s | |
 | Firmware: loading and unpacking the kernel | 7.65 → 10.90 s ("Starting OS 10902 ms") | the kernel was gzip-compressed (10.3 MB, ~3× unpacked) and the firmware unpacked it: the image now ships it unpacked; expected saving ~2–2.5 s, to be measured |
 | Linux and RetroOS to `C:\>` | 10.9 → ≈ 16 s | ≈ 5 s, as measured above |
