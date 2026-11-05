@@ -97,6 +97,8 @@ Optional but very useful: a USB-serial adapter on the Pi 5 debug UART
 | 3.18 | Exit to DOS from the bar | ◆ → Exit to DOS…, tick "Close all programs first", OK | dialog in the middle of the screen; programs close; full-screen RetroDOS |
 | 3.20 | Firmware boot log | `ADMIN UNIX vclog -m` right after a cold boot (photo of all of it) | the bootloader's timestamped messages: how long the 12 s before the kernel take |
 | 3.21 | One colour scheme everywhere | in the Desktop, `COLOR AMBER` in a DOS Prompt with a second DOS Prompt open (◆ → DOS Prompt); then `RESTART /Y`; then `COLOR CLASSIC` | at once: both consoles, window frames, menus, the desktop pattern and the System Bar turn amber; after the restart the POST screen, the Startup Menu and RetroDOS are amber too; CLASSIC brings everything back |
+| 3.22 | Boot times in one screen | cold boot (not the first after flashing), then `ADMIN UNIX /usr/libexec/retroos/boot-times` (one photo) | firmware and Linux times, the total from power-on to Station, the supply limit (5000 mA) and `throttled=0x0`; compare the total with the stopwatch: the difference is the monitor |
+| 3.23 | POST visible | `ADMIN UNIX "sed -i s/fast_post=yes/fast_post=no/ /etc/retroos/startup.conf"`, cold boot; afterwards set it back to `yes` | the POST screen (memory count, devices) stays ≈ 4 s instead of ≈ 1 s; if it shows now, the fast one is hidden while the monitor re-syncs to the display driver's mode |
 | 3.19 | Shut down from the bar | ◆ → Shut Down…, OK | the Pi powers off (green LED off) |
 | 3.15 | Boot times (carried over) | stopwatch, second boot, text mode | record power-on → POST screen (1.1) and power-on → `C:\>` (1.8) |
 
