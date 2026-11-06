@@ -125,7 +125,7 @@ textures. (Headless Station also holds its 8 MB off-screen image.)
 | Metric | Value | Notes |
 |---|---|---|
 | Desktop idle, MemTotal − MemAvailable (QEMU TCG) | _from CI (test_m3 report.json)_ | |
-| Desktop idle, RetroOS userspace (Pi 5) | **79.4 MB** (AnonPages 63.8 + Shmem 15.6) | HW_CHECKLIST 3.12, CI run 30; target < 160 MB (D-028) ✅ |
+| Desktop idle, RetroOS userspace (Pi 5) | **52.8 MB** (AnonPages 40.6 + Shmem 12.2) | HW_CHECKLIST 3.33 (M3 acceptance), CI run 66, Program Manager open; "used" (MemTotal − MemAvailable) 252.0 MB; About This Computer: RetroOS 334.0 MB, DOS Prompt 6.5, Program Manager 3.0. Target < 160 MB (D-028) ✅. Was 79.4 MB in run 30 (3.12) |
 | Firefox windowed, GPU (Pi 5): Enter → window | **~7 s first start, 2.4 s second** | HW_CHECKLIST 3.9, CI run 30; target ~5 s. The second start (files cached) shows the M2 start-up fix works; the first is mostly reading Firefox from the SD card |
 | Power-off → `C:\>` (Pi 5, cold) | **17.7 s** | HW_CHECKLIST 3.15 / 1.8, CI run 30; target ≤ 10 s (aim 7) ❌ — breakdown requested |
 

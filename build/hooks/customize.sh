@@ -67,6 +67,21 @@ ln -sf /usr/share/zoneinfo/Etc/UTC "$R/etc/localtime"
 # First boot creates the machine id.
 echo uninitialized > "$R/etc/machine-id"
 rm -f "$R/var/lib/dbus/machine-id"
+# GTK programs (Firefox) pick their pointer theme from GTK's own settings,
+# not XCURSOR_THEME, so name the Phosphor pointers there too (D-040).
+# 32 px = 16 px art at the 2x art scale of a 1080p screen.
+for v in 3.0 4.0; do
+    mkdir -p "$R/etc/gtk-$v"
+    printf '[Settings]\ngtk-cursor-theme-name=Phosphor\ngtk-cursor-theme-size=32\n' > "$R/etc/gtk-$v/settings.ini"
+done
+# ...and GSettings, which GTK on Wayland prefers when the GNOME schemas exist.
+S="$R/usr/share/glib-2.0/schemas"
+if [ -f "$S/org.gnome.desktop.interface.gschema.xml" ]; then
+    printf "[org.gnome.desktop.interface]\ncursor-theme='Phosphor'\ncursor-size=32\n" > "$S/90_retroos.gschema.override"
+    for c in "$R"/usr/lib/*/glib-2.0/glib-compile-schemas "$R"/usr/bin/glib-compile-schemas; do
+        if [ -x "$c" ]; then chroot "$R" "${c#"$R"}" /usr/share/glib-2.0/schemas; break; fi
+    done
+fi
 # Root has no password and cannot log in; the first user (Setup) is an admin.
 chroot "$R" passwd -l root >/dev/null
 

@@ -37,6 +37,8 @@ libgles2
 libgl1-mesa-dri
 # --- X11 programs: Station starts Xwayland the first time one runs (D-025)
 xwayland
+# xeyes, xclock and friends: something small to check X11 with (HW_CHECKLIST 3.31)
+x11-apps
 # --- the preinstalled browser (Raspberry Pi build, Wayland + V3D)
 firefox
 fonts-dejavu-core
