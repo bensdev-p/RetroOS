@@ -90,6 +90,7 @@ pub fn render(st: &mut Station) {
         overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
         personality: st.personality,
         desktop: &st.desktop,
+        x11_overrides: &st.x11_overrides,
     };
     let elements = render::build(&mut hd.renderer, &scene, &mut hd.cursor);
     if let Ok(mut fb) = hd.renderer.bind(&mut hd.image) {

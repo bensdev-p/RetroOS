@@ -187,6 +187,12 @@ impl Desktop {
 
 /// The xdg size limits a client asked for (0 = none).
 fn size_limits(t: &Task) -> (Size<i32, Logical>, Size<i32, Logical>) {
+    if let Some(x) = t.x11() {
+        return (
+            x.min_size().unwrap_or_default(),
+            x.max_size().unwrap_or_default(),
+        );
+    }
     t.window
         .toplevel()
         .map(|top| {
@@ -245,6 +251,11 @@ impl Station {
     }
 
     fn is_ssd(t: &Task) -> bool {
+        // X11 programs expect the window manager's frame unless they ask
+        // for none (Motif hints) or are popups.
+        if let Some(x) = t.x11() {
+            return !x.is_decorated() && !x.is_popup();
+        }
         t.window.toplevel().is_some_and(|top| {
             top.current_state().decoration_mode == Some(DecorationMode::ServerSide)
         })
@@ -277,7 +288,7 @@ impl Station {
     /// The client area of a maximised window: the frame's border is off the
     /// screen, the title bar runs along the top of the work area (Win 3.1).
     /// Programs with their own title bar get the whole work area.
-    fn maximized_rect(&self, t: &Task) -> Rectangle<i32, Logical> {
+    pub(crate) fn maximized_rect(&self, t: &Task) -> Rectangle<i32, Logical> {
         let m = self.metrics();
         let w = self.work_area();
         if !Self::is_ssd(t) {
@@ -347,6 +358,9 @@ impl Station {
         let dos = self.dos_size();
         let Some(t) = self.tasks.get(id) else { return };
         let max = self.maximized_rect(t).size;
+        if t.x11().is_some() {
+            return self.x11_configure(id);
+        }
         let Some(top) = t.window.toplevel() else {
             return;
         };
@@ -388,8 +402,13 @@ impl Station {
         let Some(t) = self.tasks.get(id) else { return };
         let loc = self.shown_rect(t).loc;
         let w = t.window.clone();
+        let x11 = t.x11().is_some();
         if self.space.element_location(&w) != Some(loc) {
             self.space.map_element(w, loc, false);
+        }
+        if x11 {
+            // X needs to know where its window is (its menus open from there).
+            self.x11_configure(id);
         }
         self.dirty = true;
     }
@@ -740,9 +759,7 @@ impl Station {
             );
             return;
         }
-        if let Some(top) = t.window.toplevel() {
-            top.send_close();
-        }
+        t.close();
     }
 
     pub fn show_message(&mut self, title: &str, lines: &[&str]) {

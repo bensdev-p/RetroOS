@@ -127,9 +127,7 @@ impl Station {
                 None => Some("This task cannot be ended from here.".into()),
             }
         } else {
-            if let Some(top) = t.window.toplevel() {
-                top.send_close();
-            }
+            t.close();
             Some(format!(
                 "Asked {} to close. If it does not, press K to end it now.",
                 t.name

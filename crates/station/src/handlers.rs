@@ -38,6 +38,9 @@ impl CompositorHandler for Station {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
+        if let Some(x) = client.get_data::<smithay::xwayland::XWaylandClientData>() {
+            return &x.compositor_state;
+        }
         &client.get_data::<ClientState>().unwrap().compositor_state
     }
 
@@ -314,12 +317,16 @@ impl XdgShellHandler for Station {
 impl Station {
     /// A move or resize the program asked for while a button is held.
     fn client_drag(&mut self, surface: &ToplevelSurface, kind: DragKind) {
+        if let Some(id) = self.tasks.find_surface(surface.wl_surface()) {
+            self.drag_task(id, kind);
+        }
+    }
+
+    /// A move or resize asked for by the program of task `id`.
+    pub fn drag_task(&mut self, id: u64, kind: DragKind) {
         if self.personality != Personality::Desktop {
             return;
         }
-        let Some(id) = self.tasks.find_surface(surface.wl_surface()) else {
-            return;
-        };
         let Some(ptr) = self.seat.get_pointer() else {
             return;
         };

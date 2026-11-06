@@ -26,7 +26,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libxkbcommon-dev libinput-dev libudev-dev libseat-dev libgbm-dev libdrm-dev libpixman-1-dev python3-pil
+            libxkbcommon-dev libinput-dev libudev-dev libseat-dev libgbm-dev libdrm-dev libpixman-1-dev python3-pil \
+            xwayland x11-apps libegl1 libegl-mesa0 libgl1-mesa-dri
       - uses: dtolnay/rust-toolchain@1.97.0
         with:
           components: rustfmt, clippy
@@ -52,6 +53,7 @@ jobs:
           python3 tests/host/station.py target/debug out/test-host-about tests/host/about.steps
           RETROOS_NO_BAR=1 python3 tests/host/station.py target/debug out/test-host-jot tests/host/jot.steps
           RETROOS_NO_BAR=1 python3 tests/host/station.py target/debug out/test-host-cabinet tests/host/cabinet.steps
+          RETROOS_NO_BAR=1 python3 tests/host/station.py target/debug out/test-host-x11 tests/host/x11.steps
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -70,6 +72,7 @@ jobs:
             out/test-host-about
             out/test-host-jot
             out/test-host-cabinet
+            out/test-host-x11
 
   bootloader:
     name: Pi 5 bootloader settings card

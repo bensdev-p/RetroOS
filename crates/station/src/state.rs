@@ -53,6 +53,12 @@ pub struct Station {
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<Station>,
     pub data_device_state: DataDeviceState,
+    /// Xwayland (started on demand, D-025): its X11 window manager, the
+    /// display number programs get, and its menus and tooltips.
+    pub xwm: Option<smithay::xwayland::X11Wm>,
+    pub xdisplay: Option<u32>,
+    pub xwayland_shell_state: smithay::wayland::xwayland_shell::XWaylandShellState,
+    pub x11_overrides: Vec<smithay::desktop::Window>,
     pub popups: PopupManager,
     pub seat: Seat<Station>,
 
@@ -146,6 +152,8 @@ impl Station {
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Station>(&dh);
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Station>(&dh);
+        let xwayland_shell_state =
+            smithay::wayland::xwayland_shell::XWaylandShellState::new::<Station>(&dh);
         let mut seat: Seat<Station> = seat_state.new_wl_seat(&dh, "seat0");
         let xkb = crate::input::xkb_config();
         if seat.add_keyboard(xkb, 400, 25).is_err() {
@@ -198,6 +206,10 @@ impl Station {
             output_manager_state,
             seat_state,
             data_device_state,
+            xwm: None,
+            xdisplay: None,
+            xwayland_shell_state,
+            x11_overrides: Vec::new(),
             popups: PopupManager::default(),
             seat,
             space: Space::default(),
@@ -300,7 +312,7 @@ impl Station {
     }
 
     /// The broker launch request whose process (or an ancestor) owns `pid`.
-    fn launch_for_pid(&self, pid: u32) -> Option<u64> {
+    pub(crate) fn launch_for_pid(&self, pid: u32) -> Option<u64> {
         let mut p = pid;
         for _ in 0..16 {
             if let Some((_, l)) = self.children.iter().find(|(c, _)| c.id() == p) {
@@ -321,6 +333,9 @@ impl Station {
         }
         let size = self.output_size();
         let Some(t) = self.tasks.get(id) else { return };
+        if t.x11().is_some() {
+            return self.x11_configure(id);
+        }
         let Some(top) = t.window.toplevel() else {
             return;
         };
@@ -373,7 +388,10 @@ impl Station {
                 let loc = ((out.w - geo.w).max(0) / 2, (out.h - geo.h).max(0) / 2);
                 self.space.map_element(w.clone(), loc, true);
             }
-            let surface = w.toplevel().map(|t| t.wl_surface().clone());
+            let surface = t.surface();
+            if let Some(x) = t.x11().cloned() {
+                self.x11_activate(&x);
+            }
             let serial = smithay::utils::SERIAL_COUNTER.next_serial();
             if let Some(kb) = self.seat.get_keyboard() {
                 // A menu's grab would hand the keyboard back to whoever had
@@ -388,9 +406,12 @@ impl Station {
     }
 
     pub fn remove_toplevel(&mut self, surface: &WlSurface) {
-        let Some(id) = self.tasks.find_surface(surface) else {
-            return;
-        };
+        if let Some(id) = self.tasks.find_surface(surface) {
+            self.remove_task(id);
+        }
+    }
+
+    pub fn remove_task(&mut self, id: u64) {
         let was_focused = self.tasks.focused() == Some(id);
         let t = self.tasks.remove(id);
         self.task_list_forget(id);
@@ -433,6 +454,10 @@ impl Station {
 
     /// Title of a task's toplevel.
     pub fn task_title(&self, t: &Task) -> String {
+        if let Some(x) = t.x11() {
+            let title = x.title();
+            return if title.is_empty() { x.class() } else { title };
+        }
         t.window
             .toplevel()
             .map(|top| {
@@ -458,6 +483,14 @@ impl Station {
     ) -> Option<(WlSurface, Point<f64, Logical>)> {
         if self.task_list.is_some() {
             return None;
+        }
+        // X11 menus and tooltips are above everything, where they put themselves.
+        for o in self.x11_overrides.iter().rev() {
+            let Some(x) = o.x11_surface() else { continue };
+            let loc = x.geometry().loc;
+            if let Some((s, p)) = o.surface_under(pos - loc.to_f64(), WindowSurfaceType::ALL) {
+                return Some((s, (p + loc).to_f64()));
+            }
         }
         if self.personality == Personality::Desktop {
             if self.desktop.captures_pointer() {
@@ -508,7 +541,19 @@ impl Station {
         // Programs start in the session's colour scheme (even one COLOR
         // could not save for the next boot).
         cmd.env("RETROOS_SCHEME", self.scheme.key());
-        cmd.env_remove("DISPLAY");
+        // X11-only programs get Xwayland (started now if need be); once it
+        // runs, every program gets DISPLAY.
+        if crate::xwayland::needs_x11(&argv[0]) {
+            self.xwayland_display();
+        }
+        match self.xdisplay {
+            Some(d) => {
+                cmd.env("DISPLAY", format!(":{d}"));
+            }
+            None => {
+                cmd.env_remove("DISPLAY");
+            }
+        }
         if let Some(c) = cwd {
             cmd.current_dir(c);
         }

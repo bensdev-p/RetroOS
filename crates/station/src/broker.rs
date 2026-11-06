@@ -278,9 +278,7 @@ impl Station {
                         _ => "ERR	cannot end this task".into(),
                     },
                     Some(t) => {
-                        if let Some(top) = t.window.toplevel() {
-                            top.send_close();
-                        }
+                        t.close();
                         "OK".into()
                     }
                     None => "ERR	no such task".into(),

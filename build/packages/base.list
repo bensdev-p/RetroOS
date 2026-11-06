@@ -35,6 +35,8 @@ libegl1
 libegl-mesa0
 libgles2
 libgl1-mesa-dri
+# --- X11 programs: Station starts Xwayland the first time one runs (D-025)
+xwayland
 # --- the preinstalled browser (Raspberry Pi build, Wayland + V3D)
 firefox
 fonts-dejavu-core

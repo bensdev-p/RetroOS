@@ -20,6 +20,7 @@ mod state;
 mod tasklist;
 mod tasks;
 mod udev;
+mod xwayland;
 
 use render::Scene;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
@@ -83,6 +84,7 @@ pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
                 overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
                 personality: st.personality,
                 desktop: &st.desktop,
+                x11_overrides: &st.x11_overrides,
             };
             match ud.gpu.as_mut().ok_or("no renderer")? {
                 udev::Gpu::Pixman { renderer, .. } => {

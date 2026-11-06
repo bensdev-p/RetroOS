@@ -263,6 +263,8 @@ pub struct Scene<'a> {
     pub overlay: Option<&'a MemoryRenderBuffer>,
     pub personality: Personality,
     pub desktop: &'a Desktop,
+    /// X11 menus and tooltips, drawn where they put themselves, topmost last.
+    pub x11_overrides: &'a [Window],
 }
 
 /// Render elements, front to back.
@@ -318,6 +320,15 @@ where
             }
             _ => {}
         }
+    }
+
+    // X11 menus and tooltips: above every window (topmost first).
+    for o in scene.x11_overrides.iter().rev() {
+        let Some(x) = o.x11_surface() else { continue };
+        let loc = x.geometry().loc.to_physical_precise_round(scale);
+        out.extend(AsRenderElements::<R>::render_elements::<StationElement<R>>(
+            o, renderer, loc, scale, 1.0,
+        ));
     }
 
     if let Some(buf) = scene.overlay {
@@ -407,10 +418,8 @@ where
             if t.dialog {
                 // A focused dialog: draw it over its parent.
                 windows.push(&t.window);
-                if let Some(parent) = t.window.toplevel().and_then(|top| top.parent()) {
-                    if let Some(pid) = scene.tasks.find_surface(&parent) {
-                        windows.push(&scene.tasks.get(pid).unwrap().window);
-                    }
+                if let Some(pid) = scene.tasks.parent_of(fid) {
+                    windows.push(&scene.tasks.get(pid).unwrap().window);
                 }
             } else {
                 windows.push(&t.window);

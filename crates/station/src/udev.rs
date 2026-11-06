@@ -569,6 +569,7 @@ pub fn render(st: &mut Station) {
         overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
         personality: st.personality,
         desktop: &st.desktop,
+        x11_overrides: &st.x11_overrides,
     };
     let cursor = &mut ud.cursor;
     let Some(gpu) = ud.gpu.as_mut() else {

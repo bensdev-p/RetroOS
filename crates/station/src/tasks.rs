@@ -5,6 +5,7 @@
 use smithay::desktop::Window;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Rectangle, Size};
+use smithay::xwayland::X11Surface;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskKind {
@@ -27,6 +28,30 @@ pub struct Task {
     pub dialog: bool,
     /// Where the window sits in the Desktop.
     pub place: Place,
+}
+
+impl Task {
+    /// The X11 window behind this task (a program running on Xwayland).
+    pub fn x11(&self) -> Option<&X11Surface> {
+        self.window.x11_surface()
+    }
+
+    /// The task's main surface (an X11 window's, once Xwayland has given it one).
+    pub fn surface(&self) -> Option<WlSurface> {
+        match self.window.toplevel() {
+            Some(top) => Some(top.wl_surface().clone()),
+            None => self.x11().and_then(X11Surface::wl_surface),
+        }
+    }
+
+    /// Ask the program to close this window.
+    pub fn close(&self) {
+        if let Some(top) = self.window.toplevel() {
+            top.send_close();
+        } else if let Some(x) = self.x11() {
+            let _ = x.close();
+        }
+    }
 }
 
 /// A window's state in the Desktop personality (kept while in RetroDOS, so
@@ -127,6 +152,16 @@ impl Tasks {
     /// The task a dialog belongs to.
     pub fn parent_of(&self, id: u64) -> Option<u64> {
         let t = self.get(id).filter(|t| t.dialog)?;
+        if let Some(x) = t.x11() {
+            // An X11 dialog names its parent by X window id (WM_TRANSIENT_FOR).
+            let parent = x.is_transient_for()?;
+            return self
+                .list
+                .iter()
+                .find(|p| p.x11().is_some_and(|px| px.window_id() == parent))
+                .map(|p| p.id)
+                .filter(|p| *p != id);
+        }
         let p = t.window.toplevel()?.parent()?;
         self.find_surface(&p).filter(|p| *p != id)
     }
@@ -166,8 +201,13 @@ impl Tasks {
     pub fn find_surface(&self, s: &WlSurface) -> Option<u64> {
         self.list
             .iter()
-            .find(|t| t.window.toplevel().is_some_and(|top| top.wl_surface() == s))
+            .find(|t| t.surface().as_ref() == Some(s))
             .map(|t| t.id)
+    }
+
+    /// The task of an X11 window.
+    pub fn find_x11(&self, x: &X11Surface) -> Option<u64> {
+        self.list.iter().find(|t| t.x11() == Some(x)).map(|t| t.id)
     }
 
     /// Next (or previous) task in creation order, skipping dialogs.
@@ -197,6 +237,13 @@ impl Tasks {
 
     /// Children (dialogs) of a task's window, drawn over it.
     pub fn dialogs_of(&self, id: u64) -> Vec<&Task> {
+        if self.get(id).is_some_and(|t| t.x11().is_some()) {
+            return self
+                .list
+                .iter()
+                .filter(|t| t.dialog && self.parent_of(t.id) == Some(id))
+                .collect();
+        }
         let Some(parent) = self
             .get(id)
             .and_then(|t| t.window.toplevel().map(|top| top.wl_surface().clone()))
