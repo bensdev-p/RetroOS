@@ -12,10 +12,14 @@ use crate::tasks::TaskKind;
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
     KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+    TouchEvent,
 };
 use smithay::input::keyboard::{keysyms, FilterResult, XkbConfig};
 use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent};
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
+
+/// evdev BTN_LEFT.
+const BTN_LEFT: u32 = 0x110;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Action {
@@ -88,6 +92,35 @@ impl Station {
                 let size = self.output_size();
                 let loc = event.position_transformed(size);
                 self.pointer_motion(loc, event.time_msec());
+            }
+            // A touch screen (Touch Display 2): one finger is the left mouse
+            // button, moved through the screen's rotation (D-042). Other
+            // fingers are ignored until programs get wl_touch.
+            InputEvent::TouchDown { event } => {
+                if self.touch_slot.is_some() {
+                    return;
+                }
+                self.touch_slot = Some(event.slot());
+                let loc = self.touch_location(&event);
+                self.pointer_motion(loc, event.time_msec());
+                self.pointer_button(BTN_LEFT, ButtonState::Pressed, event.time_msec());
+            }
+            InputEvent::TouchMotion { event } => {
+                if self.touch_slot == Some(event.slot()) {
+                    let loc = self.touch_location(&event);
+                    self.pointer_motion(loc, event.time_msec());
+                }
+            }
+            InputEvent::TouchUp { event } => {
+                if self.touch_slot == Some(event.slot()) {
+                    self.touch_slot = None;
+                    self.pointer_button(BTN_LEFT, ButtonState::Released, event.time_msec());
+                }
+            }
+            InputEvent::TouchCancel { event } => {
+                if self.touch_slot.take().is_some() {
+                    self.pointer_button(BTN_LEFT, ButtonState::Released, event.time_msec());
+                }
             }
             InputEvent::PointerButton { event } => {
                 self.pointer_button(event.button_code(), event.state(), event.time_msec());
@@ -230,6 +263,25 @@ impl Station {
         None
     }
 
+    /// Where a finger is, in the picture's logical coordinates. A touch
+    /// panel reports positions on the panel as it is built (portrait on the
+    /// Touch Display 2), so undo the output's rotation.
+    fn touch_location<B: InputBackend>(
+        &self,
+        event: &impl AbsolutePositionEvent<B>,
+    ) -> Point<f64, Logical> {
+        let Some(o) = self.output.as_ref() else {
+            return event.position_transformed(self.output_size());
+        };
+        let Some(mode) = o.current_mode() else {
+            return event.position_transformed(self.output_size());
+        };
+        let scale = o.current_scale().integer_scale();
+        let panel = mode.size.to_logical(scale);
+        let on_panel = event.position_transformed(panel);
+        self.clamp(panel_to_picture(o.current_transform(), on_panel, panel))
+    }
+
     fn clamp(&self, p: Point<f64, Logical>) -> Point<f64, Logical> {
         let s = self.output_size();
         (
@@ -353,6 +405,48 @@ impl Station {
                 if let Err(e) = crate::screenshot(self, &path) {
                     tracing::warn!("screenshot failed: {e}");
                 }
+            }
+        }
+    }
+}
+
+/// A point on the panel (as built: a touch panel's own coordinates) to the
+/// picture shown on it through the output transform `t`. smithay's
+/// `transform_point_in` with the output's own transform goes this way
+/// (the renderer uses its inverse); the test pins it to the POST screen's
+/// `retro_gfx::screen::to_panel`.
+pub fn panel_to_picture(
+    t: smithay::utils::Transform,
+    p: Point<f64, Logical>,
+    panel: smithay::utils::Size<i32, Logical>,
+) -> Point<f64, Logical> {
+    t.transform_point_in(p, &panel.to_f64())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::panel_to_picture;
+    use crate::render::transform_for;
+    use retro_gfx::screen::{logical_size, to_panel};
+
+    #[test]
+    fn touches_land_where_the_picture_is() {
+        let (pw, ph) = (720u32, 1280u32);
+        for deg in [0, 90, 180, 270] {
+            let (lw, lh) = logical_size(pw, ph, deg);
+            for (x, y) in [(0, 0), (lw - 1, 0), (0, lh - 1), (100, 30)] {
+                let (px, py) = to_panel(x, y, lw, lh, deg);
+                // The centre of that panel pixel, through the inverse.
+                let got = panel_to_picture(
+                    transform_for(deg),
+                    (px as f64 + 0.5, py as f64 + 0.5).into(),
+                    (pw as i32, ph as i32).into(),
+                );
+                assert!(
+                    (got.x - (x as f64 + 0.5)).abs() < 0.01
+                        && (got.y - (y as f64 + 0.5)).abs() < 0.01,
+                    "rotate={deg}: picture ({x},{y}) -> panel ({px},{py}) -> {got:?}"
+                );
             }
         }
     }

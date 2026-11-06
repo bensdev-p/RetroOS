@@ -34,7 +34,7 @@ use smithay::reexports::drm::control::{
 };
 use smithay::reexports::input::{DeviceCapability, Libinput};
 use smithay::reexports::rustix::fs::OFlags;
-use smithay::utils::{DeviceFd, Transform};
+use smithay::utils::DeviceFd;
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -276,12 +276,35 @@ fn open_device(
     let res = drm
         .resource_handles()
         .map_err(|e| format!("resources: {e}"))?;
-    let conn = res
+    let conns: Vec<_> = res
         .connectors()
         .iter()
         .filter_map(|c| drm.get_connector(*c, false).ok())
+        .collect();
+    let conn = conns
+        .iter()
         .find(|c| c.state() == connector::State::Connected && !c.modes().is_empty())
-        .ok_or("no connected display")?;
+        .cloned()
+        .ok_or_else(|| {
+            // Name every connector so the message says what the card has
+            // (a DSI panel missing here means its overlay was not loaded).
+            let list: Vec<String> = conns
+                .iter()
+                .map(|c| {
+                    format!(
+                        "{}-{} {:?}",
+                        c.interface().as_str(),
+                        c.interface_id(),
+                        c.state()
+                    )
+                })
+                .collect();
+            format!(
+                "{}: no connected display [{}]",
+                path.display(),
+                list.join(", ")
+            )
+        })?;
     let mode = conn
         .modes()
         .iter()
@@ -307,11 +330,15 @@ fn open_device(
         },
     );
     let (w, h) = mode.size();
-    let scale = client_scale(w as i32, h as i32);
+    // A portrait panel (Touch Display 2) is shown landscape; `rotate=` (D-042).
+    let transform = render::transform_for(retro_gfx::screen::rotation(w as u32, h as u32));
+    let turned: smithay::utils::Size<i32, smithay::utils::Physical> =
+        transform.transform_size((w as i32, h as i32).into());
+    let scale = client_scale(turned.w, turned.h);
     let wl_mode = Mode::from(mode);
     output.change_current_state(
         Some(wl_mode),
-        Some(Transform::Normal),
+        Some(transform),
         Some(Scale::Integer(scale)),
         Some((0, 0).into()),
     );
@@ -451,8 +478,10 @@ pub fn init(st: &mut Station) -> Result<(), String> {
     } = opened.ok_or_else(|| format!("no usable display: {}", errors.join("; ")))?;
     let output = scanout.output.clone();
     st.scale = scale;
-    if let Some(m) = output.current_mode() {
-        st.art_scale = integer_scale(m.size.w, m.size.h);
+    st.output = Some(output.clone());
+    if let Some(s) = st.output_pixels() {
+        st.art_scale = integer_scale(s.w, s.h);
+        tracing::info!(width = s.w, height = s.h, transform = ?output.current_transform(), "picture");
     }
     st.space.map_output(&output, (0, 0));
     st.output = Some(output);

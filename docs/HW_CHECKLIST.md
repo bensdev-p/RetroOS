@@ -123,6 +123,22 @@ Optional but very useful: a USB-serial adapter on the Pi 5 debug UART
 
 Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|Slab|SUnrecl|KernelSt|PageTab|Vmalloc|Percpu|Cma|AnonPages' /proc/meminfo; ps -eo rss,comm --sort=-rss | head -12"`
 
+## Displays — Raspberry Pi Touch Display 2 (D-042)
+
+Touch Display 2 on the Pi 5's CAM/DISP connector (Pi 5 cable), HDMI
+unplugged unless a step says otherwise. If the picture comes up upside
+down, power off, put the card in a PC, add ` retroos.rotate=270` to the end
+of the single line in `cmdline.txt` on the boot partition, and boot again.
+
+| # | Check | How | Expected |
+|---|---|---|---|
+| D.1 | Picture | cold boot | the POST screen, then the login and `C:\>` fill the panel **landscape** (wider than tall), the right way up (else `retroos.rotate=270`, above, and note which it needed) |
+| D.2 | What the system sees | `ADMIN UNIX "grep -H . /sys/class/drm/*/status; dmesg \| grep -iE 'dsi\|ili9881\|panel\|touch' \| tail -20"` (photo) | a `DSI-1` (or `DSI-2`) connector `connected`; the panel and touch drivers loaded without errors |
+| D.3 | Text size | at `C:\>`, `DIR`, and `DESKTOP` | record whether the DOS text and the desktop are readable on the 7" panel (they draw at 1×) |
+| D.4 | Touch | in the Desktop: tap the System Bar's ◆; double-tap Program Manager's icon; drag a window by its title bar; in Jot tap where to type | each tap lands under the finger (not mirrored or turned); a drag moves the window with the finger |
+| D.5 | Touch in Firefox | Program Manager → Internet → Firefox; tap a link, tap the address bar and type, drag the page | links and fields work; dragging selects or drags like a mouse (finger scrolling comes with wl_touch) |
+| D.6 | HDMI still works | power off, unplug the Touch Display 2, plug in the 15.6" monitor, cold boot | as before (1080p landscape, not turned) |
+
 ## Results
 
 | Date | Image | Board | Pass | Notes |

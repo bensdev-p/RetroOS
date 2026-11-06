@@ -35,8 +35,14 @@ pub struct Display {
     crtc: crtc::Handle,
     conn: connector::Handle,
     mode: Mode,
+    /// The picture's size (what callers draw): the panel's mode, turned
+    /// `rotation` degrees clockwise (retro_gfx::screen, D-042).
     pub width: u32,
     pub height: u32,
+    /// The panel's native size and how far the picture is turned on it.
+    panel_w: u32,
+    panel_h: u32,
+    pub rotation: u32,
     pitch: u32,
     pub connector_name: String,
     pub path: String,
@@ -114,6 +120,8 @@ impl Display {
         card.set_crtc(crtc, Some(fb), (0, 0), &[con.handle()], Some(mode))?;
         let name = format!("{:?}-{}", con.interface(), con.interface_id());
         let vt = graphics_vt();
+        let rotation = retro_gfx::screen::rotation(w as u32, h as u32);
+        let (lw, lh) = retro_gfx::screen::logical_size(w as u32, h as u32, rotation);
         Ok(Display {
             card,
             db,
@@ -121,8 +129,11 @@ impl Display {
             crtc,
             conn: con.handle(),
             mode,
-            width: w as u32,
-            height: h as u32,
+            width: lw,
+            height: lh,
+            panel_w: w as u32,
+            panel_h: h as u32,
+            rotation,
             pitch,
             connector_name: name,
             path: path.to_string(),
@@ -132,6 +143,9 @@ impl Display {
 
     /// Copy a full-screen canvas to the scan-out buffer.
     pub fn present(&mut self, c: &Canvas) -> io::Result<()> {
+        if self.rotation != 0 {
+            return self.present_turned(c);
+        }
         let (w, h, pitch) = (
             self.width.min(c.width) as usize,
             self.height.min(c.height) as usize,
@@ -144,6 +158,27 @@ impl Display {
             let row = &mut dst[y * pitch..y * pitch + w * 4];
             for (d, s) in row.chunks_exact_mut(4).zip(src) {
                 d.copy_from_slice(&s.to_le_bytes());
+            }
+        }
+        Ok(())
+    }
+
+    /// `present` for a turned panel: every pixel to its place on the panel.
+    fn present_turned(&mut self, c: &Canvas) -> io::Result<()> {
+        let (w, h) = (self.width.min(c.width), self.height.min(c.height));
+        let (pw, ph, pitch) = (self.panel_w, self.panel_h, self.pitch as usize);
+        let (rot, lw, lh) = (self.rotation, self.width, self.height);
+        let mut map = self.card.map_dumb_buffer(&mut self.db)?;
+        let dst = map.as_mut();
+        for y in 0..h {
+            for x in 0..w {
+                let (px, py) = retro_gfx::screen::to_panel(x, y, lw, lh, rot);
+                if px >= pw || py >= ph {
+                    continue;
+                }
+                let s = c.px[(y * c.width + x) as usize];
+                let o = py as usize * pitch + px as usize * 4;
+                dst[o..o + 4].copy_from_slice(&s.to_le_bytes());
             }
         }
         Ok(())

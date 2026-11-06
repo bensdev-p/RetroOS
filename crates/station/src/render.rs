@@ -392,13 +392,19 @@ pub fn offscreen(
     cursor: &mut CursorCache,
 ) -> Result<retro_gfx::Canvas, String> {
     let mode = output.current_mode().ok_or("output has no mode")?;
-    let (w, h) = (mode.size.w, mode.size.h);
+    // The picture as the user sees it (a turned panel is not saved sideways).
+    let size = output.current_transform().transform_size(mode.size);
+    let (w, h) = (size.w, size.h);
     let mut image = pixman::Image::new(pixman::FormatCode::X8R8G8B8, w as usize, h as usize, true)
         .map_err(|_| "image alloc failed".to_string())?;
     let elements = build(renderer, scene, cursor);
     {
         let mut fb = renderer.bind(&mut image).map_err(|e| format!("{e:?}"))?;
-        let mut damage = OutputDamageTracker::from_output(output);
+        let mut damage = OutputDamageTracker::new(
+            size,
+            output.current_scale().fractional_scale(),
+            Transform::Normal,
+        );
         damage
             .render_output(renderer, &mut fb, 0, &elements, CLEAR)
             .map_err(|e| format!("{e:?}"))?;
@@ -414,14 +420,20 @@ pub fn offscreen_gles(
     cursor: &mut CursorCache,
 ) -> Result<retro_gfx::Canvas, String> {
     let mode = output.current_mode().ok_or("output has no mode")?;
-    let (w, h) = (mode.size.w, mode.size.h);
+    // The picture as the user sees it (a turned panel is not saved sideways).
+    let size = output.current_transform().transform_size(mode.size);
+    let (w, h) = (size.w, size.h);
     let mut tex: GlesTexture = renderer
         .create_buffer(Fourcc::Abgr8888, (w, h).into())
         .map_err(|e| format!("{e:?}"))?;
     let elements = build(renderer, scene, cursor);
     let mapping = {
         let mut fb = renderer.bind(&mut tex).map_err(|e| format!("{e:?}"))?;
-        let mut damage = OutputDamageTracker::from_output(output);
+        let mut damage = OutputDamageTracker::new(
+            size,
+            output.current_scale().fractional_scale(),
+            Transform::Normal,
+        );
         damage
             .render_output(renderer, &mut fb, 0, &elements, CLEAR)
             .map_err(|e| format!("{e:?}"))?;
@@ -460,6 +472,17 @@ pub fn image_to_canvas(image: &pixman::Image<'_, '_>) -> retro_gfx::Canvas {
     c
 }
 
+/// The output transform for `rotate=` degrees clockwise (D-042). smithay's
+/// (and wl_output's) transforms turn counter-clockwise.
+pub fn transform_for(clockwise: u32) -> Transform {
+    match clockwise {
+        90 => Transform::_270,
+        180 => Transform::_180,
+        270 => Transform::_90,
+        _ => Transform::Normal,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::CursorShape;
@@ -489,5 +512,66 @@ mod tests {
         }
         let (we, _) = CursorShape::SizeWE.art();
         assert_eq!(we[5], format!("X{}X", "o".repeat(17)));
+    }
+
+    /// A turned output (D-042) must turn the picture the same way the POST
+    /// screen does (retro_gfx::screen::to_panel). smithay's transforms are
+    /// counter-clockwise (as wl_output's): `rotate=90` (clockwise) is
+    /// `Transform::_270`, and the picture's top-left lands at the panel's
+    /// top-right.
+    #[test]
+    fn quarter_turn_matches_post_screen() {
+        use smithay::backend::renderer::damage::OutputDamageTracker;
+        use smithay::backend::renderer::element::solid::SolidColorRenderElement;
+        use smithay::backend::renderer::element::{Id, Kind};
+        use smithay::backend::renderer::pixman::PixmanRenderer;
+        use smithay::backend::renderer::utils::CommitCounter;
+        use smithay::backend::renderer::Bind;
+        use smithay::output::{Mode, Output, PhysicalProperties, Subpixel};
+        use smithay::reexports::pixman;
+        use smithay::utils::Rectangle;
+
+        let (pw, ph) = (36, 64); // a small portrait "panel"
+        let output = Output::new(
+            "DSI-1".into(),
+            PhysicalProperties {
+                size: (0, 0).into(),
+                subpixel: Subpixel::Unknown,
+                make: "test".into(),
+                model: "test".into(),
+            },
+        );
+        let mode = Mode {
+            size: (pw, ph).into(),
+            refresh: 60_000,
+        };
+        output.change_current_state(Some(mode), Some(super::transform_for(90)), None, None);
+        let mut renderer = PixmanRenderer::new().unwrap();
+        let mut image =
+            pixman::Image::new(pixman::FormatCode::X8R8G8B8, pw as usize, ph as usize, true)
+                .unwrap();
+        // A red square at the picture's top-left (the picture is 64×36).
+        let red = SolidColorRenderElement::new(
+            Id::new(),
+            Rectangle::new((0, 0).into(), (8, 4).into()),
+            CommitCounter::default(),
+            [1.0, 0.0, 0.0, 1.0],
+            Kind::Unspecified,
+        );
+        {
+            let mut fb = renderer.bind(&mut image).unwrap();
+            OutputDamageTracker::from_output(&output)
+                .render_output(&mut renderer, &mut fb, 0, &[red], [0.0, 0.0, 0.0, 1.0])
+                .unwrap();
+        }
+        let c = super::image_to_canvas(&image);
+        let at = |x: u32, y: u32| c.px[(y * c.width + x) as usize];
+        let (lw, lh) = retro_gfx::screen::logical_size(pw as u32, ph as u32, 90);
+        assert_eq!((lw, lh), (64, 36));
+        let (x, y) = retro_gfx::screen::to_panel(0, 0, lw, lh, 90);
+        assert_eq!(at(x, y), 0xFF0000, "picture's top-left at panel ({x},{y})");
+        let (x, y) = retro_gfx::screen::to_panel(7, 3, lw, lh, 90);
+        assert_eq!(at(x, y), 0xFF0000);
+        assert_eq!(at(0, 0), 0, "panel top-left stays black");
     }
 }

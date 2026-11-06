@@ -5,7 +5,10 @@ disable_splash=1
 disable_overscan=1
 boot_delay=0
 camera_auto_detect=0
-display_auto_detect=0
+# Let the firmware find a DSI panel (the Raspberry Pi Touch Display 2 on
+# either CAM/DISP connector) and load its overlay; HDMI is unaffected.
+# Station shows a portrait panel landscape (rotate= in startup.conf, D-042).
+display_auto_detect=1
 auto_initramfs=0
 max_framebuffers=2
 dtoverlay=vc4-kms-v3d

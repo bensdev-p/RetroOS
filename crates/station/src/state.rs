@@ -12,7 +12,7 @@ use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Display, DisplayHandle, Resource};
-use smithay::utils::{Logical, Point, Size};
+use smithay::utils::{Logical, Physical, Point, Size};
 use smithay::wayland::compositor::{with_states, CompositorClientState, CompositorState};
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
 use smithay::wayland::output::OutputManagerState;
@@ -74,6 +74,8 @@ pub struct Station {
     pub pointer_location: Point<f64, Logical>,
     /// The mouse has moved at least once (the pointer stays hidden until then).
     pub pointer_moved: bool,
+    /// The finger that is acting as the left mouse button (input.rs).
+    pub touch_slot: Option<smithay::backend::input::TouchSlot>,
     pub cursor_status: CursorImageStatus,
     /// The program under the pointer.
     pub pointer_client: Option<ClientId>,
@@ -220,6 +222,7 @@ impl Station {
             art_scale: 1,
             pointer_location: (0.0, 0.0).into(),
             pointer_moved: false,
+            touch_slot: None,
             cursor_status: CursorImageStatus::default_named(),
             pointer_client: None,
             dirty: true,
@@ -240,10 +243,18 @@ impl Station {
         self.output
             .as_ref()
             .and_then(|o| {
-                o.current_mode()
-                    .map(|m| m.size.to_logical(o.current_scale().integer_scale()))
+                self.output_pixels()
+                    .map(|s| s.to_logical(o.current_scale().integer_scale()))
             })
             .unwrap_or_else(|| (960, 540).into())
+    }
+
+    /// The picture's size in pixels: the output's mode, turned by its
+    /// transform (a portrait panel shown landscape, D-042).
+    pub fn output_pixels(&self) -> Option<Size<i32, Physical>> {
+        let o = self.output.as_ref()?;
+        let m = o.current_mode()?;
+        Some(o.current_transform().transform_size(m.size))
     }
 
     /// Bring Station-drawn parts up to date before a frame is rendered.
