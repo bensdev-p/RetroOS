@@ -13,6 +13,7 @@ mod layout;
 use layout::{GroupBox, Hit, MENU_H};
 use retro_gfx::font::{lantern_12, lantern_9};
 use retro_gfx::icons::{icon_picture, IconArt};
+use retro_gfx::iconset::{self, Icon};
 use retro_gfx::widgets::{draw_menu, ellipsize, ellipsize_in, menu_hit, menu_layout, text_width};
 use retro_gfx::widgets::{MenuItem, TEXT_Y};
 use retro_gfx::{Canvas, Theme};
@@ -30,6 +31,8 @@ struct Item {
     name: String,
     argv: Vec<String>,
     art: IconArt,
+    /// Its own picture (ours, or its theme icon retro-fied), else `art`.
+    icon: Option<Icon>,
 }
 
 struct Group {
@@ -77,11 +80,13 @@ fn load_groups() -> Vec<Group> {
                 name: "File Cabinet".into(),
                 argv: vec!["file-cabinet".into()],
                 art: IconArt::Folder,
+                icon: iconset::builtin("file-cabinet").cloned(),
             },
             Item {
                 name: "DOS Prompt".into(),
                 argv: vec!["retro-console".into()],
                 art: IconArt::Dos,
+                icon: None,
             },
         ],
     }];
@@ -96,6 +101,7 @@ fn load_groups() -> Vec<Group> {
             name: a.name.clone(),
             argv: a.exec.clone(),
             art: IconArt::Program,
+            icon: a.icon.as_deref().and_then(iconset::for_app),
         };
         match rest.iter_mut().find(|x| x.name == g) {
             Some(x) => x.items.push(item),
@@ -538,7 +544,10 @@ impl ProgMan {
         for (i, item) in self.groups[g].items.iter().enumerate() {
             let cell = layout::icon_rect(b, i);
             let (cx, cy) = (cell.x, cell.y + oy);
-            icon_picture(sf, item.art, cx + (cell.w - 32) / 2, cy + 2, 1, t);
+            match &item.icon {
+                Some(i) => iconset::draw(sf, i, cx + (cell.w - 32) / 2, cy + 2, 1, t),
+                None => icon_picture(sf, item.art, cx + (cell.w - 32) / 2, cy + 2, 1, t),
+            }
             let label = ellipsize_in(font, &item.name, cell.w - 6);
             let tw = font.text_width(&label) as i32;
             let lx = cx + (cell.w - tw) / 2;

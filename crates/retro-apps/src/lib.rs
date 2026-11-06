@@ -45,6 +45,8 @@ pub struct DesktopApp {
     pub no_display: bool,
     /// The file types it opens (MimeType=text/plain;…).
     pub mime_types: Vec<String>,
+    /// Icon= (a theme icon name or a path).
+    pub icon: Option<String>,
 }
 
 fn data_dirs() -> Vec<PathBuf> {
@@ -96,6 +98,7 @@ pub fn parse_desktop(id: &str, text: &str) -> Option<DesktopApp> {
     let (mut name, mut exec, mut terminal, mut hidden, mut app) = (None, None, false, false, false);
     let (mut categories, mut no_display) = (Vec::new(), false);
     let mut mime_types = Vec::new();
+    let mut icon = None;
     for line in text.lines() {
         let line = line.trim();
         if line.starts_with('[') {
@@ -123,6 +126,7 @@ pub fn parse_desktop(id: &str, text: &str) -> Option<DesktopApp> {
                     .collect()
             }
             "NoDisplay" => no_display = v.trim() == "true",
+            "Icon" => icon = Some(v.trim().to_string()).filter(|i| !i.is_empty()),
             "MimeType" => {
                 mime_types = v
                     .split(';')
@@ -149,6 +153,7 @@ pub fn parse_desktop(id: &str, text: &str) -> Option<DesktopApp> {
         categories,
         no_display,
         mime_types,
+        icon,
     })
 }
 

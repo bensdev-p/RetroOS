@@ -15,7 +15,7 @@
 //! Windows keep their Desktop state (`Place`) while Station is in RetroDOS,
 //! so switching back and forth puts them where they were.
 
-use crate::chrome::{self, IconArt, MenuItem, Metrics, Part, TitleStyle, BOTTOM, LEFT, RIGHT, TOP};
+use crate::chrome::{self, IconArt, MenuItem, Metrics, Part, Pic, TitleStyle, BOTTOM, LEFT, RIGHT, TOP};
 use crate::render::CursorShape;
 use crate::state::{Personality, Station};
 use crate::tasks::{Task, TaskKind};
@@ -154,6 +154,8 @@ pub struct Desktop {
     shell_at: Option<std::time::Instant>,
     shell_sel: Option<usize>,
     shell_bufs: HashMap<usize, ((IconArt, IconKey), MemoryRenderBuffer)>,
+    /// Program icons by app id (None: the program has none we can show).
+    app_icons: HashMap<String, Option<std::sync::Arc<retro_gfx::iconset::Icon>>>,
     band: Option<((i32, i32, Metrics), MemoryRenderBuffer)>,
     band_ids: Vec<Id>,
     outline_ids: Vec<Id>,
@@ -341,11 +343,25 @@ impl Station {
         title
     }
 
-    fn icon_art(t: &Task) -> IconArt {
+    /// A task's icon: the program's own (looked up once per app id), else
+    /// the DOS Prompt or generic program picture.
+    fn task_pic(&self, t: &Task) -> Pic {
         if is_dos_prompt(t) {
-            IconArt::Dos
-        } else {
-            IconArt::Program
+            return Pic::Art(IconArt::Dos);
+        }
+        app_id(t)
+            .and_then(|a| self.desktop.app_icons.get(&a).cloned().flatten())
+            .map_or(Pic::Art(IconArt::Program), Pic::Icon)
+    }
+
+    /// Look up the icons of programs not seen before (desktop_prepare).
+    fn learn_app_icons(&mut self) {
+        let ids: Vec<String> = self.tasks.iter().filter_map(app_id).collect();
+        for a in ids {
+            self.desktop
+                .app_icons
+                .entry(a)
+                .or_insert_with_key(|a| lookup_app_icon(a).map(std::sync::Arc::new));
         }
     }
 
@@ -1640,6 +1656,7 @@ impl Station {
 
     /// Rebuild what changed and the list of things to draw.
     pub fn desktop_prepare(&mut self) {
+        self.learn_app_icons();
         let m = self.metrics();
         let mut draw = Vec::new();
         let out = self.output_size();
@@ -1680,12 +1697,12 @@ impl Station {
             .and_then(|s| s.ids.get(s.index).copied());
         if let Some(id) = switch_target {
             let (art, title) = match self.tasks.get(id) {
-                Some(t) => (Self::icon_art(t), self.window_title(t)),
-                None => (IconArt::Program, String::new()),
+                Some(t) => (self.task_pic(t), self.window_title(t)),
+                None => (Pic::Art(IconArt::Program), String::new()),
             };
             if let Some(sw) = self.desktop.switcher.as_mut() {
                 if sw.buffer.is_none() {
-                    let c = chrome::draw_switch_box(art, &title, &m);
+                    let c = chrome::draw_switch_box(&art, &title, &m);
                     let size = (c.width as i32 / m.scale, c.height as i32 / m.scale).into();
                     sw.buffer = Some((chrome::to_buffer(&c, m.scale), size));
                 }
@@ -1778,18 +1795,19 @@ impl Station {
         }
 
         // Icons of minimised windows, on the desktop.
-        let icons: Vec<(u64, usize, IconArt, String)> = self
+        let icons: Vec<(u64, usize, Pic, String)> = self
             .tasks
             .iter()
             .filter(|t| t.place.minimized && !t.dialog)
-            .filter_map(|t| Some((t.id, t.place.slot?, Self::icon_art(t), self.window_title(t))))
+            .filter_map(|t| Some((t.id, t.place.slot?, self.task_pic(t), self.window_title(t))))
             .collect();
         for (id, slot, art, label) in icons {
             let pos = self.icon_pos(slot);
             let key = (label, focused == Some(id), pos, m);
             let stale = self.desktop.icons.get(&id).map(|(k, _)| k) != Some(&key);
             if stale {
-                let c = chrome::draw_icon(art, &key.0, key.1, &m, pos.x * m.scale, pos.y * m.scale);
+                let c =
+                    chrome::draw_icon(&art, &key.0, key.1, &m, pos.x * m.scale, pos.y * m.scale);
                 self.desktop
                     .icons
                     .insert(id, (key, chrome::to_buffer(&c, m.scale)));
@@ -1818,7 +1836,14 @@ impl Station {
             let stale = self.desktop.shell_bufs.get(&k).map(|(k, _)| k) != Some(&key);
             if stale {
                 let (art, (label, sel, _, _)) = &key;
-                let c = chrome::draw_icon(*art, label, *sel, &m, pos.x * m.scale, pos.y * m.scale);
+                let c = chrome::draw_icon(
+                    &Pic::Art(*art),
+                    label,
+                    *sel,
+                    &m,
+                    pos.x * m.scale,
+                    pos.y * m.scale,
+                );
                 self.desktop
                     .shell_bufs
                     .insert(k, (key.clone(), chrome::to_buffer(&c, m.scale)));
@@ -1894,4 +1919,44 @@ fn is_dos_prompt(t: &Task) -> bool {
                     .is_some_and(|a| a == "retroos.console")
             })
         })
+}
+
+/// A task's app id (an X11 window's class).
+fn app_id(t: &Task) -> Option<String> {
+    if let Some(x) = t.x11() {
+        return Some(x.class()).filter(|c| !c.is_empty());
+    }
+    let top = t.window.toplevel()?;
+    with_states(top.wl_surface(), |s| {
+        s.data_map
+            .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
+            .and_then(|d| d.lock().ok()?.app_id.clone())
+    })
+}
+
+/// The icon of the program with app id `app`: ours for our own programs,
+/// else its .desktop file's Icon= (retro-fied).
+fn lookup_app_icon(app: &str) -> Option<retro_gfx::iconset::Icon> {
+    use retro_gfx::iconset::{builtin, for_app};
+    let own = match app {
+        "retroos.jot" => Some("jot"),
+        "retroos.cabinet" => Some("file-cabinet"),
+        _ => None,
+    };
+    if let Some(i) = own.or(Some(app)).and_then(builtin) {
+        return Some(i.clone());
+    }
+    let lower = app.to_lowercase();
+    let apps = retro_apps::desktop_apps();
+    let a = apps.iter().find(|a| {
+        let id = a.id.to_lowercase();
+        id == lower
+            || id.ends_with(&format!(".{lower}"))
+            || a.exec.first().is_some_and(|e| {
+                std::path::Path::new(e)
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().to_lowercase() == lower)
+            })
+    })?;
+    for_app(a.icon.as_deref()?)
 }

@@ -9,6 +9,21 @@
 
 use retro_gfx::font::{lantern_12, lantern_9};
 pub use retro_gfx::icons::{icon_picture, IconArt};
+
+/// What an icon shows: one of the pictures drawn in code, or a program's
+/// own icon (retro_gfx::iconset).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pic {
+    Art(IconArt),
+    Icon(std::sync::Arc<retro_gfx::iconset::Icon>),
+}
+
+fn draw_pic(sf: &mut Surface, pic: &Pic, x: i32, y: i32, p: i32, th: &Theme) {
+    match pic {
+        Pic::Art(a) => icon_picture(sf, *a, x, y, p, th),
+        Pic::Icon(i) => retro_gfx::iconset::draw(sf, i, x, y, p, th),
+    }
+}
 use retro_gfx::palette::{BLACK, WHITE};
 pub use retro_gfx::widgets::{
     ellipsize, ellipsize_in, menu_hit, menu_layout, text_width, MenuItem, CLEAR_PX, TEXT_Y,
@@ -368,14 +383,7 @@ pub fn pattern_band(width_phys: u32, rows: i32, m: &Metrics) -> Canvas {
 
 /// A minimised window: icon and label over the desktop pattern, drawn at
 /// physical position (`ox`, `oy`) so the pattern lines up.
-pub fn draw_icon(
-    art: IconArt,
-    label: &str,
-    selected: bool,
-    m: &Metrics,
-    ox: i32,
-    oy: i32,
-) -> Canvas {
+pub fn draw_icon(art: &Pic, label: &str, selected: bool, m: &Metrics, ox: i32, oy: i32) -> Canvas {
     let p = m.px;
     let (w, h) = ((ICON_W * p) as u32, (ICON_H * p) as u32);
     let mut c = Canvas::new(w, h, 0);
@@ -385,7 +393,7 @@ pub fn draw_icon(
         }
     }
     let mut sf = c.surface();
-    icon_picture(&mut sf, art, (ICON_W - 32) / 2 * p, 0, p, &m.theme);
+    draw_pic(&mut sf, art, (ICON_W - 32) / 2 * p, 0, p, &m.theme);
     // Label in Lantern 9: White on Black, the selection colours when selected.
     let font = lantern_9();
     let text = ellipsize_in(font, label, ICON_W - 6);
@@ -405,7 +413,7 @@ pub fn draw_icon(
 // ------------------------------------------------------------------- boxes
 
 /// The Alt+Tab box: icon and title of the window that will be switched to.
-pub fn draw_switch_box(art: IconArt, title: &str, m: &Metrics) -> Canvas {
+pub fn draw_switch_box(art: &Pic, title: &str, m: &Metrics) -> Canvas {
     let (p, th) = (m.px, &m.theme);
     let (w, h) = (320, 52);
     let mut c = Canvas::new(((w + 1) * p) as u32, ((h + 1) * p) as u32, CLEAR_PX);
@@ -421,7 +429,7 @@ pub fn draw_switch_box(art: IconArt, title: &str, m: &Metrics) -> Canvas {
         p as u32,
         th.active,
     );
-    icon_picture(&mut sf, art, 8 * p, 10 * p, p, th);
+    draw_pic(&mut sf, art, 8 * p, 10 * p, p, th);
     let text = ellipsize(title, w - 64);
     sf.text(lantern_12(), 52 * p, 20 * p, p as u32, th.text, None, &text);
     c

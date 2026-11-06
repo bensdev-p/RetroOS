@@ -67,9 +67,12 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
 - **Pointers** (D-040): `retro_gfx::cursors` (the art and an Xcursor
   writer), `tools/retro-cursors` (the Phosphor theme, generated in mkdeb),
   Station's `XCURSOR_THEME`/`XCURSOR_SIZE` for programs.
-- Next: the icon set (`.icon` text sources, program icons, retro-fied
-  third-party icons); then acceptance (step 8: QEMU GUI tests, desktop idle
-  RAM on the Pi).
+- **Icon set** (D-041): `assets/icons/*.icon`, `retro_gfx::iconset`
+  (parser, built-ins, theme PNG lookup, retro-fy, draw); retro-apps parses
+  `Icon=`; Program Manager, minimised windows and Alt+Tab use them
+  (Station's `chrome::Pic`, `Desktop::app_icons`).
+- Next: acceptance (HANDOFF §7 step 8): QEMU GUI golden tests, Firefox
+  windowed on the Pi with the GPU, desktop idle RAM (userspace < 160 MB).
 
 ## 1. Where things stand
 
