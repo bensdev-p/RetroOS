@@ -308,7 +308,7 @@ impl Station {
     /// Size for a window first seen in RetroDOS: the DOS Prompt's own, or
     /// three quarters of the screen (Windows 3.1's default).
     fn default_size(&self, t: &Task) -> Size<i32, Logical> {
-        if t.kind == TaskKind::Console {
+        if is_dos_prompt(t) {
             return self.dos_size();
         }
         if t.dialog {
@@ -331,7 +331,7 @@ impl Station {
     }
 
     fn icon_art(t: &Task) -> IconArt {
-        if t.kind == TaskKind::Console {
+        if is_dos_prompt(t) {
             IconArt::Dos
         } else {
             IconArt::Program
@@ -359,7 +359,7 @@ impl Station {
             Some(want.size)
         } else if p.placed && !p.rect.size.is_empty() {
             Some(p.rect.size)
-        } else if t.kind == TaskKind::Console {
+        } else if is_dos_prompt(t) {
             Some(dos)
         } else {
             None
@@ -1863,4 +1863,18 @@ impl Station {
             }
         }
     }
+}
+
+/// The main console or another DOS Prompt window (retro-console's app id):
+/// they share the DOS Prompt's size and icon.
+fn is_dos_prompt(t: &Task) -> bool {
+    t.kind == TaskKind::Console
+        || t.window.toplevel().is_some_and(|top| {
+            with_states(top.wl_surface(), |s| {
+                s.data_map
+                    .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
+                    .and_then(|d| d.lock().ok()?.app_id.clone())
+                    .is_some_and(|a| a == "retroos.console")
+            })
+        })
 }

@@ -25,6 +25,8 @@ wait 100
 button click
 wait 2500
 expect-task 3
+# It opens at the DOS Prompt's size (80×25 at 2×), like the first one.
+expect WINDOWS => 3 52 130 1280 800 normal DOS Prompt
 shot 81-progman-launch
 # Program Manager has the keyboard again after a click: Alt+F opens File.
 pointer 1600 500

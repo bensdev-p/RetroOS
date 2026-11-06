@@ -34,8 +34,8 @@ copy of the screen. Those are M5 tuning items, prioritised by the Pi numbers.
 
 | Metric | Value | Notes |
 |---|---|---|
-| Power-on → POST screen | _to measure_ | HW_CHECKLIST 1.1 |
-| Power-on → `C:\>` | 17.7 s (cold, 2026-11-04; see Milestone 3) | HW_CHECKLIST 1.8 |
+| Power-on → POST screen | **6 s** (2026-11-06) | HW_CHECKLIST 1.1 |
+| Power-on → `C:\>` | **9 s** (cold, 2026-11-06, with the bootloader settings card; 17.7 s on 2026-11-04) | HW_CHECKLIST 1.8, 3.24 |
 | Idle RAM, text mode | _see Milestone 2_ | HW_CHECKLIST 1.18 |
 
 ## Milestone 2

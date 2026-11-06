@@ -53,12 +53,22 @@ impl CompositorHandler for Station {
             } else if let Some(id) = self.tasks.find_surface(&root) {
                 let t = self.tasks.get(id).unwrap();
                 t.window.on_commit();
-                // Initial configure, sent once the client has committed its first state.
-                if let Some(top) = t.window.toplevel() {
-                    if !top.is_initial_configure_sent() {
+                // Initial configure, sent once the client has committed its first
+                // state; in the Desktop its size is decided now that the app id is
+                // known (every DOS Prompt gets the DOS Prompt's size).
+                let initial = t
+                    .window
+                    .toplevel()
+                    .is_some_and(|top| !top.is_initial_configure_sent());
+                if initial {
+                    if self.personality == Personality::Desktop {
+                        self.desktop_configure(id);
+                    }
+                    if let Some(top) = self.tasks.get(id).and_then(|t| t.window.toplevel()) {
                         top.send_configure();
                     }
                 }
+                let t = self.tasks.get(id).unwrap();
                 if self.personality == Personality::Desktop {
                     self.desktop_commit(id);
                 } else if t.dialog && self.tasks.focused() == Some(id) {

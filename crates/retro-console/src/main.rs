@@ -711,6 +711,14 @@ fn main() {
         .iter()
         .take_while(|a| *a != "--exec")
         .any(|a| a == "--once");
+    // --app-id ID: another window class (a text program shown as its own
+    // app, not as a DOS Prompt; Station sizes DOS Prompts itself).
+    let app_id = args
+        .iter()
+        .take_while(|a| *a != "--exec")
+        .position(|a| a == "--app-id")
+        .and_then(|i| args.get(i + 1).cloned())
+        .unwrap_or_else(|| "retroos.console".into());
     let argv = match args.iter().position(|a| a == "--exec") {
         Some(i) if i + 1 < args.len() => args[i + 1..].to_vec(),
         _ => vec!["retrodos".to_string()],
@@ -733,7 +741,7 @@ fn main() {
     let surface = compositor.create_surface(&qh);
     let window = xdg.create_window(surface, WindowDecorations::RequestServer, &qh);
     window.set_title("DOS Prompt");
-    window.set_app_id("retroos.console");
+    window.set_app_id(&app_id);
     window.commit();
     let viewporter = globals
         .bind::<WpViewporter, _, _>(&qh, 1..=1, NoEvents)

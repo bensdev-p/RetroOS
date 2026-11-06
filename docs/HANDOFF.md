@@ -67,7 +67,9 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
 
 - **M1 and M2 are complete** and verified on real hardware: a Raspberry Pi 5
   (8 GB) with the Raspberry Pi 15.6" 1080p monitor, owned by the user, who
-  tests images and reports results as photos of the screen.
+  tests images and reports results as photos of the screen. The Pi will live
+  in a custom "luggable" PC case (the user's own build; ask about its
+  screen, keyboard and power before designing around them).
 - All work is on branch `claude/blissful-heisenberg-j88hfe`. It is the **only
   branch on GitHub** (no `main` yet). A local annotated tag `v0.2-m2` marks the
   M2 commit `5162352`; the session could not push tags, so it may not exist on

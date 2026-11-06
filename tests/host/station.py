@@ -30,7 +30,7 @@ def main():
     os.makedirs(apps)
     with open(os.path.join(apps, "demo.desktop"), "w") as f:
         f.write("[Desktop Entry]\nType=Application\nName=Demo App\n"
-                "Exec=retro-console --once --exec retrodos /K ECHO This is the demo app.\n")
+                "Exec=retro-console --once --app-id retroos.demo --exec retrodos /K ECHO This is the demo app.\n")
     # Applications come from the test HOME only, not from the machine.
     nodata = tempfile.mkdtemp(prefix="retro-data-")
     env = dict(os.environ, XDG_RUNTIME_DIR=run, HOME=home, USER="retro", XDG_DATA_DIRS=nodata,
