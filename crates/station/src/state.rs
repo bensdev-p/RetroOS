@@ -541,6 +541,11 @@ impl Station {
         // Programs start in the session's colour scheme (even one COLOR
         // could not save for the next boot).
         cmd.env("RETROOS_SCHEME", self.scheme.key());
+        // Programs draw the Phosphor pointers at Station's own pointer size.
+        if std::path::Path::new("/usr/share/icons/Phosphor/cursors").exists() {
+            cmd.env("XCURSOR_THEME", "Phosphor");
+        }
+        cmd.env("XCURSOR_SIZE", (16 * self.art_scale.max(1)).to_string());
         // X11-only programs get Xwayland (started now if need be); once it
         // runs, every program gets DISPLAY.
         if crate::xwayland::needs_x11(&argv[0]) {

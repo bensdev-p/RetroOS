@@ -1246,6 +1246,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-cursors"
+version = "0.1.0"
+dependencies = [
+ "retro-gfx",
+]
+
+[[package]]
 name = "retro-dosfs"
 version = "0.1.0"
 

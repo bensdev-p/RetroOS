@@ -64,8 +64,12 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   `XwmHandler`, X11 tasks via `Task::x11()/surface()/close()`, override-
   redirect windows in `Station::x11_overrides`, drawn and hit first).
   Host test `tests/host/x11.steps`.
-- Next: icons and cursors (HANDOFF §7 step 7); then acceptance (step 8:
-  QEMU GUI tests, desktop idle RAM on the Pi).
+- **Pointers** (D-040): `retro_gfx::cursors` (the art and an Xcursor
+  writer), `tools/retro-cursors` (the Phosphor theme, generated in mkdeb),
+  Station's `XCURSOR_THEME`/`XCURSOR_SIZE` for programs.
+- Next: the icon set (`.icon` text sources, program icons, retro-fied
+  third-party icons); then acceptance (step 8: QEMU GUI tests, desktop idle
+  RAM on the Pi).
 
 ## 1. Where things stand
 

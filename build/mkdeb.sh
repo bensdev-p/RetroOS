@@ -26,7 +26,7 @@ cargo build --manifest-path "$ROOT/Cargo.toml" --release --locked --target $TARG
 BIN=$ROOT/target/$TARGET/release
 
 echo ">> host tools (sounds)"
-cargo build --manifest-path "$ROOT/Cargo.toml" --release --locked -p retro-synth -p retro-fontc
+cargo build --manifest-path "$ROOT/Cargo.toml" --release --locked -p retro-synth -p retro-fontc -p retro-cursors
 HOST=$ROOT/target/release
 
 STAGE=$OUT/stage/retroos
@@ -43,6 +43,7 @@ install -m 755 "$BIN/retro-post" "$STAGE/usr/libexec/retroos/retro-post"
 
 "$HOST/retro-synth" "$STAGE/usr/share/retroos/sounds" 2>/dev/null
 "$HOST/retro-fontc" psf "$STAGE/usr/share/retroos/fonts/phosphor-mono-8x16.psf"
+"$HOST/retro-cursors" "$STAGE/usr/share/icons/Phosphor" >/dev/null
 
 # GNU Unifont glyphs as the console's fallback for characters we haven't
 # drawn (3.7 MB instead of the 58 MB unifont packages).

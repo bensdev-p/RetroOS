@@ -1,0 +1,13 @@
+[package]
+name = "retro-cursors"
+description = "Writes the RetroOS pointers as the Phosphor Xcursor theme"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+retro-gfx.workspace = true
+
+[lints]
+workspace = true

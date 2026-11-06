@@ -4,6 +4,7 @@
 //! console, Station's chrome and the retro-ui toolkit — goes through these
 //! types: an XRGB8888 [`Surface`], the [`palette`], and bitmap [`font`]s.
 
+pub mod cursors;
 pub mod font;
 pub mod grid;
 pub mod icons;

@@ -127,75 +127,20 @@ impl CursorShape {
         }
     }
 
-    /// Art rows ('X' outline, 'o' fill) and the hotspot.
+    /// Art rows ('X' outline, 'o' fill) and the hotspot (retro_gfx::cursors,
+    /// the same art as the Phosphor cursor theme programs use).
     fn art(self) -> (Vec<String>, (i32, i32)) {
-        if self == CursorShape::Arrow {
-            return (ARROW.iter().map(|s| s.to_string()).collect(), (0, 0));
+        use retro_gfx::cursors::Cursor;
+        match self {
+            CursorShape::Arrow => Cursor::Arrow,
+            CursorShape::SizeWE => Cursor::SizeWE,
+            CursorShape::SizeNS => Cursor::SizeNS,
+            CursorShape::SizeNWSE => Cursor::SizeNWSE,
+            CursorShape::SizeNESW => Cursor::SizeNESW,
         }
-        // Double arrows: a filled shape, outlined where it meets the outside.
-        let (w, h): (i32, i32) = match self {
-            CursorShape::SizeWE => (17, 9),
-            CursorShape::SizeNS => (9, 17),
-            _ => (13, 13),
-        };
-        let inside = |x: i32, y: i32| -> bool {
-            match self {
-                CursorShape::SizeWE => {
-                    let d = (y - 4).abs();
-                    d <= x.min(16 - x) && (d <= 1 || x <= 4 || x >= 12)
-                }
-                CursorShape::SizeNS => {
-                    let d = (x - 4).abs();
-                    d <= y.min(16 - y) && (d <= 1 || y <= 4 || y >= 12)
-                }
-                CursorShape::SizeNWSE => x + y <= 5 || x + y >= 19 || (x - y).abs() <= 1,
-                _ => {
-                    let x = 12 - x;
-                    x + y <= 5 || x + y >= 19 || (x - y).abs() <= 1
-                }
-            }
-        };
-        let ok = |x: i32, y: i32| x >= 0 && y >= 0 && x < w && y < h && inside(x, y);
-        let mut rows = Vec::new();
-        for y in -1..=h {
-            let mut r = String::new();
-            for x in -1..=w {
-                r.push(if ok(x, y) {
-                    'o'
-                } else if ok(x - 1, y) || ok(x + 1, y) || ok(x, y - 1) || ok(x, y + 1) {
-                    'X'
-                } else {
-                    '.'
-                });
-            }
-            rows.push(r);
-        }
-        (rows, (w / 2 + 1, h / 2 + 1))
+        .art()
     }
 }
-
-/// The RetroOS arrow (docs/STYLE.md §5): black outline, white fill.
-const ARROW: [&str; 19] = [
-    "X...........",
-    "XX..........",
-    "XoX.........",
-    "XooX........",
-    "XoooX.......",
-    "XooooX......",
-    "XoooooX.....",
-    "XooooooX....",
-    "XoooooooX...",
-    "XooooooooX..",
-    "XoooooooooX.",
-    "XooooooXXXXX",
-    "XoooXooX....",
-    "XooXXooX....",
-    "XoX..XooX...",
-    "XX...XooX...",
-    "X.....XooX..",
-    "......XooX..",
-    ".......XX...",
-];
 
 /// Pointer images pre-scaled by whole pixels (so they stay sharp).
 #[derive(Default)]
