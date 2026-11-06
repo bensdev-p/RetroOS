@@ -50,6 +50,11 @@ expect WINDOWS => WINDOW 2 352 290 640 400 normal
 key alt+space
 wait 300
 shot 55-window-menu
+# Golden regions (tests/golden): the look of menus, frames and icons.
+expect-golden 55-window-menu window-menu 346 286 272 300
+expect-golden 55-window-menu title-active 344 246 656 46
+expect-golden 55-window-menu title-inactive 0 0 1296 46
+expect-golden 50-desktop desktop-icons 1740 0 180 1080
 key esc
 # Click the DOS Prompt's title bar to bring it forward, size it from the
 # bottom-right corner.

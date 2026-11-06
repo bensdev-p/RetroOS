@@ -19,6 +19,7 @@ button click
 wait 400
 expect WINDOWS => normal Program Manager
 shot 80b-progman-forward
+expect-golden 80b-progman-forward progman-main 736 40 600 290
 pointer 986 240
 button click
 wait 100

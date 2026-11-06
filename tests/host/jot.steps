@@ -36,6 +36,7 @@ type second
 key enter
 wait 400
 shot 97-jot-find
+expect-golden 97-jot-find jot-find 624 424 672 196
 key escape
 wait 600
 # Typing over the found word, then Alt+F4 asks about the change; N leaves.

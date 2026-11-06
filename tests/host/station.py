@@ -107,6 +107,27 @@ def main():
             got = "%02X%02X%02X" % px
             if got != want.upper():
                 print("FAIL pixel", name, x, y, "want", want, "got", got); ok = False
+        elif cmd == "expect-golden":
+            # expect-golden SHOT NAME X Y W H: that region of the screenshot
+            # must equal tests/golden/NAME.png pixel for pixel (a deliberate
+            # look change: RETRO_UPDATE_GOLDEN=1 rewrites the golden images).
+            from PIL import Image, ImageChops
+            shot, name, x, y, w, h = arg.split()
+            x, y, w, h = int(x), int(y), int(w), int(h)
+            got = Image.open(os.path.join(outdir, shot + ".png")).convert("RGB").crop((x, y, x + w, y + h))
+            gold = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "golden", name + ".png")
+            if os.environ.get("RETRO_UPDATE_GOLDEN"):
+                os.makedirs(os.path.dirname(gold), exist_ok=True)
+                got.save(gold)
+                print("golden", name, "written")
+            elif not os.path.exists(gold):
+                print("FAIL golden", name, "missing (RETRO_UPDATE_GOLDEN=1 writes it)"); ok = False
+            else:
+                want = Image.open(gold).convert("RGB")
+                diff = ImageChops.difference(got, want).getbbox() if want.size == got.size else (0, 0) + got.size
+                if diff:
+                    got.save(os.path.join(outdir, "golden-" + name + "-got.png"))
+                    print("FAIL golden", name, "differs in", diff); ok = False
         elif cmd == "windows":
             print("\n".join(req("WINDOWS")))
         elif cmd == "expect":

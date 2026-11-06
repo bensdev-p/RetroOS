@@ -71,8 +71,14 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   (parser, built-ins, theme PNG lookup, retro-fy, draw); retro-apps parses
   `Icon=`; Program Manager, minimised windows and Alt+Tab use them
   (Station's `chrome::Pic`, `Desktop::app_icons`).
-- Next: acceptance (HANDOFF §7 step 8): QEMU GUI golden tests, Firefox
-  windowed on the Pi with the GPU, desktop idle RAM (userspace < 160 MB).
+- **Golden regions** (step 8 begun): `expect-golden SHOT NAME X Y W H` in
+  host scenarios compares a screenshot region with `tests/golden/NAME.png`
+  pixel for pixel (window menu, active/inactive title bars, desktop icons,
+  Program Manager's Main group, Jot's Find dialog). A deliberate look
+  change: run the scenario with `RETRO_UPDATE_GOLDEN=1` and commit the new
+  PNGs; a failure saves `golden-NAME-got.png` next to the screenshots.
+- Next (step 8): Firefox windowed on the Pi with the GPU, desktop idle RAM
+  on the Pi (userspace < 160 MB) — hardware runs; then M3 is done.
 
 ## 1. Where things stand
 
