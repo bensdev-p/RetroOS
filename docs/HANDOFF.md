@@ -77,8 +77,12 @@ Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
   Program Manager's Main group, Jot's Find dialog). A deliberate look
   change: run the scenario with `RETRO_UPDATE_GOLDEN=1` and commit the new
   PNGs; a failure saves `golden-NAME-got.png` next to the screenshots.
-- Next (step 8): Firefox windowed on the Pi with the GPU, desktop idle RAM
-  on the Pi (userspace < 160 MB) — hardware runs; then M3 is done.
+- **M3 done (2026-11-06)**: acceptance on the Pi 5 with CI runs 66–67 —
+  Firefox windowed on the GPU (3.34), desktop idle userspace 52.8 MB against
+  160 MB (3.33), pointers in Firefox and X11 programs (3.31), icons (3.32).
+  Open items carried forward are the "Not yet" lists in D-030–D-041. The
+  user is taking a break from the OS to design the luggable enclosure; the
+  next OS milestone is M4 (DESIGN.md §18).
 
 ## 1. Where things stand
 
