@@ -1,252 +1,191 @@
-# Handoff: starting Milestone 3 (RetroOS Desktop)
+# Handoff: starting Milestone 4 (Control Panel, Software Library, audio, Bluetooth, theming)
 
-Written at the end of the M1+M2 session (2026-10-17) for whoever picks up M3.
-Read this first, then `docs/DESIGN.md` §6.2, §9 and §18 (M3),
-`docs/STYLE.md` §4, and the decisions D-007/D-023/D-029 (GPU), D-025
-(Xwayland), D-027 (scales) and D-028 (memory budget) in `docs/DECISIONS.md`.
+Written at the end of the M3 session (2026-11-06) for whoever picks up next.
+Read this first, then `docs/DESIGN.md` §18 (M4) and the sections it points
+to, `docs/STYLE.md`, and `docs/DECISIONS.md` (D-001…D-042; the "Not yet"
+lines of D-030…D-042 are M3's open ends).
 
-## 0. M3 progress (updated as steps land)
+## 0. Start here
 
-- Work continues on branch `claude/retroos-m3-desktop-32rra9` (based on the
-  M2 branch).
-- **Step 1 done** (desktop personality in Station): `desktop.rs` (window
-  manager: placement, stacking = focus order, move/resize with an outline,
-  minimise to icons, maximise, window menu, Alt+Tab/Esc/F4/Space/Enter,
-  Exit to DOS on Ctrl+Alt+F1, live personality switch) and `chrome.rs`
-  (frames, title bars, pattern, icons, menus, boxes — pure drawing with unit
-  tests). Broker: `PERSONALITY [text|desktop]`, `WINDOWS`; test-only
-  `POINTER x y`, `BUTTON down|up|click`, `KEY down:alt` / `up:alt`.
-  RetroDOS: `DESKTOP`/`WIN`, `TASKS /W`. Decisions D-030, D-031.
-- Tests: `tests/host/desktop.steps`, `tests/host/desktop-start.steps`
-  (run with `STATION_ARGS="--personality desktop"`), `tests/qemu/test_m3.py`.
-- **Lantern 12** (`assets/fonts/lantern-12.glyphs`, proportional bold, ASCII
-  + UI symbols) is used by Station's frames and menus; shared menu/button
-  drawing is `retro_gfx::widgets`.
-- **Step 2 done** (D-032): layer-shell in Station (`layers.rs`).
-- **Steps 3–4 begun**: `crates/retro-ui` (toolkit: bars, popups, windows at
-  1× art pixels via viewporter; `station` broker client), `crates/retro-apps`
-  (.desktop parsing, shared with RetroDOS), `crates/retro-bar` (System Bar:
-  ◆ menu, Programs by category, Window list, clock, Restart / Shut Down /
-  Exit to DOS dialogs). Host test `tests/host/bar.steps`; the WM-only
-  scenarios run with `RETROOS_NO_BAR=1`.
-- **System-wide colour scheme** (D-033): `retro_gfx::Theme` per scheme;
-  `scheme=` in startup.conf; broker `SCHEME`, `WATCH` (EVENT lines);
-  `COLOR` saves it via `/usr/libexec/retroos/set-scheme`. Host test
-  `tests/host/scheme.steps` (with `expect-pixel`).
-- **Lantern 9** (`assets/fonts/lantern-9.glyphs`, regular weight, 9 rows)
-  for icon labels, and **Latin-1 for both Lantern fonts**: accented letters
-  composed from base letter + drawn mark (`retro_gfx::font::accents`, one
-  `Style` per font), symbols, curly quotes and dashes drawn by hand (fractions,
-  ¤ ¦ ¶ ª º þ ð are still the replacement box). `widgets::ellipsize_in`.
-- **Program Manager** (D-035): `crates/retro-progman` (layout in
-  `layout.rs`, unit-tested); Station starts it with the first Desktop,
-  behind the focused window at the top right (`ensure_progman`,
-  `RETROOS_NO_PROGMAN`); ◆ → Program Manager. retro-ui gained `keys`,
-  `Event::Scroll`, `Ui::minimize`. Host test `tests/host/progman.steps`.
-- **About This Computer** (D-036): `crates/retro-about`, from ◆ → About
-  This Computer…; host test `tests/host/about.steps`. `retro_gfx::icons`
-  has a Computer picture.
-- **Jot** (D-037): `crates/retro-jot` (binary `jot`; `editor.rs` is the
-  tested editing core over `retro_edit::buffer`), `.desktop` file in
-  packaging (Accessories); retro-ui `controls`, `Ui::dialog`, keyboard
-  repeat, clipboard. Host test `tests/host/jot.steps` (expect-file now
-  takes `\n`).
-- **File Cabinet** (D-038): `crates/retro-cabinet` (binary `file-cabinet`;
-  `open.rs` picks the program, `trash.rs` the Wastebasket), in Program
-  Manager's Main group; FILER's panel is a library (`retro_filer::panel`);
-  retro-apps parses `MimeType=`; `retro_gfx::icons` has Folder and Document
-  pictures and `small_icon`. Host test `tests/host/cabinet.steps`.
-- **Desktop icons**: Station draws the RetroDOS drives down the right edge
-  and the Wastebasket at the bottom right (`refresh_shell`, every 3 s;
-  empty/full); a double-click opens File Cabinet there. Program Manager now
-  opens left of that column. `RETROOS_NO_DESKTOP_ICONS=1` leaves them out.
-- **Xwayland** (D-039): `crates/station/src/xwayland.rs` (on-demand start,
-  `XwmHandler`, X11 tasks via `Task::x11()/surface()/close()`, override-
-  redirect windows in `Station::x11_overrides`, drawn and hit first).
-  Host test `tests/host/x11.steps`.
-- **Pointers** (D-040): `retro_gfx::cursors` (the art and an Xcursor
-  writer), `tools/retro-cursors` (the Phosphor theme, generated in mkdeb),
-  Station's `XCURSOR_THEME`/`XCURSOR_SIZE` for programs.
-- **Icon set** (D-041): `assets/icons/*.icon`, `retro_gfx::iconset`
-  (parser, built-ins, theme PNG lookup, retro-fy, draw); retro-apps parses
-  `Icon=`; Program Manager, minimised windows and Alt+Tab use them
-  (Station's `chrome::Pic`, `Desktop::app_icons`).
-- **Golden regions** (step 8 begun): `expect-golden SHOT NAME X Y W H` in
-  host scenarios compares a screenshot region with `tests/golden/NAME.png`
-  pixel for pixel (window menu, active/inactive title bars, desktop icons,
-  Program Manager's Main group, Jot's Find dialog). A deliberate look
-  change: run the scenario with `RETRO_UPDATE_GOLDEN=1` and commit the new
-  PNGs; a failure saves `golden-NAME-got.png` next to the screenshots.
-- **M3 done (2026-11-06)**: acceptance on the Pi 5 with CI runs 66–67 —
-  Firefox windowed on the GPU (3.34), desktop idle userspace 52.8 MB against
-  160 MB (3.33), pointers in Firefox and X11 programs (3.31), icons (3.32).
-  Open items carried forward are the "Not yet" lists in D-030–D-041. The
-  user is taking a break from the OS to design the luggable enclosure; the
-  next OS milestone is M4 (DESIGN.md §18).
+1. **Check your branch has M3.** `git log --oneline | grep -c "M3 accepted"`
+   must print 1, and `crates/retro-progman` must exist. The M1/M2 branch
+   `claude/blissful-heisenberg-j88hfe` was GitHub's default branch when M3
+   ended and does **not** contain M3; M3 and the Touch Display 2 work are on
+   `claude/retroos-m3-desktop-32rra9`. If your branch was cut from the old
+   default, stop and tell the user (they should merge the M3 branch or make
+   it the default), or with their OK `git fetch origin
+   claude/retroos-m3-desktop-32rra9` and build on that.
+2. **First job: the Touch Display 2** (D-042). The code is in; it has not
+   been seen on hardware. Ask the user to run `docs/HW_CHECKLIST.md`
+   "Displays" D.1–D.6 on the latest CI image and fix what they report
+   before starting M4 proper (likely topics: which way up — `rotate=` /
+   `retroos.rotate=`; text size at 1280×720; touch mapping; multi-output).
+3. Then M4, in the order of §7 below.
 
 ## 1. Where things stand
 
-- **M1 and M2 are complete** and verified on real hardware: a Raspberry Pi 5
-  (8 GB) with the Raspberry Pi 15.6" 1080p monitor, owned by the user, who
-  tests images and reports results as photos of the screen. The Pi will live
-  in a custom "luggable" PC case (the user's own build; ask about its
-  screen, keyboard and power before designing around them).
-- All work is on branch `claude/blissful-heisenberg-j88hfe`. It is the **only
-  branch on GitHub** (no `main` yet). A local annotated tag `v0.2-m2` marks the
-  M2 commit `5162352`; the session could not push tags, so it may not exist on
-  GitHub.
-- CI (`.github/workflows/ci.yml`) is green: lint, unit and host tests on
-  ubuntu-24.04; image build + QEMU M1, M2 and M3 tests on ubuntu-24.04-arm
-  (~22 min). The flashable image is the `retroos-image` artifact of each run,
-  uploaded ~6 min in, before the QEMU tests (their screens and logs are the
-  `qemu-tests` artifact); the Pi 5 bootloader settings card is
-  `retroos-bootloader-rpi5`. Pushes that only change docs or `*.md` start no
-  run, and a newer push cancels the branch's run still going.
-- Hardware results so far: `docs/HW_CHECKLIST.md` (results table at the end).
-  Measured numbers: `docs/BUDGET.md`. Idle text mode on the Pi 5: RetroOS
-  userspace (AnonPages + Shmem) **44 MB** (target 60), MemTotal − MemAvailable
-  224 MB (target 200; the remainder is kernel-side).
+- **M1, M2 and M3 are complete** and accepted on real hardware: a Raspberry
+  Pi 5 (8 GB), 5 A USB-C supply, the bootloader settings card from CI
+  (SD first, no network-install screen), the Raspberry Pi 15.6" 1080p
+  monitor. The user tests CI images and reports by photo of the screen.
+- **The luggable**: the Pi is going into the user's own "luggable" PC case,
+  designed in a separate Claude session (3D printed). Its screen is a
+  **Raspberry Pi Touch Display 2** (DSI, 720×1280 portrait panel, touch).
+  The first attempt failed with Station's "no usable display" (D-042 has the
+  why); the fix is pushed and awaiting the hardware check (§0.2).
+- Measured on the Pi 5 (`docs/BUDGET.md`): power-on → POST screen 6 s,
+  → `C:\>` 9 s; idle userspace (AnonPages + Shmem) text mode 44 MB, Desktop
+  52.8 MB (target 160); Firefox windowed on the GPU.
+- CI (`.github/workflows/ci.yml`): lint, unit and host tests on ubuntu-24.04;
+  image build + QEMU M1, M2, M3 tests on ubuntu-24.04-arm (~22–30 min). The
+  flashable image is the `retroos-image` artifact, uploaded ~6 min in, before
+  the QEMU tests (screens and logs: `qemu-tests`); the Pi 5 bootloader card
+  is `retroos-bootloader-rpi5`. Docs-only pushes start no run; a newer push
+  cancels the branch's running one. snapshot.debian.org is flaky: the build
+  falls back to deb.debian.org for missing files (`fallback_debs`).
+- Hardware results: `docs/HW_CHECKLIST.md` (results table at the end).
 
 ## 2. Repository map
 
 | Path | What |
 |---|---|
-| `crates/station` | The Wayland compositor (Smithay 0.7). Text personality only so far. |
-| `crates/retro-console` | Wayland terminal that shows RetroDOS (alacritty_terminal grid, our bitmap font). |
-| `crates/retrodos` | The DOS-style shell (`retrodos`): builtins, batch files, launch-broker client, GUI-app detection. |
-| `crates/retro-gfx` | Palette (Phosphor16), Canvas/Surface, bitmap fonts (Phosphor Mono 8×16 + Unifont fallback), text Grid. |
-| `crates/retro-tui` | Minimal full-screen text UI layer (cells, keys incl. modifiers + SGR mouse, dialogs, fields). |
-| `crates/retro-edit`, `retro-filer`, `retro-net` | EDIT, FILER, WIFI/NET text apps (binaries `retro-edit`, `retro-filer`, `retro-net`). |
-| `crates/retro-sys` | System services over D-Bus for all front-ends (`net`: iwd + networkd). Extend here for M4 Control Panel. |
-| `crates/retro-login` | Login screen (greetd greeter) and first-boot Setup (text). |
-| `crates/retro-session` | The user session: picks text/desktop mode, runs Station + console, restarts on crash. |
-| `crates/retro-post`, `retro-kms` | POST/BIOS screen with chime, F8 Startup Menu, DEL Setup (direct KMS). |
-| `crates/retro-dosfs` | Drive letters, DOS path resolution, 8.3 names, wildcards. |
-| `tools/retro-fontc`, `tools/retro-synth` | Build-time font compiler and sound synthesiser. |
-| `packaging/retroos/root` | Files installed verbatim by the `retroos` .deb (systemd units, udev rules, helpers, policies). |
-| `build/` | `mkdeb.sh`, `mkimage.sh`, `hooks/customize.sh`, package lists, pinned keyrings and snapshot. |
-| `tests/host` | Headless-Station end-to-end tests (`station.py` + `*.steps` scripts). |
-| `tests/qemu` | Full-image tests in QEMU (`retroqemu.py`, `test_m1.py`, `test_m2.py`). |
-| `docs/` | DESIGN, STYLE, DECISIONS (D-001…D-029), BUDGET, HW_CHECKLIST, this file. |
+| `crates/station` | The Wayland compositor (Smithay 0.7): text and desktop personalities, XWM, layer-shell, launch broker. |
+| `crates/retro-console` | Wayland terminal that shows RetroDOS (the DOS Prompt; app id `retroos.console`). |
+| `crates/retrodos` | The DOS-style shell: builtins, batch files, broker client, GUI-app detection. |
+| `crates/retro-gfx` | Palette/schemes/themes, Canvas, bitmap fonts (Phosphor Mono, Lantern 12/9), widgets, icons (`icons`, `iconset`), pointers (`cursors`), screen rotation (`screen`). |
+| `crates/retro-ui` | Toolkit for windowed and bar clients (wl_shm at 1×, viewporter; menus, controls, dialogs, clipboard). |
+| `crates/retro-apps` | `.desktop` parsing (categories, icons, MIME types), shared with RetroDOS. |
+| `crates/retro-bar` | System Bar (◆ menu, Programs, Window, clock; Restart / Shut Down / Exit to DOS). |
+| `crates/retro-progman`, `retro-about`, `retro-jot`, `retro-cabinet` | Program Manager, About This Computer, Jot (`jot`), File Cabinet (`file-cabinet`). |
+| `crates/retro-tui` | Full-screen text UI layer (EDIT, FILER, NET, Setup). |
+| `crates/retro-edit`, `retro-filer`, `retro-net` | EDIT, FILER, WIFI/NET (edit/filer are also libraries for Jot/File Cabinet). |
+| `crates/retro-sys` | System services over D-Bus for both front-ends (`net`: iwd + networkd). **Grows into M4's Control Panel back end.** |
+| `crates/retro-login`, `retro-session` | Login screen + first-boot Setup; the user session (text/desktop, restarts on crash). |
+| `crates/retro-post`, `retro-kms` | POST/BIOS screen, chime, F8 Startup Menu, DEL Setup (direct KMS, honours rotation). |
+| `crates/retro-dosfs` | Drive letters, DOS paths, 8.3 names, wildcards. |
+| `tools/retro-fontc`, `retro-synth`, `retro-cursors` | Build-time font compiler, sound synthesiser, Phosphor Xcursor theme writer. |
+| `assets/` | Font glyph sources, `.icon` sources (text, one letter per pixel). |
+| `packaging/retroos/root` | Files installed verbatim by the `retroos` .deb (units, udev rules, helpers, `.desktop` files, `/etc/retroos/startup.conf`). |
+| `build/` | `mkdeb.sh`, `mkimage.sh`, `hooks/customize.sh`, `packages/*.list`, `mkeeprom.sh`, pinned keyrings/snapshot (`lock/`). |
+| `config/boot` | `config.txt`, `cmdline.txt` for the Pi firmware. |
+| `tests/host` | Headless-Station scenarios (`station.py`, `*.steps`, `run-all.sh`); goldens in `tests/golden`. |
+| `tests/qemu` | Full-image tests in QEMU (`retroqemu.py`, `test_m1.py`…`test_m3.py`). |
 
 ## 3. Building and testing
 
 ```
-make test           # cargo test + all host tests (fast, no root)
-make test-host      # headless Station scenarios only; screenshots in out/test-host*/
-make image          # flashable image + QEMU variant (needs root; slow off arm64)
-make test-qemu      # M1 then M2 QEMU tests (needs a built image)
 cargo fmt --all && cargo clippy --workspace --all-targets   # must be clean (CI checks)
+cargo test --workspace     # unit tests
+tests/host/run-all.sh      # every headless Station scenario, exactly as CI; screens in out/test-host*/
+make image                 # flashable image + QEMU variant (root; ~1 h off arm64: let CI do it)
+make test-qemu             # M1–M3 QEMU tests on a built image
 ```
 
 - **Host tests are the workhorse.** `tests/host/station.py BIN_DIR OUT_DIR
-  SCRIPT` starts `station --headless 1920x1080 --test-ipc` with a private HOME
-  (with a fake `DEMO` app in `~/.local/share/applications`), then runs steps:
-  `type`, `key ctrl+alt+tab`, `wait MS`, `shot NAME`, `expect-task N`,
-  `expect-file NAME TEXT`, `request BROKER REQUEST`. A rejected key or request
-  fails the run. Look at the screenshots — several bugs were only visible there.
-- **Image builds on an x86 container are very slow** (qemu-user emulation,
-  ~1 h). Prefer pushing and letting CI build and run QEMU tests on the arm64
-  runner. `mkimage.sh` registers the qemu-aarch64 binfmt handler itself.
-- **Adding a crate changes `Cargo.lock`; the image build uses `--locked`.**
-  Build once locally and commit the lock file before an image build starts.
-- Network: Debian packages come only from `snapshot.debian.org` (pinned in
-  `build/lock/snapshot`); the Raspberry Pi archive over **https**. crates.io
-  works. The Ubuntu archive of the dev container does not (no `apt install`).
-- After `cargo fmt`, text replacements written against pre-format code silently
-  miss; re-read the file or use exact current text.
+  SCRIPT` starts `station --headless 1920x1080 --test-ipc` with a private
+  HOME, then runs steps: `type`, `key`, `hold`, `wait`, `shot`,
+  `expect-task`, `expect-file`, `expect-pixel`, `expect-golden SHOT NAME X Y
+  W H`, `pointer`, `button`, `request`. A rejected key or request fails the
+  run. **Look at the screenshots**: several bugs were only visible there.
+  A deliberate look change: rerun the scenario with `RETRO_UPDATE_GOLDEN=1`
+  and commit the new PNGs; a mismatch saves `golden-NAME-got.png`.
+- The dev container needs `xwayland x11-apps libegl1` for the X11 scenario
+  (`apt-get install -y` works in the cloud container); the Rust toolchain
+  is pinned by `rust-toolchain.toml`.
+- Adding a crate changes `Cargo.lock`; the image build uses `--locked`.
+  Commit the lock file.
+- After `cargo fmt`, text replacements written against pre-format code
+  silently miss; re-read the file. Chain commit commands with `&&`, never `;`
+  (a failed check must stop the commit).
+- Station env switches used by tests: `RETROOS_NO_BAR`, `RETROOS_NO_PROGMAN`,
+  `RETROOS_NO_DESKTOP_ICONS`, `RETROOS_NO_XWAYLAND`, `RETROOS_SCHEME`,
+  `RETROOS_RENDERER`, `RETROOS_UI_SCALE`, `RETROOS_ROTATE`.
 
 ## 4. Working with the user and the hardware
 
-- The user flashes the CI artifact on the Pi 5 and reports by photo. Give them
-  short, exact commands. The memory check used:
-  `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|Slab|SUnrecl|KernelSt|PageTab|Vmalloc|Percpu|Cma|AnonPages' /proc/meminfo; ps -eo rss,comm --sort=-rss | head -12"`
-  and `UNIX free -m`. GPU check: `ADMIN UNIX journalctl -b -g rendering`.
-- Add an M3 section to `docs/HW_CHECKLIST.md` before asking for a hardware run;
-  record every run in its results table and numbers in `docs/BUDGET.md`.
-- Never claim a hardware result you did not get from the user.
+- The user flashes the CI artifact and reports by photo, often with short
+  notes per checklist row ("3.31: good"). Give short, exact commands; RetroDOS
+  runs Linux commands with `UNIX "…"` and as root with `ADMIN UNIX "…"`.
+  Memory check: see the end of the M3 section of `docs/HW_CHECKLIST.md`.
+- Add checklist rows before asking for a hardware run; record every run in
+  the results table and numbers in `docs/BUDGET.md`. Never claim a hardware
+  result you did not get from the user.
+- The user is happy to iterate ("worst case we circle back"), likes the
+  retro feel (kept the long-ish POST screen on purpose), and wants each
+  milestone shippable.
+- This cloud session cannot reach www.raspberrypi.com (network policy);
+  web search works.
 
 ## 5. Conventions
 
-- Rust everywhere for our components; match the surrounding code and comment
-  density. No Electron, no GNOME/KDE/Xfce components.
-- Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry (next: D-030).
-- Commit small, descriptive commits; push to the session's designated branch;
-  do not open a PR unless the user asks. Keep model names out of the repo.
-- Keep the M1/M2 tests passing; add host scenarios and QEMU checks for M3.
+- Rust for our components; match the surrounding code and comment density.
+  No Electron, no GNOME/KDE/Xfce components.
+- Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
+  (**next: D-043**).
+- Small, descriptive commits; push to the session's designated branch; no PR
+  unless the user asks. Keep model names out of the repo.
+- Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
 
-## 6. Station internals you will touch first
+## 6. Station internals
 
 - `state.rs`: `Station` (Smithay states, `space`, `tasks`, `personality`,
-  `scale` = output scale clients see, `art_scale` = pixel scale of Station's
-  own bitmap art, `children`, `broker`, `task_list`). `add_toplevel` /
-  `configure_task` / `focus_task` / `remove_toplevel` implement the text
-  personality: every toplevel is configured full-screen, dialogs (toplevels
-  with a parent) are centred over their parent. `Personality` already exists
-  (`--personality text|desktop`), but only text behaviour is implemented.
-- `tasks.rs`: `Tasks` list + MRU focus; `TaskKind::{Console, App}`; tasks
-  carry `pid`, `launch` id and `name`.
-- `render.rs`: `Scene` → render elements (pointer, optional full-screen
-  overlay, focused task and its dialogs). Desktop mode needs stacking order,
-  frames, desktop background, icons — likely a separate scene builder.
-- `udev.rs`: one KMS output; renderer is `Option<Gpu>` = Pixman (dumb
-  buffers) or GLES (GBM), switched by `set_gpu()`: GPU when the broker
-  launches a graphical program, CPU 60 s after the last one ends (D-029).
-  `renderer=gpu|cpu|auto` in `/etc/retroos/startup.conf` pins it. Desktop mode
-  will usually have GPU clients, so expect GLES most of the time there.
-- `headless.rs`: Pixman into an offscreen image (tests, screenshots).
-- `input.rs`: libinput → seat; hotkeys (Ctrl+Alt+Tab, Ctrl+Alt+Esc/Del Task
-  List, Ctrl+Alt+F1..F12, Print Screen); `xkb_config()` reads
-  `/etc/default/keyboard`.
-- `broker.rs`: line protocol on `$RETROOS_STATION` (PING, TASKS, SWITCH,
-  LAUNCH with `=NAME=VALUE` env fields, KILL, END, KEYMAP, SCREENSHOT;
-  TYPE/KEY/QUIT with `--test-ipc`). RetroDOS's `launch.rs` is the client.
-- `tasklist.rs`: the full-screen Task List, drawn with `retro-gfx` into a
-  `MemoryRenderBuffer` — a working example of Station-drawn UI.
-- Protocols offered: compositor, shm, xdg-shell, xdg-decoration, seat, data
-  device, output, viewporter, linux-dmabuf (GPU only). Missing for M3:
-  layer-shell (System Bar/desktop as clients) and Xwayland/XWM.
-- retro-console uses `wp_viewporter` to send a 1× buffer that Station enlarges
-  with nearest-neighbour filtering (renderers are set to `TextureFilter::Nearest`).
-  Any bitmap UI client (retro-ui apps) should do the same.
+  `scale` = output scale programs see, `art_scale` = pixel scale of our own
+  art, `desktop`, `x11_overrides`, `touch_slot`); `output_size()` (logical,
+  after rotation), `output_pixels()`; `spawn()` sets each program's env
+  (`DISPLAY`, `XCURSOR_*`).
+- `desktop.rs`: the desktop personality — placement, stacking, move/resize,
+  minimise-to-icon, window menu, Alt+Tab/Esc/F4, shell icons (drives,
+  Wastebasket), Program Manager management, app icons.
+- `chrome.rs`: frames, title bars, icons, menus, boxes (pure drawing).
+- `render.rs`: `Scene` → render elements; `transform_for()` (rotation);
+  `offscreen*` (screenshots).
+- `udev.rs`: one KMS output (first connected connector), output transform
+  from `retro_gfx::screen`, Pixman ↔ GLES switching (`set_gpu`, D-029).
+- `input.rs`: libinput → seat; hotkeys; touch as the left button
+  (`panel_to_picture`).
+- `xwayland.rs`: on-demand Xwayland + `XwmHandler` (D-039).
+- `layers.rs`: layer-shell (System Bar). `broker.rs`: the line protocol
+  (LAUNCH, TASKS, SWITCH, SCHEME, WATCH, SCREENSHOT, …).
 
-## 7. Milestone 3 plan (from DESIGN.md §18, with what M2 changed)
+## 7. Milestone 4 plan (DESIGN.md §18)
 
 Suggested order, each step leaving a working image:
 
-1. **Desktop personality in Station**: stacking window manager with
-   server-side Win 3.1 frames (STYLE.md §4: 4-px frame, 18-px Cobalt title bar,
-   control-menu box, minimise/maximise), click-to-focus, Alt+Tab, Alt+F4,
-   Alt+Space window menu, move/resize with an XOR outline, minimise to icons on
-   the bottom edge, dithered desktop. `DESKTOP` command and "Exit to DOS" switch
-   personality live (no logout); the RetroDOS console becomes a "DOS Prompt"
-   window. Firefox windowed works from day one. Respect D-027: windows use the
-   client scale; frames and our art use `art_scale`.
-2. **layer-shell** for System Bar and desktop clients (or draw them in Station
-   first, like the Task List, and move them to clients later — decide and log).
-3. **retro-ui toolkit** (DESIGN §9.3: software-rendered into wl_shm at 1×,
-   enlarged via viewporter) and the **Lantern 12/9** proportional bitmap fonts
-   (text glyph sources like `assets/fonts/phosphor-mono-8x16.glyphs`, compiled
-   by `retro-fontc`).
-4. **System Bar** (◆ Phosphor menu, Programs, Window, clock, network) and
-   **Program Manager** (groups from `.desktop` categories).
-5. **File Cabinet**, **Jot**, **About This Computer** (memory bar per program).
-6. **Xwayland + X11 WM** (D-025): start Xwayland on the first launch of a
-   program that links libX11/libxcb but not libwayland-client; `DISPLAY` for it.
-7. **Icon set and cursor theme** (original art from text sources, D-015/D-021).
-8. **Tests and acceptance**: host golden screenshots of the desktop, QEMU GUI
-   test (switch to desktop, open/move/close windows), Firefox windowed on the
-   Pi with the GPU, desktop idle RAM measured (target: userspace < 160 MB, D-028).
+1. **Touch Display 2 follow-ups** from the hardware check (§0.2); then
+   `wl_touch` for programs (Firefox finger scrolling) and, if the luggable
+   wants both screens, more than one output.
+2. **retro-sys complete + Control Panel** (text + GUI) with its applets:
+   Display (scheme, rotation, scale, brightness for the DSI panel), Startup
+   (startup.conf), Date & Time, Keyboard, Network (Wi-Fi Enterprise, static
+   IP, country — deferred by D-026), Users, Sound, Bluetooth.
+3. **Audio**: PipeWire/WirePlumber; `MIXER`/Volume; UI sounds (STYLE.md).
+4. **Bluetooth** pairing in both personalities (keyboard, headphones, gamepad).
+5. **Software Library** (text + GUI) on PackageKit + the catalog (~60
+   entries) with retro-fied icons (`retro_gfx::iconset::retrofy`); updates,
+   notifications, unattended security updates.
+6. **Theming of others' programs**: GTK3/GTK4/Qt/Firefox/Chromium colours
+   and fonts (the pointer theme is done: D-040).
+7. **Media Player** (libmpv) and **Arcade v1** (RetroArch); Geany
+   preinstalled, VS Code in the catalog.
+8. **Acceptance**: install/remove apps from both front-ends; BT audio and a
+   gamepad on the Pi; budget re-measured.
 
 ## 8. Open items carried over
 
-- Firefox start-up latency fix (GPU switch after spawn, 60 s hold) is in the
-  branch but not yet confirmed on the Pi.
-- Boot stopwatch values (HW_CHECKLIST 1.1, 1.8) were reported "in spec" but
-  not recorded; ask for the numbers at the next hardware run.
+- Touch Display 2 unverified on hardware (D-042, HW_CHECKLIST D.1–D.6).
+- "Not yet" lists in D-030…D-042, notably: X11 ↔ Wayland clipboard; animated
+  busy pointer; SVG-only app icons; dialog icons (Stop/Caution/Note).
+- "used" memory (MemTotal − MemAvailable) is kernel-heavy; M5 ideas in
+  BUDGET.md (blacklist unused drivers, trim initramfs-tools).
 - Untested on hardware: Ethernet (2.4), Pi 4 (1.23).
-- "used" memory is 24 MB over its 200 MB target, all kernel-side; M5 ideas in
-  BUDGET.md (blacklist unused drivers; the Pi kernel pulls in an unused
-  initramfs-tools — trim it).
-- Deferred by D-026: EDIT multiple buffers/syntax colours, FILER archives,
-  Wi-Fi Enterprise/static IP/country (M4 Control Panel).
+- Deferred by D-026: EDIT multiple buffers/syntax colours, FILER archives.
+
+## 9. What M3 built (for orientation)
+
+Desktop personality (D-030/031), layer-shell (D-032), retro-ui + System Bar,
+system-wide colour scheme (D-033), Lantern 12/9 with Latin-1, Program
+Manager (D-035), About This Computer (D-036), Jot (D-037), File Cabinet
+(D-038), desktop drive icons and Wastebasket, Xwayland + XWM (D-039),
+Phosphor pointers everywhere incl. GTK settings (D-040), icon set with
+retro-fied third-party icons (D-041), golden screenshot regions, QEMU M3
+test, Pi 5 boot time 20 s → 9 s (unpacked kernel, bootloader settings card).

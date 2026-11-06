@@ -6,7 +6,7 @@ and System 7 — on top of a modern Linux kernel that runs real modern software.
 
 RetroOS 1.0 is "made by" the fictional **Phosphor Computer Company**. It boots
 to the **Phosphor BIOS** POST screen, then to **RetroDOS**, a DOS-style command
-shell; the **RetroOS Desktop** (Milestone 3) is one command away.
+shell; the **RetroOS Desktop** is one command away (`DESKTOP`).
 
 - [`docs/DESIGN.md`](docs/DESIGN.md) — architecture, build system, milestones
 - [`docs/STYLE.md`](docs/STYLE.md) — palette, fonts, icons, sounds, naming
@@ -14,7 +14,7 @@ shell; the **RetroOS Desktop** (Milestone 3) is one command away.
 - [`docs/BUDGET.md`](docs/BUDGET.md) — measured boot time and memory
 - [`docs/HW_CHECKLIST.md`](docs/HW_CHECKLIST.md) — real-hardware test list
 
-## Status: Milestone 2 complete (Milestone 3, the desktop, is next)
+## Status: Milestone 3 complete (Milestone 4 is next)
 
 | Works now | Arrives in |
 |---|---|
@@ -27,8 +27,9 @@ shell; the **RetroOS Desktop** (Milestone 3) is one command away.
 | EDIT (EDIT.COM-style editor), FILER (Norton Commander-style file manager), NET/WIFI network setup | M2 ✓ |
 | GPU rendering (V3D) while graphical programs run, CPU at the prompt; idle RetroOS userspace 44 MB on a Pi 5 | M2 ✓ |
 | USB sticks as D: and up, `EJECT` | M2 ✓ |
-| X11-only programs (Xwayland) | M3 (D-025) |
-| RetroOS Desktop: windows, Program Manager, File Cabinet | M3 |
+| RetroOS Desktop: framed windows, System Bar, Program Manager, File Cabinet, Jot, About This Computer, drive icons and Wastebasket, `DESKTOP` ↔ Exit to DOS | M3 ✓ |
+| X11 programs (Xwayland on demand), one pointer theme and icon set for every program | M3 ✓ |
+| Raspberry Pi Touch Display 2: shown landscape, touch as the mouse (D-042) | after M3, awaiting a hardware check |
 | Control Panel, Software Library, audio, Bluetooth, app theming | M4 |
 
 ## Using RetroDOS
