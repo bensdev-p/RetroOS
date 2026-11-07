@@ -49,6 +49,85 @@ pub struct Screen {
     pub block_cursor: bool,
     /// Owns the terminal (restores it on drop).
     active: bool,
+    /// Monochrome attributes (amber, green, paper schemes): see [`mono`].
+    pub mono: bool,
+    scheme_checked: Option<std::time::Instant>,
+}
+
+/// The session's colour scheme: Station's (live), else $RETROOS_SCHEME,
+/// else startup.conf. None outside the RetroOS console (SSH, the Linux
+/// console in safe mode), where the terminal's own colours apply.
+pub fn current_scheme() -> Option<String> {
+    std::env::var_os("RETROOS_CONSOLE")?;
+    if let Some(path) = std::env::var_os("RETROOS_STATION") {
+        use std::io::{BufRead, BufReader};
+        if let Ok(mut sock) = std::os::unix::net::UnixStream::connect(path) {
+            let t = Some(std::time::Duration::from_millis(300));
+            let _ = sock.set_read_timeout(t);
+            let _ = sock.set_write_timeout(t);
+            if sock.write_all(b"SCHEME\n").is_ok() {
+                let mut line = String::new();
+                if BufReader::new(sock).read_line(&mut line).is_ok() {
+                    if let Some(k) = line.trim_end().strip_prefix("OK\t") {
+                        return Some(k.to_string());
+                    }
+                }
+            }
+        }
+    }
+    if let Ok(k) = std::env::var("RETROOS_SCHEME") {
+        return Some(k);
+    }
+    let conf = std::fs::read_to_string("/etc/retroos/startup.conf").unwrap_or_default();
+    conf.lines()
+        .find_map(|l| {
+            l.split('#')
+                .next()?
+                .trim()
+                .strip_prefix("scheme=")
+                .map(|v| v.trim().to_string())
+        })
+        .or(Some("classic".into()))
+}
+
+/// Whether a scheme shows colours as shades of one ink (amber, green, paper).
+pub fn is_mono(scheme: &str) -> bool {
+    matches!(scheme, "amber" | "green" | "paper")
+}
+
+/// A cell as a monochrome monitor shows it, in the manner of DOS programs'
+/// black-and-white modes: light backgrounds (Silver dialogs, Teal bars,
+/// selections) become inverse video, every other background black, and the
+/// text normal (7), intense (15) or dim (8). The schemes turn 0/7/8/15 into
+/// background, ink, bright ink and dim ink (paper: white page, black ink).
+pub fn mono(c: Cell) -> Cell {
+    let inverse = matches!(c.bg, TEAL | OCHRE | SILVER) || c.bg >= SKY;
+    if inverse {
+        let fg = if c.fg == c.bg {
+            WHITE
+        } else if (SKY..=WHITE).contains(&c.fg) && c.fg != WHITE || c.fg == COBALT {
+            SLATE // a highlight inside an inverse box
+        } else {
+            BLACK
+        };
+        Cell {
+            ch: c.ch,
+            fg,
+            bg: WHITE,
+        }
+    } else {
+        let fg = match c.fg {
+            f if f == c.bg => BLACK,
+            SLATE => SLATE,
+            f if f >= SKY => WHITE,
+            _ => SILVER,
+        };
+        Cell {
+            ch: c.ch,
+            fg,
+            bg: BLACK,
+        }
+    }
 }
 
 fn sgr(c: Cell) -> String {
@@ -95,6 +174,8 @@ impl Screen {
         let (cols, rows) = term_size();
         let mut s = Screen::with_size(cols, rows, orig);
         s.active = true;
+        s.mono = current_scheme().is_some_and(|k| is_mono(&k));
+        s.scheme_checked = Some(std::time::Instant::now());
         Ok(s)
     }
 
@@ -115,11 +196,33 @@ impl Screen {
             cursor: None,
             block_cursor: false,
             active: false,
+            mono: false,
+            scheme_checked: None,
         }
     }
 
-    /// Re-read the terminal size; true if it changed (everything is redrawn).
+    /// Monochrome attributes on or off (everything is redrawn).
+    pub fn set_mono(&mut self, on: bool) {
+        if on != self.mono {
+            self.mono = on;
+            self.invalidate();
+        }
+    }
+
+    /// Re-read the terminal size (and, once a second, the colour scheme);
+    /// true if it changed (everything is redrawn).
     pub fn check_resize(&mut self) -> bool {
+        if self
+            .scheme_checked
+            .is_some_and(|t| t.elapsed().as_secs() >= 1)
+        {
+            self.scheme_checked = Some(std::time::Instant::now());
+            let m = current_scheme().is_some_and(|k| is_mono(&k));
+            if m != self.mono {
+                self.set_mono(m);
+                return true;
+            }
+        }
         let (c, r) = term_size();
         if (c, r) == (self.cols, self.rows) {
             return false;
@@ -222,7 +325,11 @@ impl Screen {
         for y in 0..self.rows {
             for x in 0..self.cols {
                 let i = y as usize * self.cols as usize + x as usize;
-                let c = self.cells[i];
+                let c = if self.mono {
+                    mono(self.cells[i])
+                } else {
+                    self.cells[i]
+                };
                 if self.shown[i] == Some(c) {
                     continue;
                 }
@@ -358,6 +465,40 @@ mod tests {
         let lines: Vec<&str> = d.lines().collect();
         assert!(lines[1].starts_with("  ╔═") && lines[1].contains(" Hi "));
         assert_eq!(s.get(12, 2).unwrap().bg, BLACK);
+    }
+
+    #[test]
+    fn monochrome_keeps_text_readable() {
+        let on_blue = mono(Cell {
+            ch: 'a',
+            fg: SILVER,
+            bg: COBALT,
+        });
+        assert_eq!((on_blue.fg, on_blue.bg), (SILVER, BLACK));
+        let title = mono(Cell {
+            ch: 'a',
+            fg: WHITE,
+            bg: COBALT,
+        });
+        assert_eq!(title.fg, WHITE);
+        let bar = mono(Cell {
+            ch: 'a',
+            fg: BLACK,
+            bg: TEAL,
+        });
+        assert_eq!((bar.fg, bar.bg), (BLACK, WHITE));
+        let sel = mono(Cell {
+            ch: 'a',
+            fg: BLACK,
+            bg: SILVER,
+        });
+        assert_eq!((sel.fg, sel.bg), (BLACK, WHITE));
+        let field = mono(Cell {
+            ch: 'a',
+            fg: WHITE,
+            bg: BLACK,
+        });
+        assert_eq!((field.fg, field.bg), (WHITE, BLACK));
     }
 
     #[test]

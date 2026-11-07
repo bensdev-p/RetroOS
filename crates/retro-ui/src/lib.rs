@@ -144,6 +144,7 @@ pub mod keys {
     pub const INSERT: u32 = 0xff63;
     pub const F1: u32 = 0xffbe;
     pub const F3: u32 = 0xffc0;
+    pub const F4: u32 = 0xffc1;
     pub const F6: u32 = 0xffc3;
     pub const F10: u32 = 0xffc7;
 }

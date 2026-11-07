@@ -48,6 +48,16 @@ struct Dialog {
     h: i32,
 }
 
+/// An open drop-down list of a choice field.
+struct Drop {
+    surface: SurfaceId,
+    field: usize,
+    sel: usize,
+    n: usize,
+}
+
+const DROP_ROW: i32 = 16;
+
 struct Message {
     surface: SurfaceId,
     lines: Vec<String>,
@@ -59,6 +69,7 @@ struct Panel {
     sel: usize,
     last_click: Option<(usize, Instant)>,
     dialog: Option<Dialog>,
+    drop: Option<Drop>,
     message: Option<Message>,
     start: Option<Applet>,
 }
@@ -227,8 +238,10 @@ impl Dialog {
 }
 
 /// A drop-down-looking box: the value and an arrow button; a click steps.
+const CHOICE_W: i32 = 190;
+
 fn draw_choice(sf: &mut Surface, r: Rect, text: &str, focused: bool, enabled: bool, t: &Theme) {
-    let w = r.w.min(190);
+    let w = r.w.min(CHOICE_W);
     sf.fill_rect(r.x, r.y, w as u32, FIELD_H as u32, t.light);
     sf.frame(r.x, r.y, w as u32, FIELD_H as u32, 1, t.line);
     let font = lantern_12();
@@ -343,7 +356,110 @@ impl Panel {
         self.dialog = Some(Dialog::new(ui, win, load(a)));
     }
 
+    /// Open field `i`'s list below it.
+    fn open_drop(&mut self, ui: &mut Ui, i: usize) {
+        self.close_drop(ui);
+        let Some(d) = self.dialog.as_ref() else {
+            return;
+        };
+        let Value::Choice(opts, cur) = &d.page.fields[i].value else {
+            return;
+        };
+        let r = d.rects[i];
+        let anchor = Rect::new(r.x, r.y, r.w.min(CHOICE_W), FIELD_H);
+        let size = (anchor.w, opts.len() as i32 * DROP_ROW + 4);
+        if let Some(surface) = ui.popup(d.surface, anchor, size, false, true) {
+            self.drop = Some(Drop {
+                surface,
+                field: i,
+                sel: *cur,
+                n: opts.len(),
+            });
+        }
+    }
+
+    fn close_drop(&mut self, ui: &mut Ui) {
+        if let Some(dr) = self.drop.take() {
+            ui.close(dr.surface);
+            if let Some(d) = &self.dialog {
+                ui.redraw(d.surface);
+            }
+        }
+    }
+
+    /// Take the drop-down's choice.
+    fn pick(&mut self, ui: &mut Ui) {
+        if let (Some(dr), Some(d)) = (self.drop.as_ref(), self.dialog.as_mut()) {
+            if let Value::Choice(_, cur) = &mut d.page.fields[dr.field].value {
+                *cur = dr.sel;
+            }
+        }
+        self.close_drop(ui);
+    }
+
+    fn drop_event(&mut self, ui: &mut Ui, ev: Event) {
+        let Some(dr) = self.drop.as_mut() else { return };
+        let row = |y: i32| ((y - 2) / DROP_ROW).clamp(0, dr.n as i32 - 1) as usize;
+        match ev {
+            Event::PopupDone => return self.close_drop(ui),
+            Event::PointerMove { y, .. } | Event::PointerEnter { y, .. } => dr.sel = row(y),
+            Event::Button {
+                button: LEFT_BUTTON,
+                pressed: false,
+                y,
+                ..
+            } => {
+                dr.sel = row(y);
+                return self.pick(ui);
+            }
+            Event::Key { sym, .. } => match sym {
+                UP => dr.sel = dr.sel.saturating_sub(1),
+                DOWN => dr.sel = (dr.sel + 1).min(dr.n - 1),
+                HOME => dr.sel = 0,
+                END => dr.sel = dr.n - 1,
+                RETURN | KP_ENTER | SPACE | F4 => return self.pick(ui),
+                ESCAPE | TAB => return self.close_drop(ui),
+                _ => {}
+            },
+            _ => {}
+        }
+        ui.redraw(dr.surface);
+    }
+
+    fn draw_drop(&self, c: &mut Canvas, t: &Theme) {
+        let (Some(dr), Some(d)) = (&self.drop, &self.dialog) else {
+            return;
+        };
+        let Value::Choice(opts, _) = &d.page.fields[dr.field].value else {
+            return;
+        };
+        let (w, h) = (c.width as i32, c.height as i32);
+        let mut sf = c.surface();
+        sf.fill_rect(0, 0, w as u32, h as u32, t.light);
+        sf.frame(0, 0, w as u32, h as u32, 1, t.line);
+        let font = lantern_12();
+        for (i, (_, label)) in opts.iter().enumerate() {
+            let y = 2 + i as i32 * DROP_ROW;
+            let fg = if i == dr.sel {
+                sf.fill_rect(2, y, (w - 4) as u32, DROP_ROW as u32, t.sel);
+                t.sel_text
+            } else {
+                t.text
+            };
+            sf.text(
+                font,
+                6,
+                y + 2,
+                1,
+                fg,
+                None,
+                &ellipsize_in(font, label, w - 12),
+            );
+        }
+    }
+
     fn close_dialog(&mut self, ui: &mut Ui) {
+        self.close_drop(ui);
         if let Some(d) = self.dialog.take() {
             ui.close(d.surface);
         }
@@ -448,6 +564,10 @@ impl Panel {
                         (_, Value::Level(v)) => {
                             *v = (((x - r.x).clamp(0, 150) * 100 / 150) as u32).clamp(5, 100);
                         }
+                        (_, Value::Choice(..)) => {
+                            ui.redraw(d.surface);
+                            return self.open_drop(ui, i);
+                        }
                         _ if shift => f.step(-1),
                         _ => f.cycle(),
                     }
@@ -465,10 +585,14 @@ impl Panel {
                 sym,
                 text,
                 ctrl,
+                alt,
                 shift,
-                ..
             } => {
                 let i = d.focus;
+                let choice = i < n && matches!(d.page.fields[i].value, Value::Choice(..));
+                if choice && (sym == F4 || sym == SPACE || (alt && sym == DOWN)) {
+                    return self.open_drop(ui, i);
+                }
                 match sym {
                     ESCAPE => return self.close_dialog(ui),
                     TAB => d.next_focus(1),
@@ -553,6 +677,8 @@ impl Program for Panel {
         let t = &ui.theme;
         if Some(id) == self.win {
             self.draw_window(c, t);
+        } else if self.drop.as_ref().is_some_and(|d| d.surface == id) {
+            self.draw_drop(c, t);
         } else if let Some(d) = self.dialog.as_ref().filter(|d| d.surface == id) {
             d.draw(c, t);
         } else if let Some(m) = self.message.as_ref().filter(|m| m.surface == id) {
@@ -599,6 +725,9 @@ impl Program for Panel {
                 }
             }
             return;
+        }
+        if self.drop.as_ref().is_some_and(|d| d.surface == id) {
+            return self.drop_event(ui, ev);
         }
         if self.dialog.as_ref().is_some_and(|d| d.surface == id) {
             return self.dialog_event(ui, ev);
@@ -656,6 +785,7 @@ fn main() {
         sel: 0,
         last_click: None,
         dialog: None,
+        drop: None,
         message: None,
         start,
     };

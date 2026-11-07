@@ -64,7 +64,10 @@ pub fn valid(key: &str, value: &str) -> bool {
             .parse::<u32>()
             .is_ok_and(|n| (1..=600).contains(&n) && !value.starts_with('0')),
         "scheme" => matches!(value, "classic" | "paper" | "amber" | "green" | "high"),
-        "rotate" => matches!(value, "auto" | "0" | "90" | "180" | "270"),
+        "rotate" => matches!(
+            value,
+            "auto" | "flip" | "right" | "left" | "0" | "90" | "180" | "270"
+        ),
         "ui_scale" => matches!(value, "auto" | "1" | "2" | "3" | "4"),
         "renderer" => matches!(value, "auto" | "gpu" | "cpu"),
         _ => false,

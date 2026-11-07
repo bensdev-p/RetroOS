@@ -1,0 +1,30 @@
+# Text programs on the monochrome schemes (D-044): FILER and CONTROL in
+# amber, CONTROL in paper. Light backgrounds become inverse video.
+wait 1500
+type COLOR AMBER
+key enter
+wait 500
+type FILER
+key enter
+wait 1500
+shot 01-filer-amber
+key f10
+wait 800
+type CONTROL DISPLAY
+key enter
+wait 1500
+shot 02-control-amber
+key escape
+wait 300
+key escape
+wait 500
+type COLOR PAPER
+key enter
+wait 500
+type CONTROL DISPLAY
+key enter
+wait 1500
+shot 03-control-paper
+key escape
+wait 300
+key escape

@@ -66,7 +66,7 @@ fn main() {
         if s.flush().is_err() {
             break;
         }
-        let k = match read_key(-1) {
+        let k = match read_key(1000) {
             Ok(Some(k)) => k,
             Ok(None) => continue,
             Err(_) => break,
@@ -89,6 +89,7 @@ fn main() {
                     if let Some(scheme) = d.scheme {
                         // Every console (this one too) and the Desktop follow.
                         let _ = retro_ui::station::request(&["SCHEME", &scheme]);
+                        s.set_mono(retro_tui::is_mono(&scheme));
                         s.invalidate();
                     }
                     if d.keymap {

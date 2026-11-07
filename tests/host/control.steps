@@ -29,13 +29,18 @@ key enter
 wait 2500
 expect WINDOWS => normal Control Panel
 shot 03-control-panel
-# Display: Enter on the first icon; → turns the scheme to Paper; OK.
+# Display: Enter on the first icon; Space drops the scheme list down;
+# ↓ Enter picks Paper; Enter is OK.
 key enter
 wait 1000
 shot 04-display
-key right
-wait 300
-shot 05-display-paper
+key space
+wait 600
+shot 05-display-drop
+key down
+key enter
+wait 400
+shot 05b-display-paper
 key enter
 wait 1500
 expect-file startup.conf scheme=paper

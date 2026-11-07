@@ -16,7 +16,7 @@ for kv in "$@"; do
         fast_post=yes|fast_post=no|chime=yes|chime=no) ;;
         menu_timeout=[1-9]|menu_timeout=[1-9][0-9]|menu_timeout=[1-5][0-9][0-9]|menu_timeout=600) ;;
         scheme=classic|scheme=paper|scheme=amber|scheme=green|scheme=high) ;;
-        rotate=auto|rotate=0|rotate=90|rotate=180|rotate=270) ;;
+        rotate=auto|rotate=flip|rotate=right|rotate=left|rotate=0|rotate=90|rotate=180|rotate=270) ;;
         ui_scale=auto|ui_scale=[1-4]) ;;
         renderer=auto|renderer=gpu|renderer=cpu) ;;
         *) echo "Invalid setting $kv" >&2; exit 2 ;;

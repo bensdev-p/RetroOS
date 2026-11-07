@@ -25,15 +25,22 @@ pub fn conf_value(conf: &str, key: &str) -> Option<String> {
 }
 
 /// Degrees clockwise for a panel whose native mode is `w`×`h`, given the
-/// setting's value (None or anything unrecognised = auto).
+/// setting's value (None or anything unrecognised = auto). `flip`, `right`
+/// and `left` turn the picture from where `auto` puts it (upside down, a
+/// quarter turn clockwise, counter-clockwise), so they mean the same on a
+/// landscape monitor and on a portrait panel shown landscape (D-044); the
+/// numbers are the panel's own turns, for cmdline.txt.
 pub fn rotation_for(setting: Option<&str>, w: u32, h: u32) -> u32 {
+    let auto = if h > w { 90 } else { 0 };
     match setting.map(str::trim) {
         Some("0") => 0,
         Some("90") => 90,
         Some("180") => 180,
         Some("270") => 270,
-        _ if h > w => 90,
-        _ => 0,
+        Some("flip") => (auto + 180) % 360,
+        Some("right") => (auto + 90) % 360,
+        Some("left") => (auto + 270) % 360,
+        _ => auto,
     }
 }
 
@@ -95,6 +102,11 @@ mod tests {
         assert_eq!(rotation_for(Some("0"), 720, 1280), 0);
         assert_eq!(rotation_for(Some("180"), 1920, 1080), 180);
         assert_eq!(rotation_for(Some("sideways"), 1920, 1080), 0);
+        // Relative to auto: upside down stays landscape on a portrait panel.
+        assert_eq!(rotation_for(Some("flip"), 1200, 1920), 270);
+        assert_eq!(rotation_for(Some("flip"), 1920, 1080), 180);
+        assert_eq!(rotation_for(Some("right"), 1920, 1080), 90);
+        assert_eq!(rotation_for(Some("left"), 1200, 1920), 0);
     }
 
     #[test]

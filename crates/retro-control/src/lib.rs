@@ -196,13 +196,23 @@ fn yes(v: &str) -> bool {
     matches!(v, "yes" | "on" | "true" | "1")
 }
 
+/// Turns from the automatic picture (landscape, right way up), so the
+/// same choice means the same on a monitor and on a portrait panel (D-044).
 const ROTATIONS: &[(&str, &str)] = &[
-    ("auto", "Automatic"),
-    ("0", "Normal"),
-    ("90", "Quarter turn right"),
-    ("180", "Upside down"),
-    ("270", "Quarter turn left"),
+    ("auto", "Normal (automatic)"),
+    ("flip", "Upside down"),
+    ("right", "Quarter turn right"),
+    ("left", "Quarter turn left"),
 ];
+
+/// A panel turn set by number (cmdline-style), shown so it is not lost.
+fn rotations(current: &str) -> Vec<(String, String)> {
+    let mut v = opts(ROTATIONS);
+    if !ROTATIONS.iter().any(|(k, _)| *k == current) {
+        v.push((current.to_string(), format!("Panel turned {current}\u{b0}")));
+    }
+    v
+}
 
 const SCALES: &[(&str, &str)] = &[
     ("auto", "Automatic"),
@@ -211,6 +221,15 @@ const SCALES: &[(&str, &str)] = &[
     ("3", "3x"),
     ("4", "4x"),
 ];
+
+/// The session's colour scheme (Station's), else the saved one.
+fn live_scheme(conf: &str) -> String {
+    retro_ui::station::request(&["SCHEME"])
+        .ok()
+        .and_then(|(f, _)| f.into_iter().next())
+        .filter(|k| display::SCHEMES.iter().any(|(s, _)| s == k))
+        .unwrap_or_else(|| startup::get(conf, "scheme"))
+}
 
 /// The settings of `applet`, as the system has them now.
 pub fn load(applet: Applet) -> Page {
@@ -222,13 +241,12 @@ pub fn load(applet: Applet) -> Page {
                 Field::new(
                     "scheme",
                     "Colour scheme",
-                    choice(opts(display::SCHEMES), &startup::get(&conf, "scheme")),
+                    choice(opts(display::SCHEMES), &live_scheme(&conf)),
                 ),
-                Field::new(
-                    "rotate",
-                    "Screen rotation",
-                    choice(opts(ROTATIONS), &startup::get(&conf, "rotate")),
-                ),
+                Field::new("rotate", "Screen rotation", {
+                    let cur = startup::get(&conf, "rotate");
+                    choice(rotations(&cur), &cur)
+                }),
                 Field::new(
                     "ui_scale",
                     "Program size",
@@ -406,11 +424,15 @@ mod tests {
 
     #[test]
     fn fields_step_and_cycle() {
-        let mut f = Field::new("rotate", "Screen rotation", choice(opts(ROTATIONS), "180"));
+        let mut f = Field::new(
+            "rotate",
+            "Screen rotation",
+            choice(rotations("flip"), "flip"),
+        );
         assert_eq!(f.shown(), "Upside down");
         f.step(1);
         f.step(1);
-        assert_eq!(f.text(), "270", "stops at the end");
+        assert_eq!(f.text(), "left", "stops at the end");
         f.cycle();
         assert_eq!(f.text(), "auto", "a click wraps around");
         let mut c = Field::new("chime", "Startup chime", Value::Check(true));
@@ -448,6 +470,13 @@ mod tests {
         assert_eq!(d.field("scheme").unwrap().shown(), "Amber");
         std::env::remove_var("RETROOS_STARTUP_CONF");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_numeric_rotation_is_kept_visible() {
+        let r = rotations("90");
+        assert_eq!(r.last().unwrap().0, "90");
+        assert_eq!(rotations("auto").len(), ROTATIONS.len());
     }
 }
 

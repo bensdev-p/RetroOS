@@ -20,6 +20,7 @@ RETROOS_NO_BAR=1 run -desktop tests/host/desktop.steps
 RETROOS_NO_BAR=1 STATION_ARGS="--personality desktop" run -desktop-start tests/host/desktop-start.steps
 run -bar tests/host/bar.steps
 run -scheme tests/host/scheme.steps
+run -mono tests/host/mono.steps
 RETROOS_NO_PROGMAN= run -progman tests/host/progman.steps
 run -about tests/host/about.steps
 RETROOS_NO_BAR=1 run -jot tests/host/jot.steps
