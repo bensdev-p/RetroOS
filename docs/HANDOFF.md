@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-045**).
+  (**next: D-046**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -180,15 +180,19 @@ Suggested order, each step leaving a working image:
   helper `set-startup`; sudoers NOPASSWD for it and `set-keyboard`; polkit
   rule for timedated. New crate `retro-control`: the applet model
   (`lib.rs`), CONTROL (`text.rs`, binary `retro-control`) and the Desktop
-  Control Panel (`bin/gui.rs`, binary `control-panel`). Applets: Display,
+  Control Panel (`gui/main.rs`, binary `control-panel`). Applets: Display,
   Date & Time, Keyboard, Network (opens NET), Startup. Host test
   `control.steps` (writes `~/startup.conf` via `RETROOS_STARTUP_CONF`).
   Hardware: 4.1–4.7 and D.1–D.6 passed on the Pi (2026-11-07); 4.8
   rotation reworked (D-044), monochrome text attributes (D-044); 4.8–4.10
   to run.
-- **Next in step 2**: GUI Network applet (Wi-Fi list + Enterprise, static
-  IP, country), Users (needs a password dialog: polkit/sudo), then Sound and
-  Bluetooth with steps 3–4.
+- **Network page done (D-045)**: `retro_sys::netconf` (country, fixed wired
+  address, enterprise provisioning) + helpers `set-wifi-country`,
+  `set-wired`, `set-wifi-enterprise`; Desktop *Wireless Networks* dialog
+  (`retro-control/src/gui/wifi.rs`; `RETROOS_TEST_WIFI=1` = pretend adapter
+  for host tests); NET asks for enterprise sign-in too. HW rows 4.11–4.15.
+- **Next in step 2**: Users (needs a password dialog: polkit/sudo), then
+  Sound and Bluetooth with steps 3–4.
 
 ## 8. Open items carried over
 

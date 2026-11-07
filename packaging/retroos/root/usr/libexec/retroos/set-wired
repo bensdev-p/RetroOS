@@ -1,0 +1,36 @@
+#!/bin/sh
+# Set how the wired network gets its address (run as root).
+#
+#   set-wired dhcp
+#   set-wired static ADDRESS/PREFIX [GATEWAY] [DNS...]
+#
+# A fixed address is a networkd file that sorts before the image's DHCP one
+# (80-retroos-wired.network); dhcp removes it. networkd applies it at once.
+# Used by Control Panel → Network; the admin group may run it without a
+# password. retro_sys::netconf checks the values first; this checks the
+# characters.
+set -eu
+f=/etc/systemd/network/70-retroos-wired.network
+case ${1:-} in
+    dhcp) rm -f $f ;;
+    static)
+        addr=${2:-}; gw=${3:-}
+        case $addr in ""|*[!0-9./]*|*/*/*) echo "Invalid address" >&2; exit 2 ;; */*) ;; *) echo "Invalid address" >&2; exit 2 ;; esac
+        case $gw in *[!0-9.]*) echo "Invalid gateway" >&2; exit 2 ;; esac
+        shift 2; [ $# -gt 0 ] && shift
+        for d in "$@"; do
+            case $d in ""|*[!0-9A-Fa-f.:]*) echo "Invalid name server" >&2; exit 2 ;; esac
+        done
+        mkdir -p /etc/systemd/network
+        {
+            echo "# Fixed address, set by RetroOS Control Panel."
+            printf '[Match]\nType=ether\nName=e*\n\n[Network]\nAddress=%s\n' "$addr"
+            [ -n "$gw" ] && echo "Gateway=$gw"
+            for d in "$@"; do echo "DNS=$d"; done
+        } > $f.new
+        chmod 644 $f.new
+        mv $f.new $f
+        ;;
+    *) echo "Usage: set-wired dhcp | static ADDRESS/PREFIX [GATEWAY] [DNS...]" >&2; exit 2 ;;
+esac
+networkctl reload 2>/dev/null || true

@@ -4,7 +4,7 @@
 //! exactly the same things. Each applet [`load`]s a page of [`Field`]s;
 //! the front-end lets the user edit them and calls [`apply`].
 
-use retro_sys::{clock, display, keyboard, startup};
+use retro_sys::{clock, display, keyboard, netconf, startup};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Applet {
@@ -51,15 +51,7 @@ impl Applet {
             Applet::Startup => "The POST screen, the chime, and how RetroOS starts.",
             Applet::DateTime => "The date, the time and the time zone.",
             Applet::Keyboard => "The keyboard layout.",
-            Applet::Network => "Wired and wireless networks.",
-        }
-    }
-
-    /// Applets that are a program of their own, not a page of fields.
-    pub fn program(self) -> Option<&'static str> {
-        match self {
-            Applet::Network => Some("retro-net"),
-            _ => None,
+            Applet::Network => "Wi-Fi networks, the wired address, the country.",
         }
     }
 }
@@ -76,7 +68,13 @@ pub enum Value {
     Level(u32),
     /// Typed text.
     Text(String),
+    /// A button that opens more (the front-end knows what: [`ACTION_WIFI`]).
+    Action(&'static str),
 }
+
+/// The Network page's "Wireless networks" button: NET in text mode, the
+/// Wireless Networks dialog on the Desktop.
+pub const ACTION_WIFI: &str = "wifi";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Field {
@@ -105,6 +103,7 @@ impl Field {
             Value::Check(b) => if *b { "yes" } else { "no" }.into(),
             Value::Level(n) => n.to_string(),
             Value::Text(s) => s.clone(),
+            Value::Action(_) => String::new(),
         }
     }
 
@@ -117,6 +116,7 @@ impl Field {
             Value::Check(b) => if *b { "Yes" } else { "No" }.into(),
             Value::Level(n) => format!("{n} %"),
             Value::Text(s) => s.clone(),
+            Value::Action(_) => "Open...".into(),
         }
     }
 
@@ -134,7 +134,7 @@ impl Field {
             }
             Value::Check(b) => *b = !*b,
             Value::Level(n) => *n = (*n as i32 + d * 5).clamp(5, 100) as u32,
-            Value::Text(_) => {}
+            Value::Text(_) | Value::Action(_) => {}
         }
     }
 
@@ -178,6 +178,19 @@ impl Page {
             .iter()
             .zip(&self.original)
             .any(|(f, o)| f.text() != *o)
+    }
+
+    /// Fields that depend on others: call after every change (the
+    /// fixed-address fields only count when the address is fixed).
+    pub fn update(&mut self) {
+        if self.applet == Applet::Network {
+            let fixed = self.field("wired").is_some_and(|f| f.text() == "static");
+            for f in self.fields.iter_mut() {
+                if matches!(f.key, "address" | "gateway" | "dns") {
+                    f.enabled = fixed;
+                }
+            }
+        }
     }
 }
 
@@ -343,15 +356,45 @@ pub fn load(applet: Applet) -> Page {
             let i = list.iter().position(|(n, _)| *n == layout).unwrap_or(0);
             vec![Field::new("layout", "Layout", Value::List(list, i))]
         }
-        Applet::Network => Vec::new(),
+        Applet::Network => {
+            let cur = netconf::country();
+            let mut list = vec![(
+                String::new(),
+                "Not set (world-wide channels only)".to_string(),
+            )];
+            list.extend(
+                netconf::countries()
+                    .into_iter()
+                    .map(|(c, n)| (c.clone(), format!("{n} ({c})"))),
+            );
+            let i = list.iter().position(|(c, _)| *c == cur).unwrap_or(0);
+            let w = netconf::wired();
+            vec![
+                Field::new("wifi", "Wireless networks", Value::Action(ACTION_WIFI)),
+                Field::new(
+                    "wired",
+                    "Wired address",
+                    choice(
+                        opts(&[("dhcp", "Automatic (DHCP)"), ("static", "Fixed")]),
+                        if w.dhcp { "dhcp" } else { "static" },
+                    ),
+                ),
+                Field::new("address", "IP address/prefix", Value::Text(w.address)),
+                Field::new("gateway", "Gateway", Value::Text(w.gateway)),
+                Field::new("dns", "Name servers", Value::Text(w.dns)),
+                Field::new("country", "Wi-Fi country", Value::List(list, i)),
+            ]
+        }
     };
     let original = fields.iter().map(Field::text).collect();
-    Page {
+    let mut page = Page {
         applet,
         fields,
         notice,
         original,
-    }
+    };
+    page.update();
+    page
 }
 
 /// What applying did, beyond "done".
@@ -363,6 +406,27 @@ pub struct Applied {
     pub keymap: bool,
     /// Settings that take effect when the Desktop or RetroDOS next starts.
     pub restart: bool,
+    /// Settings that take effect when the computer next starts.
+    pub reboot: bool,
+}
+
+impl Applied {
+    /// What to tell the user after saving, if anything.
+    pub fn notice(&self) -> Option<[&'static str; 2]> {
+        if self.reboot {
+            Some([
+                "The Wi-Fi country takes effect the",
+                "next time the computer starts.",
+            ])
+        } else if self.restart {
+            Some([
+                "The new screen settings take effect the",
+                "next time the Desktop or RetroDOS starts.",
+            ])
+        } else {
+            None
+        }
+    }
 }
 
 /// Save what changed on `page`.
@@ -413,7 +477,21 @@ pub fn apply(page: &Page) -> Result<Applied, String> {
                 done.keymap = true;
             }
         }
-        Applet::Network => {}
+        Applet::Network => {
+            let wired = ["wired", "address", "gateway", "dns"];
+            if wired.iter().any(|k| page.changed(k)) {
+                netconf::set_wired(&netconf::Wired {
+                    dhcp: val("wired") != "static",
+                    address: val("address"),
+                    gateway: val("gateway"),
+                    dns: val("dns"),
+                })?;
+            }
+            if page.changed("country") {
+                netconf::set_country(&val("country")).map_err(|e| e.to_string())?;
+                done.reboot = true;
+            }
+        }
     }
     Ok(done)
 }
@@ -470,6 +548,22 @@ mod tests {
         assert_eq!(d.field("scheme").unwrap().shown(), "Amber");
         std::env::remove_var("RETROOS_STARTUP_CONF");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn fixed_address_fields_follow_the_choice() {
+        let mut p = load(Applet::Network);
+        assert_eq!(p.field("wifi").unwrap().value, Value::Action(ACTION_WIFI));
+        let i = p.fields.iter().position(|f| f.key == "wired").unwrap();
+        p.fields[i].value = choice(
+            opts(&[("dhcp", "Automatic (DHCP)"), ("static", "Fixed")]),
+            "dhcp",
+        );
+        p.update();
+        assert!(!p.field("address").unwrap().enabled);
+        p.fields[i].step(1);
+        p.update();
+        assert!(p.field("address").unwrap().enabled);
     }
 
     #[test]

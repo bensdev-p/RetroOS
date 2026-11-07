@@ -137,6 +137,11 @@ Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|S
 | 4.8 | Rotation (Touch Display 2) | Control Panel → Display → Screen rotation → Upside down, OK; ◆ → Restart | the panel says the change applies at the next start; after the restart the picture is upside down **and still landscape** (touch follows); set it back to Normal (automatic) |
 | 4.9 | Choice drop-downs | Control Panel → Display; click the Colour scheme box (or Space / F4) | a list drops down under the box; click Amber (or ↓ and Enter) and OK |
 | 4.10 | Monochrome text programs | `COLOR AMBER`, then `FILER` (F10 out) and `CONTROL`; the same with `COLOR GREEN` and `COLOR PAPER`; then `COLOR CLASSIC` | every word readable: black background (white on Paper), bars, dialogs and the selection in inverse video, like a DOS program's black-and-white mode; switching the scheme from the Desktop's Control Panel while FILER is open redraws it within a second |
+| 4.11 | Wireless Networks dialog | Desktop: Control Panel → Network → Wireless networks: Open... | your network listed with signal bars, "WPA2/3" and "Connected"; Disconnect, then select it and Connect (no passphrase asked: Saved); Close returns to the Network page |
+| 4.12 | Join with a passphrase | in the dialog, Forget your network, then Connect: type the passphrase | "Connecting...", then Connected; System Bar/NET agree; a wrong passphrase shows a message and nothing hangs |
+| 4.13 | Fixed wired address (needs a cable) | Network → Wired address → Fixed; IP e.g. `192.168.1.250/24` (free on your router), gateway your router, name server `1.1.1.1`; OK; `NET /S`; then back to Automatic (DHCP) | `NET /S` shows the fixed address within a few seconds; DHCP comes back after switching back |
+| 4.14 | Wi-Fi country | Network → Wi-Fi country: type your country's first letters in the list (or in CONTROL: Enter on the field, type to search), OK; restart; `UNIX "cat /sys/module/cfg80211/parameters/ieee80211_regdom"` | the panel says it applies at the next start; after it, your country's code |
+| 4.15 | Enterprise Wi-Fi (only if you have such a network, e.g. eduroam) | Connect on it: method PEAP (or what your IT says), user name, password | Connected; the network shows Saved afterwards. Skip if none is available |
 
 ## Displays — Raspberry Pi Touch Display 2 (D-042)
 

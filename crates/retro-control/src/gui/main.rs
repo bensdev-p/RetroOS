@@ -5,7 +5,11 @@
 //!
 //!   control-panel [applet]     open that applet at once (DISPLAY, TIME, …)
 
-use retro_control::{applet_by_letter, applet_named, apply, load, Applet, Page, Value, APPLETS};
+mod wifi;
+
+use retro_control::{
+    applet_by_letter, applet_named, apply, load, Applet, Page, Value, ACTION_WIFI, APPLETS,
+};
 use retro_gfx::font::lantern_12;
 use retro_gfx::iconset;
 use retro_gfx::widgets::{bevel, ellipsize, ellipsize_in, push_button, text_width};
@@ -70,9 +74,15 @@ struct Panel {
     last_click: Option<(usize, Instant)>,
     dialog: Option<Dialog>,
     drop: Option<Drop>,
+    wifi: Option<wifi::WifiDlg>,
     message: Option<Message>,
     start: Option<Applet>,
 }
+
+/// Width of a typed-text field in a dialog.
+const TEXT_W: i32 = 200;
+/// Width of an action button ("Open...").
+const ACTION_W: i32 = 100;
 
 fn cell(i: usize) -> Rect {
     Rect::new(8 + i as i32 * CELL_W, GRID_Y, CELL_W, CELL_H)
@@ -190,10 +200,10 @@ impl Dialog {
             match (&f.value, &self.ctls[i]) {
                 (_, Ctl::Text(tf)) => {
                     if f.enabled {
-                        tf.draw(&mut sf, r.x, r.y, 110, focused, t);
+                        tf.draw(&mut sf, r.x, r.y, TEXT_W, focused, t);
                     } else {
-                        sf.fill_rect(r.x, r.y, 110, FIELD_H as u32, t.face);
-                        sf.frame(r.x, r.y, 110, FIELD_H as u32, 1, t.disabled);
+                        sf.fill_rect(r.x, r.y, TEXT_W as u32, FIELD_H as u32, t.face);
+                        sf.frame(r.x, r.y, TEXT_W as u32, FIELD_H as u32, 1, t.disabled);
                         sf.text(font, r.x + 4, r.y + 4, 1, t.disabled, None, &f.text());
                     }
                 }
@@ -215,12 +225,30 @@ impl Dialog {
                     }
                 }
                 (Value::Level(n), _) => draw_level(&mut sf, r, *n, focused, f.enabled, t),
+                (Value::Action(_), _) => {
+                    push_button(
+                        &mut sf,
+                        r.x,
+                        r.y - 2,
+                        ACTION_W,
+                        FIELD_H + 4,
+                        1,
+                        &f.shown(),
+                        focused,
+                        false,
+                        t,
+                    );
+                }
                 _ => {}
             }
         }
         for (i, label) in ["OK", "Cancel"].iter().enumerate() {
             let b = self.button(i);
-            let focus = self.focus == self.n() + i || (i == 0 && self.focus < self.n());
+            // OK is the default unless an action button has the focus.
+            let on_action = self.focus < self.n()
+                && matches!(self.page.fields[self.focus].value, Value::Action(_));
+            let focus =
+                self.focus == self.n() + i || (i == 0 && self.focus < self.n() && !on_action);
             push_button(
                 &mut sf,
                 b.x,
@@ -341,19 +369,37 @@ impl Panel {
 
     fn open(&mut self, ui: &mut Ui, a: Applet) {
         let Some(win) = self.win else { return };
-        if let Some(p) = a.program() {
-            // Network: NET in a window of its own.
-            let argv: Vec<String> = ["retro-console", "--exec", p]
-                .iter()
-                .map(|s| s.to_string())
-                .collect();
-            if let Err(e) = station::launch("NET", &argv) {
-                self.message(ui, &[&format!("Cannot start Network: {e}")]);
-            }
-            return;
-        }
         self.close_dialog(ui);
         self.dialog = Some(Dialog::new(ui, win, load(a)));
+    }
+
+    /// An action button of the open page.
+    fn action(&mut self, ui: &mut Ui, what: &str) {
+        if what == ACTION_WIFI && self.wifi.is_none() {
+            if let Some(d) = &self.dialog {
+                self.wifi = Some(wifi::WifiDlg::new(ui, d.surface));
+            }
+        }
+    }
+
+    fn close_wifi(&mut self, ui: &mut Ui) {
+        if let Some(mut w) = self.wifi.take() {
+            if let Some(a) = w.ask.take() {
+                ui.close(a.surface);
+            }
+            ui.close(w.surface);
+        }
+    }
+
+    fn wifi_out(&mut self, ui: &mut Ui, out: wifi::Out) {
+        match out {
+            wifi::Out::None => {}
+            wifi::Out::Close => self.close_wifi(ui),
+            wifi::Out::Message(lines) => {
+                let l: Vec<&str> = lines.iter().map(String::as_str).collect();
+                self.message(ui, &l);
+            }
+        }
     }
 
     /// Open field `i`'s list below it.
@@ -393,6 +439,7 @@ impl Panel {
             if let Value::Choice(_, cur) = &mut d.page.fields[dr.field].value {
                 *cur = dr.sel;
             }
+            d.page.update();
         }
         self.close_drop(ui);
     }
@@ -460,6 +507,7 @@ impl Panel {
 
     fn close_dialog(&mut self, ui: &mut Ui) {
         self.close_drop(ui);
+        self.close_wifi(ui);
         if let Some(d) = self.dialog.take() {
             ui.close(d.surface);
         }
@@ -470,7 +518,12 @@ impl Panel {
         if let Some(m) = self.message.take() {
             ui.close(m.surface);
         }
-        let parent = self.dialog.as_ref().map_or(win, |d| d.surface);
+        // Over the topmost box: the sign-in, Wireless Networks, the page.
+        let parent = match (&self.wifi, &self.dialog) {
+            (Some(w), _) => w.ask.as_ref().map_or(w.surface, |a| a.surface),
+            (None, Some(d)) => d.surface,
+            (None, None) => win,
+        };
         let w = lines
             .iter()
             .map(|l| text_width(l))
@@ -500,20 +553,14 @@ impl Panel {
         match apply(&d.page) {
             Ok(done) => {
                 self.close_dialog(ui);
-                if let Some(s) = done.scheme {
-                    let _ = station::request(&["SCHEME", &s]);
+                if let Some(s) = &done.scheme {
+                    let _ = station::request(&["SCHEME", s]);
                 }
                 if done.keymap {
                     let _ = station::request(&["KEYMAP"]);
                 }
-                if done.restart {
-                    self.message(
-                        ui,
-                        &[
-                            "The new screen settings take effect the",
-                            "next time the Desktop or RetroDOS starts.",
-                        ],
-                    );
+                if let Some(n) = done.notice() {
+                    self.message(ui, &n);
                 }
             }
             Err(e) => self.message(ui, &[&e]),
@@ -568,10 +615,16 @@ impl Panel {
                             ui.redraw(d.surface);
                             return self.open_drop(ui, i);
                         }
+                        (_, Value::Action(what)) => {
+                            let what = *what;
+                            ui.redraw(d.surface);
+                            return self.action(ui, what);
+                        }
                         _ if shift => f.step(-1),
                         _ => f.cycle(),
                     }
                     d.sync(i);
+                    d.page.update();
                 }
                 ui.redraw(d.surface);
             }
@@ -592,6 +645,11 @@ impl Panel {
                 let choice = i < n && matches!(d.page.fields[i].value, Value::Choice(..));
                 if choice && (sym == F4 || sym == SPACE || (alt && sym == DOWN)) {
                     return self.open_drop(ui, i);
+                }
+                if i < n && matches!(sym, RETURN | KP_ENTER | SPACE) {
+                    if let Value::Action(what) = d.page.fields[i].value {
+                        return self.action(ui, what);
+                    }
                 }
                 match sym {
                     ESCAPE => return self.close_dialog(ui),
@@ -629,6 +687,7 @@ impl Panel {
                             },
                         }
                         d.sync(i);
+                        d.page.update();
                     }
                 }
                 ui.redraw(d.surface);
@@ -679,9 +738,38 @@ impl Program for Panel {
             self.draw_window(c, t);
         } else if self.drop.as_ref().is_some_and(|d| d.surface == id) {
             self.draw_drop(c, t);
+        } else if let Some(w) = self.wifi.as_ref() {
+            if w.surface == id {
+                w.draw(c, t);
+            } else if let Some(a) = w.ask.as_ref().filter(|a| a.surface == id) {
+                a.draw(c, t);
+            } else if let Some(d) = self.dialog.as_ref().filter(|d| d.surface == id) {
+                d.draw(c, t);
+            } else {
+                self.draw_message(id, c, t);
+            }
         } else if let Some(d) = self.dialog.as_ref().filter(|d| d.surface == id) {
             d.draw(c, t);
-        } else if let Some(m) = self.message.as_ref().filter(|m| m.surface == id) {
+        } else {
+            self.draw_message(id, c, t);
+        }
+    }
+
+    fn timer(&mut self, ui: &mut Ui, token: u32) {
+        if let Some(w) = self.wifi.as_mut() {
+            let out = w.timer(ui, token);
+            self.wifi_out(ui, out);
+        }
+    }
+
+    fn event(&mut self, ui: &mut Ui, id: SurfaceId, ev: Event) {
+        self.handle(ui, id, ev);
+    }
+}
+
+impl Panel {
+    fn draw_message(&self, id: SurfaceId, c: &mut Canvas, t: &Theme) {
+        if let Some(m) = self.message.as_ref().filter(|m| m.surface == id) {
             let (w, h) = (c.width as i32, c.height as i32);
             let mut sf = c.surface();
             sf.clear(t.face);
@@ -703,7 +791,7 @@ impl Program for Panel {
         }
     }
 
-    fn event(&mut self, ui: &mut Ui, id: SurfaceId, ev: Event) {
+    fn handle(&mut self, ui: &mut Ui, id: SurfaceId, ev: Event) {
         if let Some(m) = self.message.as_mut().filter(|m| m.surface == id) {
             let close = match ev {
                 Event::Close => true,
@@ -728,6 +816,18 @@ impl Program for Panel {
         }
         if self.drop.as_ref().is_some_and(|d| d.surface == id) {
             return self.drop_event(ui, ev);
+        }
+        if let Some(w) = self.wifi.as_mut() {
+            let out = if w.surface == id {
+                Some(w.event(ui, ev.clone()))
+            } else if w.ask.as_ref().is_some_and(|a| a.surface == id) {
+                Some(w.ask_event(ui, ev.clone()))
+            } else {
+                None
+            };
+            if let Some(out) = out {
+                return self.wifi_out(ui, out);
+            }
         }
         if self.dialog.as_ref().is_some_and(|d| d.surface == id) {
             return self.dialog_event(ui, ev);
@@ -786,6 +886,7 @@ fn main() {
         last_click: None,
         dialog: None,
         drop: None,
+        wifi: None,
         message: None,
         start,
     };

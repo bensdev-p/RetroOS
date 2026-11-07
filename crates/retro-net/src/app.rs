@@ -1,6 +1,7 @@
 //! The network setup screen (docs/STYLE.md §3 mock-up).
 
 use retro_sys::net::{Link, Network, Security, WifiApi};
+use retro_sys::netconf::{self, EAP_METHODS};
 use retro_tui::{Field, Key, Screen, BLACK, BRICK, COBALT, LEMON, LIME, SILVER, TEAL, WHITE};
 
 /// Slow system calls; the main loop shows `busy_text` while one runs.
@@ -10,12 +11,14 @@ pub enum Job {
     Disconnect,
     Forget(Network),
     Scan,
+    /// Enterprise sign-in (method, user name, password), then connect.
+    Enterprise(Network, String, String, String),
 }
 
 impl Job {
     pub fn busy_text(&self) -> String {
         match self {
-            Job::Connect(n, _) => format!("Connecting to {}...", n.ssid),
+            Job::Connect(n, _) | Job::Enterprise(n, ..) => format!("Connecting to {}...", n.ssid),
             Job::Hidden(s, _) => format!("Connecting to {s}..."),
             Job::Disconnect => "Disconnecting...".into(),
             Job::Forget(n) => format!("Forgetting {}...", n.ssid),
@@ -46,6 +49,15 @@ pub enum Modal {
         net: Option<Network>,
         ssid: Field,
         pass: Field,
+        focus: usize,
+    },
+    /// User name and password for an enterprise (802.1X) network (D-045).
+    Enterprise {
+        net: Network,
+        method: usize,
+        user: Field,
+        pass: Field,
+        /// 0 method, 1 user name, 2 password.
         focus: usize,
     },
     Message(String, Vec<String>),
@@ -115,6 +127,10 @@ impl App {
             Job::Disconnect => w.disconnect(),
             Job::Forget(n) => w.forget(&n),
             Job::Scan => w.scan(),
+            Job::Enterprise(n, method, user, pass) => {
+                netconf::provision_enterprise(&n.ssid, &method, &user, &pass)
+                    .and_then(|()| w.connect(&n, None))
+            }
         };
         if let Err(e) = r {
             self.message("Network", &[&e]);
@@ -129,7 +145,7 @@ impl App {
         }
         match net.security {
             Security::Open => Some(Job::Connect(net, None)),
-            Security::Psk if net.known => Some(Job::Connect(net, None)),
+            Security::Psk | Security::Enterprise if net.known => Some(Job::Connect(net, None)),
             Security::Psk => {
                 self.modal = Modal::Join {
                     net: Some(net),
@@ -139,14 +155,19 @@ impl App {
                 };
                 None
             }
-            _ => {
-                self.message(
-                    "Network",
-                    &[
-                        &format!("{} uses enterprise (802.1X) sign-in.", net.ssid),
-                        "Set it up in the Control Panel.",
-                    ],
-                );
+            Security::Enterprise => {
+                self.modal = Modal::Enterprise {
+                    net,
+                    method: 0,
+                    user: Field::new(64, false),
+                    pass: Field::new(64, true),
+                    focus: 1,
+                };
+                None
+            }
+            Security::Other => {
+                let msg = format!("{} uses security RetroOS cannot join yet.", net.ssid);
+                self.message("Network", &[&msg]);
                 None
             }
         }
@@ -156,6 +177,42 @@ impl App {
     pub fn key(&mut self, k: Key) -> Option<Job> {
         match std::mem::replace(&mut self.modal, Modal::None) {
             Modal::Message(..) => return None,
+            Modal::Enterprise {
+                net,
+                mut method,
+                mut user,
+                mut pass,
+                mut focus,
+            } => {
+                match k {
+                    Key::Esc => return None,
+                    Key::Tab | Key::Down => focus = (focus + 1) % 3,
+                    Key::BackTab | Key::Up => focus = (focus + 2) % 3,
+                    Key::Left | Key::Right | Key::Char(' ') if focus == 0 => {
+                        method = (method + 1) % EAP_METHODS.len()
+                    }
+                    Key::Enter if !user.value.trim().is_empty() && !pass.value.is_empty() => {
+                        let m = EAP_METHODS[method].0.to_string();
+                        let u = user.value.trim().to_string();
+                        return Some(Job::Enterprise(net, m, u, pass.value));
+                    }
+                    k if focus == 1 => {
+                        user.edit(&k);
+                    }
+                    k if focus == 2 => {
+                        pass.edit(&k);
+                    }
+                    _ => {}
+                }
+                self.modal = Modal::Enterprise {
+                    net,
+                    method,
+                    user,
+                    pass,
+                    focus,
+                };
+                return None;
+            }
             Modal::Join {
                 net,
                 mut ssid,
@@ -447,6 +504,58 @@ impl App {
                 };
                 s.text(dx + 3, r, hint.0, hint.1, SILVER);
             }
+            Modal::Enterprise {
+                net,
+                method,
+                user,
+                pass,
+                focus,
+            } => {
+                let dw = 56u16.min(s.cols - 4);
+                let dh = 11;
+                let dx = (s.cols - dw) / 2;
+                let dy = (s.rows - dh) / 2;
+                s.dialog(
+                    dx,
+                    dy,
+                    dw,
+                    dh,
+                    &format!("Sign in to {}", net.ssid),
+                    BLACK,
+                    SILVER,
+                );
+                let rows: [(&str, u16); 3] = [("Method:", 2), ("User name:", 4), ("Password:", 6)];
+                for (i, (label, r)) in rows.iter().enumerate() {
+                    s.text(dx + 3, dy + r, label, BLACK, SILVER);
+                    let bg = if *focus == i { TEAL } else { COBALT };
+                    let fx = dx + 18;
+                    match i {
+                        0 => {
+                            let m = format!("\u{25c4} {} \u{25ba}", EAP_METHODS[*method].1);
+                            s.text(fx, dy + r, &m, WHITE, bg);
+                        }
+                        1 => {
+                            let cx = user.draw(s, fx, dy + r, dw - 21, WHITE, bg);
+                            if *focus == 1 {
+                                s.cursor = Some((cx, dy + r));
+                            }
+                        }
+                        _ => {
+                            let cx = pass.draw(s, fx, dy + r, dw - 21, WHITE, bg);
+                            if *focus == 2 {
+                                s.cursor = Some((cx, dy + r));
+                            }
+                        }
+                    }
+                }
+                s.text(
+                    dx + 3,
+                    dy + 8,
+                    "Tab moves, Enter connects, Esc cancels.",
+                    BLACK,
+                    SILVER,
+                );
+            }
             Modal::Message(title, lines) => {
                 let dw = (lines.iter().map(|l| l.chars().count()).max().unwrap_or(20) as u16 + 8)
                     .max(30)
@@ -533,6 +642,7 @@ mod tests {
                 n("HomeNet", Security::Psk, -50, false),
                 n("Cafe-Guest", Security::Open, -72, false),
                 n("Office", Security::Psk, -80, true),
+                n("eduroam", Security::Enterprise, -60, false),
             ])
         }
         fn connect(&self, net: &Network, pass: Option<String>) -> Result<(), String> {
@@ -608,6 +718,38 @@ mod tests {
                 "hidden Secret Some(\"password1\")",
             ]
         );
+    }
+
+    #[test]
+    fn enterprise_asks_for_a_user_name_and_password() {
+        let (mut a, _) = app();
+        for _ in 0..3 {
+            a.key(Key::Down);
+        }
+        assert_eq!(a.key(Key::Enter).map(|j| j.busy_text()), None);
+        assert!(matches!(a.modal, Modal::Enterprise { .. }));
+        for c in "jo@uni.edu".chars() {
+            a.key(Key::Char(c));
+        }
+        assert!(a.key(Key::Enter).is_none(), "no password yet");
+        a.key(Key::Tab);
+        for c in "pw".chars() {
+            a.key(Key::Char(c));
+        }
+        a.key(Key::Tab); // to the method
+        a.key(Key::Right); // PEAP -> TTLS
+        let mut s = Screen::with_size(100, 30, None);
+        a.draw(&mut s);
+        assert!(s.dump().contains("Sign in to eduroam") && s.dump().contains("TTLS"));
+        match a.key(Key::Enter) {
+            Some(Job::Enterprise(n, m, u, p)) => {
+                assert_eq!(
+                    (n.ssid.as_str(), m.as_str(), u.as_str(), p.as_str()),
+                    ("eduroam", "TTLS", "jo@uni.edu", "pw")
+                );
+            }
+            _ => panic!("expected the enterprise job"),
+        }
     }
 
     #[test]

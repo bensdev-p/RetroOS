@@ -29,6 +29,42 @@ key enter
 wait 2500
 expect WINDOWS => normal Control Panel
 shot 03-control-panel
+# Network: the Wireless Networks dialog (a pretend adapter here,
+# RETROOS_TEST_WIFI), enterprise sign-in, and a fixed wired address.
+type n
+key enter
+wait 1000
+shot 03a-network
+key enter
+wait 1000
+shot 03b-wifi
+key down
+key enter
+wait 800
+type jo@uni.edu
+key tab
+type secret
+wait 300
+shot 03c-enterprise
+key escape
+wait 300
+key escape
+wait 500
+key tab
+key space
+wait 500
+key down
+key enter
+wait 300
+key tab
+type 192.168.1.50/24
+key tab
+type 192.168.1.1
+wait 300
+shot 03d-fixed
+key escape
+wait 500
+key home
 # Display: Enter on the first icon; Space drops the scheme list down;
 # ↓ Enter picks Paper; Enter is OK.
 key enter

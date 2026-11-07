@@ -34,6 +34,14 @@ fn is_root() -> bool {
 
 /// Run helper `name` (a file in [`LIBEXEC`]) with `args` as root.
 pub fn run_helper(name: &str, args: &[&str]) -> Result<(), AdminError> {
+    run_helper_input(name, args, "")
+}
+
+/// [`run_helper`] with `input` on the helper's standard input (secrets
+/// never go on the command line, where `ps` shows them).
+pub fn run_helper_input(name: &str, args: &[&str], input: &str) -> Result<(), AdminError> {
+    use std::io::Write;
+    use std::process::Stdio;
     let helper = format!("{LIBEXEC}/{name}");
     let mut cmd = if is_root() {
         Command::new(&helper)
@@ -42,9 +50,18 @@ pub fn run_helper(name: &str, args: &[&str]) -> Result<(), AdminError> {
         c.args(["-n", "--", &helper]);
         c
     };
-    let out = cmd
+    let mut child = cmd
         .args(args)
-        .output()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| AdminError::Failed(format!("Cannot run {name}: {e}")))?;
+    if let Some(mut i) = child.stdin.take() {
+        let _ = i.write_all(input.as_bytes());
+    }
+    let out = child
+        .wait_with_output()
         .map_err(|e| AdminError::Failed(format!("Cannot run {name}: {e}")))?;
     if out.status.success() {
         return Ok(());

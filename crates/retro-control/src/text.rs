@@ -2,7 +2,7 @@
 //! of applets on the left of a dialog; Enter opens one as a page of
 //! settings (arrows change them, a long list opens a chooser), OK saves.
 
-use crate::{apply, load, Applet, Applied, Field, Page, Value, APPLETS};
+use crate::{apply, load, Applet, Applied, Field, Page, Value, ACTION_WIFI, APPLETS};
 use retro_tui::*;
 
 /// What the main loop must do for the screen.
@@ -39,6 +39,8 @@ pub struct App {
 }
 
 const LABEL_W: usize = 22;
+/// Longest typed value (an IP address with its prefix, name servers).
+const TEXT_W: usize = 31;
 
 fn clip(s: &str, w: usize) -> String {
     s.chars().take(w).collect()
@@ -70,13 +72,11 @@ impl App {
         };
         if let Some(a) = start {
             app.sel = APPLETS.iter().position(|x| *x == a).unwrap_or(0);
-            if a.program().is_none() {
-                app.open = Some(Open {
-                    page: load(a),
-                    sel: 0,
-                    chooser: None,
-                });
-            }
+            app.open = Some(Open {
+                page: load(a),
+                sel: 0,
+                chooser: None,
+            });
         }
         app
     }
@@ -179,11 +179,12 @@ impl App {
                         "\u{2591}".repeat(20 - bars)
                     )
                 }
-                Value::Text(t) => format!("{t:<12}"),
+                Value::Text(t) => format!("{t:<TEXT_W$}"),
+                Value::Action(_) => format!("< {} >", f.shown()),
             };
             let end = s.text(vx, row, &clip(&shown, vw), fg, bg);
             if on && matches!(f.value, Value::Text(_)) && f.enabled {
-                s.cursor = Some((end.min(vx + 11), row));
+                s.cursor = Some((end.min(vx + TEXT_W as u16 - 1), row));
             }
             row += 1;
         }
@@ -316,8 +317,14 @@ impl App {
             Key::Esc => self.open = None,
             Key::Up | Key::BackTab => o.sel = o.sel.saturating_sub(1),
             Key::Down | Key::Tab => o.sel = (o.sel + 1).min(n + 1),
-            Key::Left if on_field => o.page.fields[o.sel].step(-1),
-            Key::Right if on_field => o.page.fields[o.sel].step(1),
+            Key::Left if on_field => {
+                o.page.fields[o.sel].step(-1);
+                o.page.update();
+            }
+            Key::Right if on_field => {
+                o.page.fields[o.sel].step(1);
+                o.page.update();
+            }
             Key::Left if o.sel == n + 1 => o.sel = n,
             Key::Right if o.sel == n => o.sel = n + 1,
             Key::F(10) => return self.finish(),
@@ -326,6 +333,8 @@ impl App {
                     self.open = None;
                 } else if on_field && matches!(o.page.fields[o.sel].value, Value::List(..)) {
                     return self.choose();
+                } else if on_field && matches!(o.page.fields[o.sel].value, Value::Action(_)) {
+                    return action(&o.page.fields[o.sel]);
                 } else {
                     return self.finish();
                 }
@@ -334,9 +343,11 @@ impl App {
                 let f = &mut o.page.fields[o.sel];
                 match &mut f.value {
                     Value::List(..) => return self.choose(),
+                    Value::Action(_) => return action(f),
                     Value::Text(t) if f.enabled => t.push(' '),
                     _ => f.cycle(),
                 }
+                o.page.update();
             }
             Key::Backspace if on_field => {
                 let f = &mut o.page.fields[o.sel];
@@ -347,7 +358,9 @@ impl App {
             Key::Char(ch) if on_field => {
                 let f = &mut o.page.fields[o.sel];
                 match &mut f.value {
-                    Value::Text(t) if f.enabled && t.chars().count() < 12 && !ch.is_control() => {
+                    Value::Text(t)
+                        if f.enabled && t.chars().count() < TEXT_W && !ch.is_control() =>
+                    {
                         t.push(ch)
                     }
                     Value::List(..) => {
@@ -362,7 +375,17 @@ impl App {
         }
         None
     }
+}
 
+/// What an action button does in text mode.
+fn action(f: &Field) -> Option<Action> {
+    match f.value {
+        Value::Action(ACTION_WIFI) => Some(Action::Run("retro-net")),
+        _ => None,
+    }
+}
+
+impl App {
     fn choose(&mut self) -> Option<Action> {
         let o = self.open.as_mut()?;
         let f: &Field = o.page.fields.get(o.sel)?;
@@ -378,9 +401,6 @@ impl App {
 
     fn open_applet(&mut self) -> Option<Action> {
         let a = APPLETS[self.sel];
-        if let Some(p) = a.program() {
-            return Some(Action::Run(p));
-        }
         self.open = Some(Open {
             page: load(a),
             sel: 0,
@@ -404,13 +424,8 @@ impl App {
         let o = self.open.as_ref()?;
         match apply(&o.page) {
             Ok(done) => {
-                let mut msg = Vec::new();
-                if done.restart {
-                    msg.push("The new screen settings take effect the".to_string());
-                    msg.push("next time the Desktop or RetroDOS starts.".to_string());
-                }
-                if !msg.is_empty() {
-                    self.message = Some(msg);
+                if let Some(n) = done.notice() {
+                    self.message = Some(n.iter().map(|l| l.to_string()).collect());
                 }
                 self.open = None;
                 Some(done)
@@ -452,7 +467,12 @@ mod tests {
         a.key(Key::Esc);
         assert!(a.open.is_none());
         a.key(Key::Char('n'));
-        assert_eq!(a.key(Key::Enter), Some(Action::Run("retro-net")));
+        assert_eq!(a.key(Key::Enter), None, "Network is a page");
+        assert_eq!(
+            a.key(Key::Enter),
+            Some(Action::Run("retro-net")),
+            "its first field opens NET"
+        );
     }
 
     #[test]

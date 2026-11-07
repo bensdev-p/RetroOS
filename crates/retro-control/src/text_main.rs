@@ -2,8 +2,8 @@
 //!
 //!   retro-control [applet]    applet: DISPLAY, STARTUP, TIME, KEYBOARD, NETWORK
 
+use retro_control::applet_named;
 use retro_control::text::{Action, App};
-use retro_control::{applet_named, Applet};
 use retro_tui::{keys, read_key, Screen};
 use std::io::Write;
 
@@ -45,10 +45,6 @@ fn main() {
             return;
         }
         Some(a) => match applet_named(a) {
-            Some(Applet::Network) => {
-                run("retro-net");
-                return;
-            }
             Some(x) => Some(x),
             None => {
                 eprintln!("Invalid parameter - {a}");

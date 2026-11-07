@@ -4,3 +4,5 @@
 %admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-scheme
 # Control Panel: startup settings and the keyboard layout (D-043).
 %admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-startup, /usr/libexec/retroos/set-keyboard
+# Control Panel → Network: Wi-Fi country, wired address, enterprise sign-in (D-045).
+%admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-wifi-country, /usr/libexec/retroos/set-wired, /usr/libexec/retroos/set-wifi-enterprise

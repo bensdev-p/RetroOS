@@ -83,6 +83,9 @@ pub struct TextField {
     pub text: Vec<char>,
     pub cur: usize,
     pub anchor: Option<usize>,
+    /// Shows `*` for every character (passwords); copying is left to the
+    /// program, which should not.
+    pub secret: bool,
 }
 
 impl TextField {
@@ -93,6 +96,7 @@ impl TextField {
             text,
             cur: n,
             anchor: (n > 0).then_some(0),
+            secret: false,
         }
     }
 
@@ -101,7 +105,26 @@ impl TextField {
     }
 
     pub fn set(&mut self, s: &str) {
+        let secret = self.secret;
         *self = TextField::new(s);
+        self.secret = secret;
+    }
+
+    /// An empty password field.
+    pub fn password() -> TextField {
+        TextField {
+            secret: true,
+            ..TextField::default()
+        }
+    }
+
+    /// The character shown for `c`.
+    fn shown(&self, c: char) -> char {
+        if self.secret {
+            '*'
+        } else {
+            c
+        }
     }
 
     fn sel(&self) -> Option<(usize, usize)> {
@@ -173,7 +196,7 @@ impl TextField {
         sf.fill_rect(x, y, w as u32, FIELD_H as u32, t.light);
         sf.frame(x, y, w as u32, FIELD_H as u32, 1, t.line);
         let font = lantern_12();
-        let cw = |c: &char| font.glyph_or_replacement(*c).width as i32;
+        let cw = |c: &char| font.glyph_or_replacement(self.shown(*c)).width as i32;
         // Scroll so that the cursor is inside the field.
         let inner = w - 8;
         let before: i32 = self.text[..self.cur].iter().map(cw).sum();
@@ -181,7 +204,7 @@ impl TextField {
         let mut cx = x + 4 - shift;
         let sel = self.sel().filter(|_| focused);
         for (i, c) in self.text.iter().enumerate() {
-            let g = font.glyph_or_replacement(*c);
+            let g = font.glyph_or_replacement(self.shown(*c));
             let gw = g.width as i32;
             if cx + gw > x + 2 && cx < x + w - 2 {
                 let on = sel.is_some_and(|(a, b)| i >= a && i < b);
@@ -206,7 +229,7 @@ impl TextField {
         let mut x = 4;
         let mut at = self.text.len();
         for (i, c) in self.text.iter().enumerate() {
-            let gw = font.glyph_or_replacement(*c).width as i32;
+            let gw = font.glyph_or_replacement(self.shown(*c)).width as i32;
             if px < x + gw / 2 {
                 at = i;
                 break;

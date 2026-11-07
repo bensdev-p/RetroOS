@@ -1,0 +1,33 @@
+#!/bin/sh
+# Teach iwd an enterprise (802.1X) Wi-Fi network's sign-in (run as root).
+#
+#   set-wifi-enterprise NAME PEAP|TTLS IDENTITY   < password
+#
+# NAME is iwd's file name for the network (retro_sys::netconf::iwd_file_name:
+# the SSID, or = and its hex). PEAP signs in with MSCHAPv2, TTLS with PAP.
+# Writes /var/lib/iwd/NAME.8021x (root only); iwd picks it up at once. The
+# password comes on standard input so it never shows in the process list.
+set -eu
+name=${1:-}; method=${2:-}; id=${3:-}
+case $name in
+    "") echo "Invalid network" >&2; exit 2 ;;
+    =*) case ${name#=} in ""|*[!0-9a-f]*) echo "Invalid network" >&2; exit 2 ;; esac ;;
+    *[!A-Za-z0-9\ _-]*) echo "Invalid network" >&2; exit 2 ;;
+esac
+case $method in PEAP) phase2=MSCHAPV2 ;; TTLS) phase2=Tunneled-PAP ;; *) echo "Invalid method" >&2; exit 2 ;; esac
+[ -n "$id" ] || { echo "Missing user name" >&2; exit 2; }
+[ "$(printf '%s' "$id" | wc -l)" -eq 0 ] || { echo "Invalid user name" >&2; exit 2; }
+pw=; IFS= read -r pw || true
+umask 077
+mkdir -p /var/lib/iwd
+f="/var/lib/iwd/$name.8021x"
+cat > "$f.new" <<EOT
+# Enterprise Wi-Fi sign-in, set by RetroOS Control Panel.
+[Security]
+EAP-Method=$method
+EAP-Identity=$id
+EAP-$method-Phase2-Method=$phase2
+EAP-$method-Phase2-Identity=$id
+EAP-$method-Phase2-Password=$pw
+EOT
+mv "$f.new" "$f"

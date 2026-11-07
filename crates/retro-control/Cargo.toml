@@ -7,11 +7,11 @@ license.workspace = true
 
 [[bin]]
 name = "retro-control"
-path = "src/bin/text.rs"
+path = "src/text_main.rs"
 
 [[bin]]
 name = "control-panel"
-path = "src/bin/gui.rs"
+path = "src/gui/main.rs"
 
 [dependencies]
 retro-sys = { path = "../retro-sys" }

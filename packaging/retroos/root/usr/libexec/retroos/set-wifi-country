@@ -1,0 +1,20 @@
+#!/bin/sh
+# Set the Wi-Fi country (regulatory domain) (run as root).
+#
+#   set-wifi-country GB | none
+#
+# Writes cfg80211's ieee80211_regdom option, read when the Wi-Fi driver
+# loads (the next start); also applies it now when `iw` is installed. Used by
+# Control Panel → Network; the admin group may run it without a password.
+set -eu
+f=/etc/modprobe.d/retroos-wifi-country.conf
+case ${1:-} in
+    none) rm -f $f; exit 0 ;;
+    [A-Z][A-Z]) ;;
+    *) echo "Invalid country code" >&2; exit 2 ;;
+esac
+mkdir -p /etc/modprobe.d
+printf '# Wi-Fi country, set by RetroOS Control Panel.\noptions cfg80211 ieee80211_regdom=%s\n' "$1" > $f.new
+chmod 644 $f.new
+mv $f.new $f
+command -v iw >/dev/null 2>&1 && iw reg set "$1" 2>/dev/null || true

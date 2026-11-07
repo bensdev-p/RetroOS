@@ -7,4 +7,5 @@ pub mod clock;
 pub mod display;
 pub mod keyboard;
 pub mod net;
+pub mod netconf;
 pub mod startup;
