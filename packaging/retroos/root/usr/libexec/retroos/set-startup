@@ -1,0 +1,39 @@
+#!/bin/sh
+# Change settings in /etc/retroos/startup.conf (run as root).
+#
+#   set-startup KEY=VALUE...      e.g. set-startup mode=desktop chime=no
+#
+# Used by Control Panel (Startup, Display); the admin group may run it
+# without a password (sudoers.d/retroos). Accepts only the keys and values
+# below (retro_sys::startup::valid checks the same); a key's line is
+# replaced in place, keeping its comment, or added at the end.
+set -eu
+[ $# -gt 0 ] || { echo "Usage: set-startup KEY=VALUE..." >&2; exit 2; }
+for kv in "$@"; do
+    k=${kv%%=*}; v=${kv#*=}
+    case $k=$v in
+        mode=text|mode=desktop) ;;
+        fast_post=yes|fast_post=no|chime=yes|chime=no) ;;
+        menu_timeout=[1-9]|menu_timeout=[1-9][0-9]|menu_timeout=[1-5][0-9][0-9]|menu_timeout=600) ;;
+        scheme=classic|scheme=paper|scheme=amber|scheme=green|scheme=high) ;;
+        rotate=auto|rotate=0|rotate=90|rotate=180|rotate=270) ;;
+        ui_scale=auto|ui_scale=[1-4]) ;;
+        renderer=auto|renderer=gpu|renderer=cpu) ;;
+        *) echo "Invalid setting $kv" >&2; exit 2 ;;
+    esac
+done
+f=/etc/retroos/startup.conf
+mkdir -p /etc/retroos
+[ -f $f ] || : > $f
+cp $f $f.new
+for kv in "$@"; do
+    k=${kv%%=*}
+    if grep -q "^[[:space:]]*$k=" $f.new; then
+        # Replace the value; keep any comment after it.
+        sed -i "s/^[[:space:]]*$k=[^#[:space:]]*/$kv/" $f.new
+    else
+        echo "$kv" >> $f.new
+    fi
+done
+chmod 644 $f.new
+mv $f.new $f

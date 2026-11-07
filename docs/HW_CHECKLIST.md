@@ -123,6 +123,19 @@ Optional but very useful: a USB-serial adapter on the Pi 5 debug UART
 
 Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|Slab|SUnrecl|KernelSt|PageTab|Vmalloc|Percpu|Cma|AnonPages' /proc/meminfo; ps -eo rss,comm --sort=-rss | head -12"`
 
+## M4 — Control Panel, software, sound, Bluetooth
+
+| # | Check | How | Expected |
+|---|---|---|---|
+| 4.1 | CONTROL | at `C:\>`, `CONTROL`; open each page with Enter, Esc out | five pages (Display, Date & Time, Keyboard, Network, Startup); Network opens NET, Esc returns to the list |
+| 4.2 | Startup from CONTROL | `CONTROL STARTUP`, turn the chime off (→ on "Startup chime"), Enter; restart | no chime on the next boot; `UNIX "cat /etc/retroos/startup.conf"` shows `chime=no` with the other lines kept; turn it back on |
+| 4.3 | Control Panel window | in the Desktop, ◆ → Control Panel | a window with five icons and a status line describing the selected one; Program Manager's Main group has a Control Panel icon too |
+| 4.4 | Colour scheme | Control Panel → Display → Colour scheme → Amber (click the box until it says Amber), OK | the whole Desktop and the DOS Prompt turn amber at once; it stays after a restart |
+| 4.5 | Time zone | Control Panel → Date & Time; type the first letters of your zone's region (e.g. `a` for America) and pick the city, OK | the System Bar clock shows local time within a minute; "Set automatically" is ticked and the date and time fields are greyed out |
+| 4.6 | Keyboard | Control Panel → Keyboard, pick another layout (e.g. German (de)), OK; type `yz` in a DOS Prompt; then back to English (US) | the keys follow the new layout at once (y↔z swapped on German), and `KEYB` reports it |
+| 4.7 | Brightness (Touch Display 2) | Control Panel → Display → Brightness: click near the left of the bar, OK; then set it back | the panel dims and brightens; on an HDMI monitor the bar is greyed out ("No backlight") |
+| 4.8 | Rotation (Touch Display 2) | Control Panel → Display → Screen rotation → Upside down, OK; ◆ → Restart | the panel says the change applies at the next start; after the restart the picture is upside down (and touch follows); set it back to Automatic |
+
 ## Displays — Raspberry Pi Touch Display 2 (D-042)
 
 Touch Display 2 on the Pi 5's CAM/DISP connector (Pi 5 cable), HDMI

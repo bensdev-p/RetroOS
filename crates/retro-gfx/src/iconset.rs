@@ -76,6 +76,30 @@ const BUILTIN: &[(&str, &str)] = &[
         "web-browser",
         include_str!("../../../assets/icons/web-browser.icon"),
     ),
+    (
+        "control-panel",
+        include_str!("../../../assets/icons/control-panel.icon"),
+    ),
+    (
+        "cp-display",
+        include_str!("../../../assets/icons/cp-display.icon"),
+    ),
+    (
+        "cp-clock",
+        include_str!("../../../assets/icons/cp-clock.icon"),
+    ),
+    (
+        "cp-keyboard",
+        include_str!("../../../assets/icons/cp-keyboard.icon"),
+    ),
+    (
+        "cp-network",
+        include_str!("../../../assets/icons/cp-network.icon"),
+    ),
+    (
+        "cp-startup",
+        include_str!("../../../assets/icons/cp-startup.icon"),
+    ),
 ];
 
 /// Theme icon names (from .desktop files) that our own pictures stand for.
@@ -90,6 +114,7 @@ const ALIASES: &[(&str, &str)] = &[
     ("chromium", "web-browser"),
     ("chromium-browser", "web-browser"),
     ("web-browser", "web-browser"),
+    ("preferences-system", "control-panel"),
 ];
 
 /// One of our own icons by name ("jot", "file-cabinet", "web-browser").

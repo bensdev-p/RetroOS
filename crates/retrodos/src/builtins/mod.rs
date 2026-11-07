@@ -119,6 +119,7 @@ static BUILTINS: &[Builtin] = &[
     programs::FILER,
     programs::NET,
     programs::WIFI,
+    programs::CONTROL,
     disk::ATTRIB,
     disk::XCOPY,
     disk::CHKDSK,

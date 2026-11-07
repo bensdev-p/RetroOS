@@ -139,7 +139,10 @@ impl Bar {
                     Cmd::Launch("ABOUT".into(), vec!["retro-about".into()]),
                 ),
                 sep(),
-                (MenuItem::new("&Control Panel", "", false), Cmd::None),
+                (
+                    MenuItem::new("&Control Panel", "", true),
+                    Cmd::Launch("CONTROL".into(), vec!["control-panel".into()]),
+                ),
                 (MenuItem::new("Software &Library", "", false), Cmd::None),
                 sep(),
                 (MenuItem::new("&DOS Prompt", "", true), Cmd::DosPrompt),

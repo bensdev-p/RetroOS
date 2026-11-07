@@ -7,7 +7,7 @@ set -eu
 OUT=${1:-out}
 BIN=target/debug
 cargo build -p station -p retro-console -p retrodos -p retro-login -p retro-edit -p retro-filer \
-    -p retro-net -p retro-bar -p retro-progman -p retro-about -p retro-jot -p retro-cabinet
+    -p retro-net -p retro-bar -p retro-progman -p retro-about -p retro-jot -p retro-cabinet -p retro-control
 run() { name=$1; shift; echo ">> host test: $name"; python3 tests/host/station.py "$BIN" "$OUT/test-host$name" "$@"; }
 # Program Manager only where a scenario is about it.
 export RETROOS_NO_PROGMAN=1
@@ -25,6 +25,7 @@ run -about tests/host/about.steps
 RETROOS_NO_BAR=1 run -jot tests/host/jot.steps
 RETROOS_NO_BAR=1 run -cabinet tests/host/cabinet.steps
 RETROOS_NO_BAR=1 run -x11 tests/host/x11.steps
+RETROOS_STARTUP_CONF="~/startup.conf" run -control tests/host/control.steps
 # A 10.1" Touch Display 2: 1200x1920 portrait panel shown landscape (D-042).
 RETROOS_NO_PROGMAN= RETROOS_ROTATE=auto STATION_ARGS="--headless 1200x1920" run -rotate tests/host/rotate.steps
 echo ">> host tests: all passed"

@@ -1,0 +1,8 @@
+// Control Panel → Date & Time: an administrator at the screen may set the
+// clock, time zone and automatic time without a password (D-043).
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.timedate1.") == 0 &&
+        subject.local && subject.active && subject.isInGroup("admin")) {
+        return polkit.Result.YES;
+    }
+});

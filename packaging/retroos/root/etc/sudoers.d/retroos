@@ -2,3 +2,5 @@
 %admin ALL=(ALL:ALL) ALL
 # COLOR saves the colour scheme for the whole system without asking.
 %admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-scheme
+# Control Panel: startup settings and the keyboard layout (D-043).
+%admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-startup, /usr/libexec/retroos/set-keyboard

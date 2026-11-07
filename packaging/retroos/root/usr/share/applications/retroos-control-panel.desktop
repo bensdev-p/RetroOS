@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Control Panel
+Comment=Change the display, startup, date and time, keyboard and network settings
+Exec=control-panel
+Icon=preferences-system
+Terminal=false
+Categories=Settings;System;

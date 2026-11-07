@@ -88,11 +88,19 @@ fn load_groups() -> Vec<Group> {
                 art: IconArt::Dos,
                 icon: None,
             },
+            Item {
+                name: "Control Panel".into(),
+                argv: vec!["control-panel".into()],
+                art: IconArt::Program,
+                icon: iconset::builtin("control-panel").cloned(),
+            },
         ],
     }];
     let mut apps = retro_apps::desktop_apps();
     apps.retain(|a| !a.no_display && !a.terminal && !a.exec.is_empty());
-    apps.retain(|a| a.exec[0] != "retro-console" && a.exec[0] != "file-cabinet");
+    apps.retain(|a| {
+        !["retro-console", "file-cabinet", "control-panel"].contains(&a.exec[0].as_str())
+    });
     apps.sort_by_key(|a| a.name.to_lowercase());
     let mut rest: Vec<Group> = Vec::new();
     for a in apps {

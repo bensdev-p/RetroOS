@@ -1246,6 +1246,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-control"
+version = "0.1.0"
+dependencies = [
+ "retro-gfx",
+ "retro-sys",
+ "retro-tui",
+ "retro-ui",
+]
+
+[[package]]
 name = "retro-cursors"
 version = "0.1.0"
 dependencies = [
@@ -1355,6 +1365,8 @@ version = "0.1.0"
 name = "retro-sys"
 version = "0.1.0"
 dependencies = [
+ "libc",
+ "serde",
  "serde_json",
  "zbus",
 ]

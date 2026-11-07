@@ -1,0 +1,61 @@
+# Control Panel: CONTROL in text mode, then the Desktop's Control Panel
+# from the System Bar. Settings go to ~/startup.conf (RETROOS_STARTUP_CONF).
+wait 1500
+type CONTROL
+key enter
+wait 1500
+shot 01-control-text
+# S → Startup; Enter opens the page; → changes "Start in"; Enter saves.
+type s
+key enter
+wait 500
+shot 02-control-startup
+key right
+key enter
+wait 800
+expect-file startup.conf mode=desktop
+key escape
+wait 800
+type DESKTOP
+key enter
+wait 1500
+# ◆ menu: About This Computer, then Control Panel.
+pointer 36 20
+button click
+wait 600
+key down
+key down
+key enter
+wait 2500
+expect WINDOWS => normal Control Panel
+shot 03-control-panel
+# Display: Enter on the first icon; → turns the scheme to Paper; OK.
+key enter
+wait 1000
+shot 04-display
+key right
+wait 300
+shot 05-display-paper
+key enter
+wait 1500
+expect-file startup.conf scheme=paper
+shot 06-paper
+# Date & Time: no clock service here, so the page says so.
+type d
+key enter
+wait 1000
+shot 07-datetime
+key escape
+wait 500
+# Keyboard: a long list; typing a letter jumps.
+type k
+key enter
+wait 1000
+type g
+wait 300
+shot 08-keyboard
+key escape
+wait 500
+key alt+f4
+wait 800
+expect-task 1

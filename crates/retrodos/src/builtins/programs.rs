@@ -65,3 +65,18 @@ pub const WIFI: Builtin = Builtin {
     usage: "WIFI\n\nOpens Network Setup: choose a network with the arrow keys and press Enter.",
     run: |sh, _, io| run_tool(sh, &Args::new(""), io, "retro-net"),
 };
+
+pub const CONTROL: Builtin = Builtin {
+    names: &["CONTROL"],
+    summary: "Changes RetroOS settings (Control Panel).",
+    usage: "CONTROL [DISPLAY | STARTUP | TIME | KEYBOARD | NETWORK]\n\nWithout a name, shows every Control Panel page; with one, opens that page.\n\u{2191}\u{2193} choose a setting, \u{2190}\u{2192} change it, Enter saves, Esc cancels.",
+    run: |sh, a, io| {
+        let _ = io.out.flush();
+        let Some(prog) = sh.find_program("retro-control") else {
+            return err(io, "retro-control is not installed");
+        };
+        let args: Vec<String> = a.words.iter().take(1).cloned().collect();
+        let cmd = sh.command(&prog, &args);
+        sh.wait(cmd)
+    },
+};

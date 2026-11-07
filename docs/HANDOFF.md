@@ -60,7 +60,8 @@ lines of D-030…D-042 are M3's open ends).
 | `crates/retro-progman`, `retro-about`, `retro-jot`, `retro-cabinet` | Program Manager, About This Computer, Jot (`jot`), File Cabinet (`file-cabinet`). |
 | `crates/retro-tui` | Full-screen text UI layer (EDIT, FILER, NET, Setup). |
 | `crates/retro-edit`, `retro-filer`, `retro-net` | EDIT, FILER, WIFI/NET (edit/filer are also libraries for Jot/File Cabinet). |
-| `crates/retro-sys` | System services over D-Bus for both front-ends (`net`: iwd + networkd). **Grows into M4's Control Panel back end.** |
+| `crates/retro-sys` | System services for both front-ends: `net` (iwd + networkd), `clock`, `keyboard`, `display`, `startup`, `admin` (D-043). |
+| `crates/retro-control` | Control Panel: applet model, CONTROL (text) and `control-panel` (Desktop) (D-043). |
 | `crates/retro-login`, `retro-session` | Login screen + first-boot Setup; the user session (text/desktop, restarts on crash). |
 | `crates/retro-post`, `retro-kms` | POST/BIOS screen, chime, F8 Startup Menu, DEL Setup (direct KMS, honours rotation). |
 | `crates/retro-dosfs` | Drive letters, DOS paths, 8.3 names, wildcards. |
@@ -122,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-043**).
+  (**next: D-044**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -170,6 +171,22 @@ Suggested order, each step leaving a working image:
    preinstalled, VS Code in the catalog.
 8. **Acceptance**: install/remove apps from both front-ends; BT audio and a
    gamepad on the Pi; budget re-measured.
+
+## 7a. M4 progress
+
+- **Step 2 started (2026-11-07, D-043)**: `retro-sys` gained `startup`,
+  `clock` (timedated), `keyboard`, `display` (backlight via logind) and
+  `admin` (runs `/usr/libexec/retroos/*` helpers through `sudo -n`); new
+  helper `set-startup`; sudoers NOPASSWD for it and `set-keyboard`; polkit
+  rule for timedated. New crate `retro-control`: the applet model
+  (`lib.rs`), CONTROL (`text.rs`, binary `retro-control`) and the Desktop
+  Control Panel (`bin/gui.rs`, binary `control-panel`). Applets: Display,
+  Date & Time, Keyboard, Network (opens NET), Startup. Host test
+  `control.steps` (writes `~/startup.conf` via `RETROOS_STARTUP_CONF`).
+  Hardware rows 4.1–4.8 in HW_CHECKLIST, not run yet.
+- **Next in step 2**: GUI Network applet (Wi-Fi list + Enterprise, static
+  IP, country), Users (needs a password dialog: polkit/sudo), then Sound and
+  Bluetooth with steps 3–4.
 
 ## 8. Open items carried over
 
