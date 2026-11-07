@@ -1,0 +1,13 @@
+# A portrait panel shown landscape (D-042): the 10.1" Touch Display 2 is a
+# 1200x1920 panel. Run with STATION_ARGS="--headless 1200x1920" and
+# RETROOS_ROTATE=auto. Programs must see 1920x1200 and draw at 2x like
+# Station's frames (the System Bar was 1x on the first hardware run).
+wait 1500
+type DESKTOP
+key enter
+wait 4000
+shot 90-rotated-desktop
+expect WINDOWS => WINDOW 1 8 86 1280 800 normal DOS Prompt
+# The bar's left end, pixel for pixel as on a 1080p monitor (golden taken
+# there): same 2x art, same 40 px bar.
+expect-golden 90-rotated-desktop bar-menus 0 0 340 40

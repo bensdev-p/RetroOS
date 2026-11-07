@@ -29,8 +29,9 @@ lines of D-030…D-042 are M3's open ends).
   (SD first, no network-install screen), the Raspberry Pi 15.6" 1080p
   monitor. The user tests CI images and reports by photo of the screen.
 - **The luggable**: the Pi is going into the user's own "luggable" PC case,
-  designed in a separate Claude session (3D printed). Its screen is a
-  **Raspberry Pi Touch Display 2** (DSI, 720×1280 portrait panel, touch).
+  designed in a separate Claude session (3D printed). Its screen is the
+  **10.1" Raspberry Pi Touch Display 2** (DSI, 1200×1920 portrait panel
+  shown landscape as 1920×1200, touch).
   The first attempt failed with Station's "no usable display" (D-042 has the
   why); the fix is pushed and awaiting the hardware check (§0.2).
 - Measured on the Pi 5 (`docs/BUDGET.md`): power-on → POST screen 6 s,

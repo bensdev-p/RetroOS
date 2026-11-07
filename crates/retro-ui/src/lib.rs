@@ -603,6 +603,16 @@ fn read_with_timeout(
     Some(String::from_utf8_lossy(&out).replace("\r\n", "\n"))
 }
 
+/// The picture's size on an output whose mode is `dims`: a turned output (a
+/// portrait panel shown landscape, D-042) reports its panel's own mode.
+pub fn turned(dims: (i32, i32), t: wl_output::Transform) -> (i32, i32) {
+    use wl_output::Transform as T;
+    match t {
+        T::_90 | T::_270 | T::Flipped90 | T::Flipped270 => (dims.1, dims.0),
+        _ => dims,
+    }
+}
+
 pub fn art_scale(w: i32, h: i32) -> i32 {
     (w / 960).min(h / 540).clamp(1, 8)
 }
@@ -664,7 +674,7 @@ pub fn run(program: Box<dyn Program>) -> Result<(), String> {
     {
         let mode = info.modes.iter().find(|m| m.current).or(info.modes.first());
         if let Some(m) = mode {
-            let (w, h) = m.dimensions;
+            let (w, h) = turned(m.dimensions, info.transform);
             st.ui.art_scale = art_scale(w, h);
             st.ui.output_scale = info.scale_factor.max(1);
             st.ui.screen = (w / st.ui.art_scale, h / st.ui.art_scale);
@@ -1181,3 +1191,20 @@ impl<I: Proxy> smithay_client_toolkit::dispatch2::Dispatch2<I, State> for NoEven
     fn event(&self, _: &mut State, _: &I, _: I::Event, _: &Connection, _: &QueueHandle<State>) {}
 }
 smithay_client_toolkit::delegate_dispatch2!(State);
+
+#[cfg(test)]
+mod tests {
+    use super::{art_scale, turned};
+    use smithay_client_toolkit::reexports::client::protocol::wl_output::Transform;
+
+    #[test]
+    fn a_turned_panel_is_measured_the_way_it_is_shown() {
+        // A 10.1" Touch Display 2 (1200×1920 portrait panel) shown landscape:
+        // the bar and windows must use the same 2× as Station's frames.
+        let d = turned((1200, 1920), Transform::_270);
+        assert_eq!(d, (1920, 1200));
+        assert_eq!(art_scale(d.0, d.1), 2);
+        assert_eq!(turned((1920, 1080), Transform::Normal), (1920, 1080));
+        assert_eq!(turned((720, 1280), Transform::_90), (1280, 720));
+    }
+}

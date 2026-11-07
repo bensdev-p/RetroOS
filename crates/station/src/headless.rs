@@ -11,11 +11,13 @@ use smithay::backend::renderer::{Renderer as _, TextureFilter};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::pixman;
-use smithay::utils::Transform;
 use std::time::Duration;
 
 pub struct HeadlessData {
     pub renderer: PixmanRenderer,
+    /// Degrees clockwise the picture is turned on the virtual panel
+    /// (`RETROOS_ROTATE`, D-042); screenshots are turned back upright.
+    rotation: u32,
     image: pixman::Image<'static, 'static>,
     damage: OutputDamageTracker,
     pub cursor: CursorCache,
@@ -35,11 +37,19 @@ pub fn init(st: &mut Station, w: i32, h: i32) {
         size: (w, h).into(),
         refresh: 60_000,
     };
-    st.scale = client_scale(w, h);
-    st.art_scale = integer_scale(w, h);
+    // `--headless 1200x1920` with RETROOS_ROTATE=auto|90|270 stands in for a
+    // portrait panel shown landscape (only the env var: tests must not pick
+    // up the host's settings).
+    let rotation = std::env::var("RETROOS_ROTATE")
+        .ok()
+        .map(|v| retro_gfx::screen::rotation_for(Some(&v), w as u32, h as u32))
+        .unwrap_or(0);
+    let (lw, lh) = retro_gfx::screen::logical_size(w as u32, h as u32, rotation);
+    st.scale = client_scale(lw as i32, lh as i32);
+    st.art_scale = integer_scale(lw as i32, lh as i32);
     output.change_current_state(
         Some(mode),
-        Some(Transform::Normal),
+        Some(render::transform_for(rotation)),
         Some(Scale::Integer(st.scale)),
         Some((0, 0).into()),
     );
@@ -56,6 +66,7 @@ pub fn init(st: &mut Station, w: i32, h: i32) {
             let _ = r.upscale_filter(TextureFilter::Nearest);
             r
         },
+        rotation,
         image,
         damage,
         cursor: CursorCache::default(),
@@ -110,5 +121,17 @@ pub fn screenshot(st: &mut Station) -> retro_gfx::Canvas {
     let crate::Backend::Headless(hd) = &st.backend else {
         unreachable!()
     };
-    render::image_to_canvas(&hd.image)
+    let panel = render::image_to_canvas(&hd.image);
+    if hd.rotation == 0 {
+        return panel;
+    }
+    let (lw, lh) = retro_gfx::screen::logical_size(panel.width, panel.height, hd.rotation);
+    let mut c = retro_gfx::Canvas::new(lw, lh, 0);
+    for y in 0..lh {
+        for x in 0..lw {
+            let (px, py) = retro_gfx::screen::to_panel(x, y, lw, lh, hd.rotation);
+            c.px[(y * lw + x) as usize] = panel.px[(py * panel.width + px) as usize];
+        }
+    }
+    c
 }
