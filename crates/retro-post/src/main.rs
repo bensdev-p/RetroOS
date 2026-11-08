@@ -9,6 +9,7 @@
 //!   retro-post                     normal boot
 //!   retro-post --png OUT [SCREEN]  render a screen with fixed data (post|menu|setup)
 
+mod chime;
 mod config;
 mod probe;
 
@@ -367,22 +368,6 @@ fn marker(msg: &str) {
     eprintln!("{msg}");
 }
 
-fn play_chime() {
-    for p in ["/usr/share/retroos/sounds/startup.wav"] {
-        if Path::new(p).exists() {
-            // sysdefault: the sound card itself. "default" goes to PipeWire
-            // once pipewire-alsa is installed, and no PipeWire runs this
-            // early (D-047).
-            let _ = std::process::Command::new("aplay")
-                .args(["-q", "-D", "sysdefault", p])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn();
-            return;
-        }
-    }
-}
-
 fn apply(choice: Choice) {
     let write = |s: &str| {
         let _ = std::fs::create_dir_all("/run/retroos");
@@ -424,10 +409,18 @@ fn wait_for_display() -> Option<Display> {
 
 fn boot() {
     let mut cfg = Config::load(Path::new(config::PATH));
-    if cfg.chime {
-        play_chime();
-    }
+    let log = |m: &str| marker(m);
     let Some(mut d) = wait_for_display() else {
+        // No screen: the chime still plays, on the first sound card.
+        if cfg.chime {
+            let mut ch = chime::Chime::new("");
+            let t = Instant::now();
+            while t.elapsed() < Duration::from_secs(5) && !ch.started() {
+                ch.poll(&log);
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            ch.finish(Duration::from_secs(3), &log);
+        }
         marker(&format!("RETRO-POST: done t={} display=none", uptime_ms()));
         return;
     };
@@ -456,8 +449,15 @@ fn boot() {
     let lines = device_lines(&info).len();
     let total = count_ms + line_ms * lines as u64 + hold_ms;
     let mut wanted: Option<Key> = None;
+    // The chime waits for the display link and the monitor (D-049).
+    let mut chime = cfg.chime.then(|| chime::Chime::new(&d.connector_name));
     loop {
         let el = t0.elapsed().as_millis() as u64;
+        if el >= chime::DELAY.as_millis() as u64 {
+            if let Some(ch) = chime.as_mut() {
+                ch.poll(&log);
+            }
+        }
         let frac = (el as f64 / count_ms as f64).min(1.0);
         // Count in 1 MB-ish steps like a real memory test.
         let mem_shown = ((info.mem_kb as f64 * frac) as u64 / 1024) * 1024;
@@ -493,6 +493,10 @@ fn boot() {
         }
         Some(Key::Delete) => run_setup(&mut d, &mut kb, &mut c, scale, &mut cfg),
         _ => {}
+    }
+    // Let the chime ring out (systemd ends what a finished service left).
+    if let Some(ch) = chime {
+        ch.finish(Duration::from_secs(3), &log);
     }
     // Leave the screen black for the session's compositor.
     c.surface().clear(0);
