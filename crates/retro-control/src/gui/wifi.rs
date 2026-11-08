@@ -82,8 +82,10 @@ impl Ask {
     fn n(&self) -> usize {
         1 + self.fields.len()
     }
+    /// Row `i` (0 = the method, 1… = the fields), counted from the first
+    /// row this box has: only enterprise sign-in has the method row.
     fn row_y(&self, i: usize) -> i32 {
-        40 + i as i32 * 28
+        40 + i.saturating_sub(self.first()) as i32 * 28
     }
     fn button(&self, b: usize) -> Rect {
         Rect::new(

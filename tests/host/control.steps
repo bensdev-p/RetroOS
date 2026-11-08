@@ -67,6 +67,23 @@ wait 300
 shot 03c-enterprise
 key escape
 wait 300
+# A passphrase network and a hidden one: their boxes have no method row.
+key down
+key down
+key enter
+wait 800
+shot 03c2-passphrase
+key escape
+wait 300
+key tab
+key tab
+key tab
+key tab
+key enter
+wait 800
+shot 03c3-hidden
+key escape
+wait 300
 key escape
 wait 500
 key tab
