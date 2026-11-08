@@ -6,8 +6,11 @@
 //! screen is lit and the monitor has had a moment to sync, on the sound card
 //! of the HDMI port in use (`vc4hdmi0` for HDMI-A-1, `vc4hdmi1` for
 //! HDMI-A-2; `sysdefault:` lets alsa-lib's card file convert to the IEC958
-//! samples those cards take). The POST screen waits for it to finish before
-//! it exits, since systemd ends whatever a finished service left running.
+//! samples those cards take). With no HDMI port in use (a Touch Display 2,
+//! which has no sound) it plays on the first sound card that is not HDMI: a
+//! USB speaker or sound card, or an I2S amplifier board. The POST screen
+//! waits for it to finish before it exits, since systemd ends whatever a
+//! finished service left running.
 
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -26,7 +29,8 @@ fn hdmi_card(connector: &str) -> Option<String> {
 }
 
 /// The card to play on: the HDMI port the picture is on; for a DSI panel
-/// (no sound) any connected HDMI port; else None (card 0).
+/// (no sound) any connected HDMI port; else None (a card that is not HDMI,
+/// see [`other_card`]).
 pub fn card_for(connector: &str, drm: &Path) -> Option<String> {
     if let Some(c) = hdmi_card(connector) {
         return Some(c);
@@ -45,6 +49,19 @@ pub fn card_for(connector: &str, drm: &Path) -> Option<String> {
     ports.first().and_then(|c| hdmi_card(c))
 }
 
+/// The first sound card that is not one of the Pi's HDMI outputs, from the
+/// text of /proc/asound/cards (" 2 [Device         ]: USB-Audio - …").
+pub fn other_card(cards: &str) -> Option<String> {
+    cards
+        .lines()
+        .filter(|l| l.trim_start().starts_with(|c: char| c.is_ascii_digit()))
+        .filter_map(|l| {
+            let id = l.split_once('[')?.1.split_once(']')?.0.trim();
+            (!id.is_empty() && !id.starts_with("vc4hdmi")).then(|| id.to_string())
+        })
+        .next()
+}
+
 /// The ALSA device name for `card`.
 pub fn device(card: Option<&str>) -> String {
     match card {
@@ -53,12 +70,9 @@ pub fn device(card: Option<&str>) -> String {
     }
 }
 
-/// Whether the card exists yet (ALSA's /proc/asound/<id> link, or card 0).
-fn card_ready(card: Option<&str>) -> bool {
-    match card {
-        Some(c) => Path::new("/proc/asound").join(c).exists(),
-        None => Path::new("/proc/asound/card0").exists(),
-    }
+/// Whether the card exists yet (ALSA's /proc/asound/<id> link).
+fn card_ready(card: &str) -> bool {
+    Path::new("/proc/asound").join(card).exists()
 }
 
 /// A chime waiting for its card, then playing.
@@ -89,13 +103,20 @@ impl Chime {
         if self.child.is_some() || self.given_up || !Path::new(SOUND).exists() {
             return;
         }
-        if !card_ready(self.card.as_deref()) {
+        // No HDMI port in use: the first other card, once it has appeared
+        // (USB devices come up a moment after the HDMI ones).
+        if self.card.is_none() {
+            let cards = std::fs::read_to_string("/proc/asound/cards").unwrap_or_default();
+            self.card = other_card(&cards);
+        }
+        let ready = self.card.as_deref().is_some_and(card_ready);
+        if !ready {
             if self.since.elapsed() > CARD_WAIT {
                 self.given_up = true;
-                log(&format!(
-                    "RETRO-POST: chime: no sound card {} appeared",
-                    self.card.as_deref().unwrap_or("card0")
-                ));
+                log(&match &self.card {
+                    Some(c) => format!("RETRO-POST: chime: sound card {c} did not appear"),
+                    None => "RETRO-POST: chime: no speaker (no HDMI sound in use and no other sound card)".into(),
+                });
             }
             return;
         }
@@ -176,5 +197,13 @@ mod tests {
         assert_eq!(card_for("HDMI-A-1", &d).as_deref(), Some("vc4hdmi0"));
         std::fs::remove_dir_all(&d).unwrap();
         assert_eq!(card_for("DSI-1", &d), None);
+    }
+
+    #[test]
+    fn without_hdmi_the_first_other_card() {
+        let cards = " 0 [vc4hdmi0       ]: vc4-hdmi - vc4-hdmi-0\n                      vc4-hdmi-0\n 1 [vc4hdmi1       ]: vc4-hdmi - vc4-hdmi-1\n                      vc4-hdmi-1\n 2 [Device         ]: USB-Audio - USB Audio Device\n                      Generic USB Audio Device at usb-xhci, full speed\n";
+        assert_eq!(other_card(cards).as_deref(), Some("Device"));
+        assert_eq!(other_card(" 0 [vc4hdmi0 ]: vc4-hdmi - vc4-hdmi-0\n"), None);
+        assert_eq!(other_card("--- no soundcards ---\n"), None);
     }
 }
