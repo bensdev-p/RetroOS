@@ -6,3 +6,5 @@
 %admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-startup, /usr/libexec/retroos/set-keyboard
 # Control Panel → Network: Wi-Fi country, wired address, enterprise sign-in (D-045).
 %admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-wifi-country, /usr/libexec/retroos/set-wired, /usr/libexec/retroos/set-wifi-enterprise
+# Control Panel → Users runs /usr/libexec/retroos/user-admin with the
+# administrator's password (the %admin ALL rule above; no NOPASSWD, D-046).

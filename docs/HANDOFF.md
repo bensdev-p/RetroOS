@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-046**).
+  (**next: D-047**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -191,8 +191,12 @@ Suggested order, each step leaving a working image:
   `set-wired`, `set-wifi-enterprise`; Desktop *Wireless Networks* dialog
   (`retro-control/src/gui/wifi.rs`; `RETROOS_TEST_WIFI=1` = pretend adapter
   for host tests); NET asks for enterprise sign-in too. HW rows 4.11–4.15.
-- **Next in step 2**: Users (needs a password dialog: polkit/sudo), then
-  Sound and Bluetooth with steps 3–4.
+- **Users done (D-046)**: `retro_sys::users` + `admin::authorize`
+  (sudo -K / -S -v / -n), helper `user-admin` (not NOPASSWD), form model
+  `retro_control::forms` drawn by `text.rs` and `gui/formdlg.rs`. HW rows
+  4.16–4.20 (4.16 also proves the sudo sequence, untestable in CI).
+- **Next**: step 3, audio (PipeWire/WirePlumber, `MIXER`/Volume, Sound
+  applet, System Bar volume, UI sounds); then Bluetooth (step 4).
 
 ## 8. Open items carried over
 

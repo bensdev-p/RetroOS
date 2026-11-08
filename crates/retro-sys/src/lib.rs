@@ -9,3 +9,4 @@ pub mod keyboard;
 pub mod net;
 pub mod netconf;
 pub mod startup;
+pub mod users;

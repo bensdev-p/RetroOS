@@ -1,0 +1,72 @@
+#!/bin/sh
+# Manage people's accounts (run as root through sudo; the Control Panel asks
+# for the administrator's password first — this helper is not NOPASSWD).
+#
+#   user-admin add NAME FULL-NAME         < password    a standard user
+#   user-admin password NAME              < password
+#   user-admin admin NAME yes|no                        administrator rights
+#   user-admin remove NAME                              home folder kept
+#
+# Only accounts with UIDs 1000–59999 are touched. An administrator cannot
+# remove themselves or take away their own rights, and the last
+# administrator stays one. retro_sys::users checks the same first.
+set -eu
+ADMIN_GROUPS="admin sudo adm systemd-journal"
+USER_GROUPS="audio video render input netdev bluetooth plugdev dialout"
+die() { echo "$2" >&2; exit "$1"; }
+existing() {
+    out=
+    for g in "$@"; do getent group "$g" >/dev/null && out="$out${out:+,}$g"; done
+    echo "$out"
+}
+check_name() {
+    case $1 in ""|[!a-z_]*|*[!a-z0-9_-]*) die 2 "Invalid user name" ;; esac
+    [ ${#1} -le 32 ] || die 2 "Invalid user name"
+}
+person() {
+    check_name "$1"
+    uid=$(id -u -- "$1" 2>/dev/null) || die 3 "There is no user called $1."
+    [ "$uid" -ge 1000 ] && [ "$uid" -lt 60000 ] || die 3 "$1 is not a person's account."
+}
+is_admin() { id -nG -- "$1" | tr ' ' '\n' | grep -qx admin; }
+admin_count() { getent group admin | cut -d: -f4 | tr ',' '\n' | grep -c . || true; }
+read_pw() {
+    pw=; IFS= read -r pw || true
+    [ -n "$pw" ] || die 2 "The password is empty."
+}
+me=${SUDO_USER:-}
+case ${1:-} in
+    add)
+        name=${2:-}; full=$(printf '%s' "${3:-}" | tr -d ':,\n')
+        check_name "$name"
+        getent passwd "$name" >/dev/null && die 3 "There is already a user called $name."
+        read_pw
+        useradd --create-home --shell /bin/bash --comment "$full" \
+            --groups "$(existing $USER_GROUPS)" "$name"
+        printf '%s:%s\n' "$name" "$pw" | chpasswd
+        ;;
+    password)
+        person "${2:-}"; read_pw
+        printf '%s:%s\n' "$2" "$pw" | chpasswd
+        ;;
+    admin)
+        person "${2:-}"
+        case ${3:-} in
+            yes) for g in $ADMIN_GROUPS; do getent group "$g" >/dev/null && gpasswd -a "$2" "$g" >/dev/null; done ;;
+            no)
+                [ "$2" != "$me" ] || die 4 "You cannot take away your own administrator rights."
+                is_admin "$2" && [ "$(admin_count)" -le 1 ] && die 4 "$2 is the last administrator."
+                for g in $ADMIN_GROUPS; do gpasswd -d "$2" "$g" >/dev/null 2>&1 || true; done
+                ;;
+            *) die 2 "Usage: user-admin admin NAME yes|no" ;;
+        esac
+        ;;
+    remove)
+        person "${2:-}"
+        [ "$2" != "$me" ] || die 4 "You cannot remove your own account."
+        is_admin "$2" && [ "$(admin_count)" -le 1 ] && die 4 "$2 is the last administrator."
+        pgrep -u "$2" >/dev/null 2>&1 && die 4 "$2 is logged on. Ask them to log off first."
+        userdel "$2"
+        ;;
+    *) die 2 "Usage: user-admin add|password|admin|remove ..." ;;
+esac

@@ -100,6 +100,10 @@ const BUILTIN: &[(&str, &str)] = &[
         "cp-startup",
         include_str!("../../../assets/icons/cp-startup.icon"),
     ),
+    (
+        "cp-users",
+        include_str!("../../../assets/icons/cp-users.icon"),
+    ),
 ];
 
 /// Theme icon names (from .desktop files) that our own pictures stand for.

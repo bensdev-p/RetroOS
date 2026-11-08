@@ -2,7 +2,8 @@
 //! of applets on the left of a dialog; Enter opens one as a page of
 //! settings (arrows change them, a long list opens a chooser), OK saves.
 
-use crate::{apply, load, Applet, Applied, Field, Page, Value, ACTION_WIFI, APPLETS};
+use crate::{apply, forms, load, Applet, Applied, Field, Form, Page, Value, ACTION_WIFI, APPLETS};
+use retro_tui::Field as Input;
 use retro_tui::*;
 
 /// What the main loop must do for the screen.
@@ -12,6 +13,8 @@ pub enum Action {
     Run(&'static str),
     /// Save the page (the loop draws "Saving..." first).
     Apply,
+    /// Do what the open form says (the loop draws "Working..." first).
+    RunForm,
     Quit,
 }
 
@@ -27,6 +30,31 @@ pub struct Open {
     /// The field with the cursor; `fields.len()` = OK, +1 = Cancel.
     pub sel: usize,
     pub chooser: Option<Chooser>,
+    /// A form over the page (Users).
+    pub form: Option<TextForm>,
+}
+
+/// A form being filled in: one input per field, then the confirming
+/// button (`inputs.len()`) and Cancel (+1).
+pub struct TextForm {
+    pub form: Form,
+    pub inputs: Vec<Input>,
+    pub focus: usize,
+}
+
+impl TextForm {
+    fn new(form: Form) -> TextForm {
+        let inputs = form
+            .fields
+            .iter()
+            .map(|f| Input::new(64, f.secret))
+            .collect();
+        TextForm {
+            form,
+            inputs,
+            focus: 0,
+        }
+    }
 }
 
 pub struct App {
@@ -76,6 +104,7 @@ impl App {
                 page: load(a),
                 sel: 0,
                 chooser: None,
+                form: None,
             });
         }
         app
@@ -208,6 +237,45 @@ impl App {
                 self.draw_chooser(s, p.fields[c.field].label, items, *cur, c);
             }
         }
+        if let Some(f) = &o.form {
+            self.draw_form(s, f);
+        }
+    }
+
+    fn draw_form(&self, s: &mut Screen, f: &TextForm) {
+        let n = f.inputs.len();
+        let w = 62.min(s.cols.saturating_sub(4));
+        let h = f.form.intro.len() as u16 + 2 * n as u16 + 5;
+        let (x, y) = ((s.cols - w) / 2, s.rows.saturating_sub(h) / 2);
+        s.dialog(x, y, w, h, &f.form.title, BLACK, SILVER);
+        let mut row = y + 1;
+        for l in &f.form.intro {
+            s.text(x + 3, row, &clip(l, (w - 6) as usize), BLACK, SILVER);
+            row += 1;
+        }
+        row += 1;
+        for (i, (field, input)) in f.form.fields.iter().zip(&f.inputs).enumerate() {
+            s.text(x + 3, row, &format!("{}:", field.label), BLACK, SILVER);
+            let bg = if f.focus == i { TEAL } else { COBALT };
+            let cx = input.draw(s, x + 20, row, w - 23, WHITE, bg);
+            if f.focus == i {
+                s.cursor = Some((cx, row));
+            }
+            row += 2;
+        }
+        let ok = format!("< {} >", f.form.button);
+        let pick = |on: bool| if on { (WHITE, BLACK) } else { (BLACK, SILVER) };
+        let bx = x + w / 2 - (ok.chars().count() as u16 + 12) / 2;
+        let (fg, bg) = pick(f.focus == n);
+        s.text(bx, row, &ok, fg, bg);
+        let (fg, bg) = pick(f.focus == n + 1);
+        s.text(
+            bx + ok.chars().count() as u16 + 2,
+            row,
+            "< Cancel >",
+            fg,
+            bg,
+        );
     }
 
     fn draw_chooser(
@@ -281,6 +349,23 @@ impl App {
             }
             return None;
         };
+        if let Some(f) = o.form.as_mut() {
+            let n = f.inputs.len();
+            match base {
+                Key::Esc => o.form = None,
+                Key::Tab | Key::Down => f.focus = (f.focus + 1) % (n + 2),
+                Key::BackTab | Key::Up => f.focus = (f.focus + n + 1) % (n + 2),
+                Key::Left if f.focus == n + 1 => f.focus = n,
+                Key::Right if f.focus == n => f.focus = n + 1,
+                Key::Enter if f.focus == n + 1 => o.form = None,
+                Key::Enter => return Some(Action::RunForm),
+                k if f.focus < n => {
+                    f.inputs[f.focus].edit(&k);
+                }
+                _ => {}
+            }
+            return None;
+        }
         if let Some(c) = o.chooser.as_mut() {
             let Value::List(items, cur) = &mut o.page.fields[c.field].value else {
                 o.chooser = None;
@@ -334,16 +419,20 @@ impl App {
                 } else if on_field && matches!(o.page.fields[o.sel].value, Value::List(..)) {
                     return self.choose();
                 } else if on_field && matches!(o.page.fields[o.sel].value, Value::Action(_)) {
-                    return action(&o.page.fields[o.sel]);
+                    return self.activate();
                 } else {
                     return self.finish();
                 }
+            }
+            Key::Char(' ')
+                if on_field && matches!(o.page.fields[o.sel].value, Value::Action(_)) =>
+            {
+                return self.activate()
             }
             Key::Char(' ') if on_field => {
                 let f = &mut o.page.fields[o.sel];
                 match &mut f.value {
                     Value::List(..) => return self.choose(),
-                    Value::Action(_) => return action(f),
                     Value::Text(t) if f.enabled => t.push(' '),
                     _ => f.cycle(),
                 }
@@ -377,15 +466,51 @@ impl App {
     }
 }
 
-/// What an action button does in text mode.
-fn action(f: &Field) -> Option<Action> {
-    match f.value {
-        Value::Action(ACTION_WIFI) => Some(Action::Run("retro-net")),
-        _ => None,
-    }
-}
-
 impl App {
+    /// The focused action button: NET for Wireless networks, else its form.
+    fn activate(&mut self) -> Option<Action> {
+        let o = self.open.as_mut()?;
+        let Value::Action(a) = o.page.fields.get(o.sel)?.value else {
+            return None;
+        };
+        if a == ACTION_WIFI {
+            return Some(Action::Run("retro-net"));
+        }
+        match forms::form_for(a, &o.page) {
+            Ok(form) => o.form = Some(TextForm::new(form)),
+            Err(e) => self.message = Some(vec![e]),
+        }
+        None
+    }
+
+    /// Do what the open form says (after [`Action::RunForm`]).
+    pub fn run_form(&mut self) {
+        let Some(o) = self.open.as_mut() else { return };
+        let Some(tf) = o.form.as_mut() else { return };
+        for (f, i) in tf.form.fields.iter_mut().zip(&tf.inputs) {
+            f.value = i.value.clone();
+        }
+        match forms::run(&tf.form) {
+            Ok(msg) => {
+                let select = if tf.form.target.is_empty() {
+                    tf.form.value("name").trim().to_string()
+                } else {
+                    tf.form.target.clone()
+                };
+                o.page = o.page.reloaded(Some(&select));
+                o.form = None;
+                self.message = Some(vec![msg]);
+            }
+            Err(e) => {
+                // Asked again: the administrator's password is not kept.
+                if let Some(i) = tf.form.fields.iter().position(|f| f.key == "auth") {
+                    tf.inputs[i].value.clear();
+                }
+                self.message = Some(vec![e]);
+            }
+        }
+    }
+
     fn choose(&mut self) -> Option<Action> {
         let o = self.open.as_mut()?;
         let f: &Field = o.page.fields.get(o.sel)?;
@@ -405,6 +530,7 @@ impl App {
             page: load(a),
             sel: 0,
             chooser: None,
+            form: None,
         });
         None
     }

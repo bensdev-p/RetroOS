@@ -142,6 +142,11 @@ Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|S
 | 4.13 | Fixed wired address (needs a cable) | Network → Wired address → Fixed; IP e.g. `192.168.1.250/24` (free on your router), gateway your router, name server `1.1.1.1`; OK; `NET /S`; then back to Automatic (DHCP) | `NET /S` shows the fixed address within a few seconds; DHCP comes back after switching back |
 | 4.14 | Wi-Fi country | Network → Wi-Fi country: type your country's first letters in the list (or in CONTROL: Enter on the field, type to search), OK; restart; `UNIX "cat /sys/module/cfg80211/parameters/ieee80211_regdom"` | the panel says it applies at the next start; after it, your country's code |
 | 4.15 | Enterprise Wi-Fi (only if you have such a network, e.g. eduroam) | Connect on it: method PEAP (or what your IT says), user name, password | Connected; the network shows Saved afterwards. Skip if none is available |
+| 4.16 | Users: add a user | Control Panel → Users → New user: Add...; user name `test`, a password twice, **your** password; Add | "test can now log on."; the list shows test; ◆ → Restart (or Exit to DOS → `EXIT`) and log on as test: it works and test is not an administrator (`ADMIN DIR` refuses) |
+| 4.17 | Users: wrong password | as 4.16 but type a wrong "Your password" | "That password is not right." (after a short pause); the form stays open with that field empty; nothing changes |
+| 4.18 | Users: administrator rights | select test → Administrator rights: Change... → your password → Make Admin; then take them away again | the list marks test "administrator", then not; trying it on yourself says you cannot take away your own rights |
+| 4.19 | Users: password | select test → Password: Change...; a new password twice and yours | test can log on with the new password |
+| 4.20 | Users: remove; CONTROL | in RetroDOS `CONTROL USERS`, Tab to Remove user, Enter, your password, Enter | "test has been removed."; `DIR C:\..` (or `UNIX "ls /home"`) still shows test's folder |
 
 ## Displays — Raspberry Pi Touch Display 2 (D-042)
 

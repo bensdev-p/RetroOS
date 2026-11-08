@@ -5,6 +5,7 @@
 //!
 //!   control-panel [applet]     open that applet at once (DISPLAY, TIME, …)
 
+mod formdlg;
 mod wifi;
 
 use retro_control::{
@@ -75,6 +76,7 @@ struct Panel {
     dialog: Option<Dialog>,
     drop: Option<Drop>,
     wifi: Option<wifi::WifiDlg>,
+    form: Option<formdlg::FormDlg>,
     message: Option<Message>,
     start: Option<Applet>,
 }
@@ -95,6 +97,18 @@ fn win_size() -> (i32, i32) {
     )
 }
 
+fn ctl_for(v: &Value) -> Ctl {
+    match v {
+        Value::List(items, sel) => {
+            let mut l = ListBox::new(items.iter().map(|(_, l)| l.clone()).collect());
+            l.sel = (!items.is_empty()).then_some(*sel);
+            Ctl::List(l)
+        }
+        Value::Text(s) => Ctl::Text(TextField::new(s)),
+        _ => Ctl::Plain,
+    }
+}
+
 impl Dialog {
     fn new(ui: &mut Ui, parent: SurfaceId, page: Page) -> Dialog {
         let top = if page.notice.is_some() { 38 } else { 14 };
@@ -102,14 +116,11 @@ impl Dialog {
         let mut rects = Vec::new();
         let mut ctls = Vec::new();
         for f in &page.fields {
-            let (h, ctl) = match &f.value {
-                Value::List(items, sel) => {
-                    let mut l = ListBox::new(items.iter().map(|(_, l)| l.clone()).collect());
-                    l.sel = Some(*sel);
-                    (LIST_H, Ctl::List(l))
-                }
-                Value::Text(s) => (FIELD_H, Ctl::Text(TextField::new(s))),
-                _ => (FIELD_H, Ctl::Plain),
+            let ctl = ctl_for(&f.value);
+            let h = if matches!(ctl, Ctl::List(_)) {
+                LIST_H
+            } else {
+                FIELD_H
             };
             // A long list goes under its label, the dialog's full width.
             if matches!(ctl, Ctl::List(_)) {
@@ -135,8 +146,13 @@ impl Dialog {
         if !d.usable(0) {
             d.next_focus(1);
         }
-        // A list wants to show its selection.
-        for c in d.ctls.iter_mut() {
+        d.reveal_lists();
+        d
+    }
+
+    /// A list wants to show its selection.
+    fn reveal_lists(&mut self) {
+        for c in self.ctls.iter_mut() {
             if let Ctl::List(l) = c {
                 if let Some(s) = l.sel {
                     l.top = s.saturating_sub(3);
@@ -144,7 +160,13 @@ impl Dialog {
                 }
             }
         }
-        d
+    }
+
+    /// The same page with fresh values (same fields, so the same layout).
+    fn set_page(&mut self, page: Page) {
+        self.ctls = page.fields.iter().map(|f| ctl_for(&f.value)).collect();
+        self.page = page;
+        self.reveal_lists();
     }
 
     fn n(&self) -> usize {
@@ -375,9 +397,41 @@ impl Panel {
 
     /// An action button of the open page.
     fn action(&mut self, ui: &mut Ui, what: &str) {
-        if what == ACTION_WIFI && self.wifi.is_none() {
-            if let Some(d) = &self.dialog {
+        let Some(d) = &self.dialog else { return };
+        if what == ACTION_WIFI {
+            if self.wifi.is_none() {
                 self.wifi = Some(wifi::WifiDlg::new(ui, d.surface));
+            }
+            return;
+        }
+        if self.form.is_some() {
+            return;
+        }
+        match retro_control::forms::form_for(what, &d.page) {
+            Ok(f) => self.form = Some(formdlg::FormDlg::new(ui, d.surface, f)),
+            Err(e) => self.message(ui, &[&e]),
+        }
+    }
+
+    fn close_form(&mut self, ui: &mut Ui) {
+        if let Some(f) = self.form.take() {
+            ui.close(f.surface);
+        }
+    }
+
+    fn form_out(&mut self, ui: &mut Ui, out: formdlg::Out) {
+        match out {
+            formdlg::Out::None => {}
+            formdlg::Out::Close => self.close_form(ui),
+            formdlg::Out::Message(m) => self.message(ui, &[&m]),
+            formdlg::Out::Done { select, message } => {
+                self.close_form(ui);
+                if let Some(d) = self.dialog.as_mut() {
+                    let page = d.page.reloaded(Some(&select));
+                    d.set_page(page);
+                    ui.redraw(d.surface);
+                }
+                self.message(ui, &[&message]);
             }
         }
     }
@@ -508,6 +562,7 @@ impl Panel {
     fn close_dialog(&mut self, ui: &mut Ui) {
         self.close_drop(ui);
         self.close_wifi(ui);
+        self.close_form(ui);
         if let Some(d) = self.dialog.take() {
             ui.close(d.surface);
         }
@@ -518,11 +573,12 @@ impl Panel {
         if let Some(m) = self.message.take() {
             ui.close(m.surface);
         }
-        // Over the topmost box: the sign-in, Wireless Networks, the page.
-        let parent = match (&self.wifi, &self.dialog) {
-            (Some(w), _) => w.ask.as_ref().map_or(w.surface, |a| a.surface),
-            (None, Some(d)) => d.surface,
-            (None, None) => win,
+        // Over the topmost box: a form, the sign-in, Wireless Networks, the page.
+        let parent = match (&self.form, &self.wifi, &self.dialog) {
+            (Some(f), _, _) => f.surface,
+            (None, Some(w), _) => w.ask.as_ref().map_or(w.surface, |a| a.surface),
+            (None, None, Some(d)) => d.surface,
+            (None, None, None) => win,
         };
         let w = lines
             .iter()
@@ -738,6 +794,8 @@ impl Program for Panel {
             self.draw_window(c, t);
         } else if self.drop.as_ref().is_some_and(|d| d.surface == id) {
             self.draw_drop(c, t);
+        } else if let Some(f) = self.form.as_ref().filter(|f| f.surface == id) {
+            f.draw(c, t);
         } else if let Some(w) = self.wifi.as_ref() {
             if w.surface == id {
                 w.draw(c, t);
@@ -756,6 +814,10 @@ impl Program for Panel {
     }
 
     fn timer(&mut self, ui: &mut Ui, token: u32) {
+        if let Some(f) = self.form.as_mut() {
+            let out = f.timer(ui, token);
+            self.form_out(ui, out);
+        }
         if let Some(w) = self.wifi.as_mut() {
             let out = w.timer(ui, token);
             self.wifi_out(ui, out);
@@ -816,6 +878,10 @@ impl Panel {
         }
         if self.drop.as_ref().is_some_and(|d| d.surface == id) {
             return self.drop_event(ui, ev);
+        }
+        if let Some(f) = self.form.as_mut().filter(|f| f.surface == id) {
+            let out = f.event(ui, ev);
+            return self.form_out(ui, out);
         }
         if let Some(w) = self.wifi.as_mut() {
             let out = if w.surface == id {
@@ -887,6 +953,7 @@ fn main() {
         dialog: None,
         drop: None,
         wifi: None,
+        form: None,
         message: None,
         start,
     };

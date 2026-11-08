@@ -41,7 +41,7 @@ fn main() {
     let start = match arg.as_deref() {
         None => None,
         Some("/?" | "-h" | "--help") => {
-            println!("Changes RetroOS settings.\n\nCONTROL [DISPLAY | STARTUP | TIME | KEYBOARD | NETWORK]");
+            println!("Changes RetroOS settings.\n\nCONTROL [DISPLAY | STARTUP | TIME | KEYBOARD | NETWORK | USERS]");
             return;
         }
         Some(a) => match applet_named(a) {
@@ -74,6 +74,13 @@ fn main() {
                 run(p);
                 s = open_screen();
                 s.invalidate();
+            }
+            Some(Action::RunForm) => {
+                app.busy = Some("Working...".into());
+                app.draw(&mut s);
+                let _ = s.flush();
+                app.run_form();
+                app.busy = None;
             }
             Some(Action::Apply) => {
                 app.busy = Some("Saving...".into());

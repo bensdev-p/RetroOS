@@ -14,6 +14,23 @@ key right
 key enter
 wait 800
 expect-file startup.conf mode=desktop
+# Users: the page, then the New User form (not submitted: no sudo here).
+type u
+key enter
+wait 500
+key tab
+key enter
+wait 300
+type sam
+key tab
+type Sam Smith
+key tab
+type secret1
+wait 300
+shot 02b-users-form-text
+key escape
+key escape
+wait 300
 key escape
 wait 800
 type DESKTOP
@@ -95,6 +112,25 @@ wait 1000
 type g
 wait 300
 shot 08-keyboard
+key escape
+wait 500
+# Users on the Desktop: the list, then New User.
+type u
+key enter
+wait 1000
+shot 09-users
+key tab
+key enter
+wait 800
+type sam
+key tab
+type Sam Smith
+key tab
+type secret1
+wait 300
+shot 10-new-user
+key escape
+wait 300
 key escape
 wait 500
 key alt+f4

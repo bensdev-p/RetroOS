@@ -4,7 +4,10 @@
 //! exactly the same things. Each applet [`load`]s a page of [`Field`]s;
 //! the front-end lets the user edit them and calls [`apply`].
 
-use retro_sys::{clock, display, keyboard, netconf, startup};
+use retro_sys::{clock, display, keyboard, netconf, startup, users};
+
+pub mod forms;
+pub use forms::{action_label, Form};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Applet {
@@ -13,6 +16,7 @@ pub enum Applet {
     DateTime,
     Keyboard,
     Network,
+    Users,
 }
 
 pub const APPLETS: &[Applet] = &[
@@ -21,6 +25,7 @@ pub const APPLETS: &[Applet] = &[
     Applet::Keyboard,
     Applet::Network,
     Applet::Startup,
+    Applet::Users,
 ];
 
 impl Applet {
@@ -31,6 +36,7 @@ impl Applet {
             Applet::DateTime => "Date & Time",
             Applet::Keyboard => "Keyboard",
             Applet::Network => "Network",
+            Applet::Users => "Users",
         }
     }
 
@@ -42,6 +48,7 @@ impl Applet {
             Applet::DateTime => "cp-clock",
             Applet::Keyboard => "cp-keyboard",
             Applet::Network => "cp-network",
+            Applet::Users => "cp-users",
         }
     }
 
@@ -52,6 +59,7 @@ impl Applet {
             Applet::DateTime => "The date, the time and the time zone.",
             Applet::Keyboard => "The keyboard layout.",
             Applet::Network => "Wi-Fi networks, the wired address, the country.",
+            Applet::Users => "Who can log on, their passwords and rights.",
         }
     }
 }
@@ -116,7 +124,7 @@ impl Field {
             Value::Check(b) => if *b { "Yes" } else { "No" }.into(),
             Value::Level(n) => format!("{n} %"),
             Value::Text(s) => s.clone(),
-            Value::Action(_) => "Open...".into(),
+            Value::Action(a) => action_label(a).into(),
         }
     }
 
@@ -178,6 +186,23 @@ impl Page {
             .iter()
             .zip(&self.original)
             .any(|(f, o)| f.text() != *o)
+    }
+
+    /// The page loaded again (after a form changed the system), keeping the
+    /// chosen item of each list, or choosing `select` in it.
+    pub fn reloaded(&self, select: Option<&str>) -> Page {
+        let mut p = load(self.applet);
+        for f in p.fields.iter_mut() {
+            let want = select
+                .map(String::from)
+                .or_else(|| self.field(f.key).map(Field::text));
+            if let (Value::List(o, i), Some(w)) = (&mut f.value, want) {
+                if let Some(j) = o.iter().position(|(v, _)| *v == w) {
+                    *i = j;
+                }
+            }
+        }
+        p
     }
 
     /// Fields that depend on others: call after every change (the
@@ -356,6 +381,42 @@ pub fn load(applet: Applet) -> Page {
             let i = list.iter().position(|(n, _)| *n == layout).unwrap_or(0);
             vec![Field::new("layout", "Layout", Value::List(list, i))]
         }
+        Applet::Users => {
+            let me = users::me();
+            let list: Vec<(String, String)> = users::list()
+                .into_iter()
+                .map(|u| {
+                    let mut label = u.label();
+                    if u.admin {
+                        label.push_str(" - administrator");
+                    }
+                    if u.name == me {
+                        label.push_str(" (you)");
+                    }
+                    (u.name, label)
+                })
+                .collect();
+            let i = list.iter().position(|(n, _)| *n == me).unwrap_or(0);
+            vec![
+                Field::new("users", "Users", Value::List(list, i)),
+                Field::new("add", "New user", Value::Action(forms::ACTION_ADD_USER)),
+                Field::new(
+                    "password",
+                    "Password",
+                    Value::Action(forms::ACTION_PASSWORD),
+                ),
+                Field::new(
+                    "admin",
+                    "Administrator rights",
+                    Value::Action(forms::ACTION_ADMIN),
+                ),
+                Field::new(
+                    "remove",
+                    "Remove user",
+                    Value::Action(forms::ACTION_REMOVE_USER),
+                ),
+            ]
+        }
         Applet::Network => {
             let cur = netconf::country();
             let mut list = vec![(
@@ -477,6 +538,8 @@ pub fn apply(page: &Page) -> Result<Applied, String> {
                 done.keymap = true;
             }
         }
+        // Users change through forms, at once; the page itself saves nothing.
+        Applet::Users => {}
         Applet::Network => {
             let wired = ["wired", "address", "gateway", "dns"];
             if wired.iter().any(|k| page.changed(k)) {
@@ -596,6 +659,7 @@ pub fn applet_named(name: &str) -> Option<Applet> {
         "date" | "time" | "clock" | "datetime" => Applet::DateTime,
         "keyboard" | "keyb" => Applet::Keyboard,
         "network" | "net" | "wifi" => Applet::Network,
+        "users" | "user" | "accounts" => Applet::Users,
         _ => return None,
     })
 }
