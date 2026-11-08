@@ -246,7 +246,14 @@ impl Dialog {
                         dotted(&mut sf, r.x - 2, r.y + 1, 17, 17, t);
                     }
                 }
-                (Value::Level(n), _) => draw_level(&mut sf, r, *n, focused, f.enabled, t),
+                (Value::Level(n), _) => {
+                    let off = if f.key == "brightness" {
+                        "No backlight"
+                    } else {
+                        "Not available"
+                    };
+                    draw_level(&mut sf, r, *n, focused, f.enabled, off, t)
+                }
                 (Value::Action(_), _) => {
                     push_button(
                         &mut sf,
@@ -320,7 +327,16 @@ fn draw_choice(sf: &mut Surface, r: Rect, text: &str, focused: bool, enabled: bo
     }
 }
 
-fn draw_level(sf: &mut Surface, r: Rect, n: u32, focused: bool, enabled: bool, t: &Theme) {
+#[allow(clippy::too_many_arguments)]
+fn draw_level(
+    sf: &mut Surface,
+    r: Rect,
+    n: u32,
+    focused: bool,
+    enabled: bool,
+    off: &str,
+    t: &Theme,
+) {
     let w = 150;
     let y = r.y + 4;
     sf.fill_rect(r.x, y, w as u32, 12, t.light);
@@ -333,7 +349,7 @@ fn draw_level(sf: &mut Surface, r: Rect, n: u32, focused: bool, enabled: bool, t
     let label = if enabled {
         format!("{n} %")
     } else {
-        "No backlight".into()
+        off.to_string()
     };
     sf.text(lantern_12(), r.x + w + 8, r.y + 4, 1, fg, None, &label);
     if focused {
@@ -398,6 +414,18 @@ impl Panel {
     /// An action button of the open page.
     fn action(&mut self, ui: &mut Ui, what: &str) {
         let Some(d) = &self.dialog else { return };
+        if what == retro_control::ACTION_MIXER {
+            // MIXER in a window of its own (the Desktop's Volume window will
+            // take over, D-047).
+            let argv: Vec<String> = ["retro-console", "--exec", "retro-mixer"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+            if let Err(e) = station::launch("MIXER", &argv) {
+                self.message(ui, &[&format!("Cannot start the mixer: {e}")]);
+            }
+            return;
+        }
         if what == ACTION_WIFI {
             if self.wifi.is_none() {
                 self.wifi = Some(wifi::WifiDlg::new(ui, d.surface));

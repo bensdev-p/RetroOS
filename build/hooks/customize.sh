@@ -90,6 +90,11 @@ systemctl --root="$R" set-default graphical.target
 systemctl --root="$R" enable retro-post.service retro-firstboot.service retro-setup.service greetd.service \
     systemd-networkd.service systemd-resolved.service systemd-timesyncd.service iwd.service nftables.service
 ln -sf /usr/lib/systemd/system/greetd.service "$R/etc/systemd/system/display-manager.service"
+# Sound: PipeWire's sockets in every user session; it (and WirePlumber, which
+# it wants) start when a program first connects (D-047). The package scripts
+# normally do this; done here too so a chroot install cannot miss it.
+systemctl --root="$R" --global enable pipewire.socket pipewire-pulse.socket wireplumber.service \
+    >/dev/null 2>&1 || echo "!! could not enable PipeWire user units" >&2
 systemctl --root="$R" mask getty@tty1.service
 for t in apt-daily.timer apt-daily-upgrade.timer man-db.timer e2scrub_all.timer dpkg-db-backup.timer \
          e2scrub_reap.service systemd-networkd-wait-online.service; do

@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-047**).
+  (**next: D-048**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -195,8 +195,13 @@ Suggested order, each step leaving a working image:
   (sudo -K / -S -v / -n), helper `user-admin` (not NOPASSWD), form model
   `retro_control::forms` drawn by `text.rs` and `gui/formdlg.rs`. HW rows
   4.16–4.20 (4.16 also proves the sudo sequence, untestable in CI).
-- **Next**: step 3, audio (PipeWire/WirePlumber, `MIXER`/Volume, Sound
-  applet, System Bar volume, UI sounds); then Bluetooth (step 4).
+- **Step 3 started (D-047)**: PipeWire packages + user units;
+  `retro_sys::sound` (pw-dump/wpctl; `RETROOS_TEST_SOUND=1` = pretend);
+  crate `retro-mixer` (MIXER, VOLUME); Control Panel → Sound; host test
+  `sound.steps`; HW rows 4.21–4.25.
+- **Next in step 3**: System Bar volume item + popup, the Desktop Volume
+  window, interface sounds (Station `SOUND` request + console bell); then
+  Bluetooth (step 4).
 
 ## 8. Open items carried over
 

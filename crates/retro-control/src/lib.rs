@@ -4,7 +4,7 @@
 //! exactly the same things. Each applet [`load`]s a page of [`Field`]s;
 //! the front-end lets the user edit them and calls [`apply`].
 
-use retro_sys::{clock, display, keyboard, netconf, startup, users};
+use retro_sys::{clock, display, keyboard, netconf, sound, startup, users};
 
 pub mod forms;
 pub use forms::{action_label, Form};
@@ -16,6 +16,7 @@ pub enum Applet {
     DateTime,
     Keyboard,
     Network,
+    Sound,
     Users,
 }
 
@@ -24,6 +25,7 @@ pub const APPLETS: &[Applet] = &[
     Applet::DateTime,
     Applet::Keyboard,
     Applet::Network,
+    Applet::Sound,
     Applet::Startup,
     Applet::Users,
 ];
@@ -37,6 +39,7 @@ impl Applet {
             Applet::Keyboard => "Keyboard",
             Applet::Network => "Network",
             Applet::Users => "Users",
+            Applet::Sound => "Sound",
         }
     }
 
@@ -49,6 +52,7 @@ impl Applet {
             Applet::Keyboard => "cp-keyboard",
             Applet::Network => "cp-network",
             Applet::Users => "cp-users",
+            Applet::Sound => "cp-sound",
         }
     }
 
@@ -60,6 +64,7 @@ impl Applet {
             Applet::Keyboard => "The keyboard layout.",
             Applet::Network => "Wi-Fi networks, the wired address, the country.",
             Applet::Users => "Who can log on, their passwords and rights.",
+            Applet::Sound => "Where sound plays, its volume, interface sounds.",
         }
     }
 }
@@ -79,6 +84,9 @@ pub enum Value {
     /// A button that opens more (the front-end knows what: [`ACTION_WIFI`]).
     Action(&'static str),
 }
+
+/// The Sound page's "Mixer" button: MIXER (text) or the Volume window.
+pub const ACTION_MIXER: &str = "mixer";
 
 /// The Network page's "Wireless networks" button: NET in text mode, the
 /// Wireless Networks dialog on the Desktop.
@@ -381,6 +389,52 @@ pub fn load(applet: Applet) -> Page {
             let i = list.iter().position(|(n, _)| *n == layout).unwrap_or(0);
             vec![Field::new("layout", "Layout", Value::List(list, i))]
         }
+        Applet::Sound => {
+            let (m, why) = match sound::mixer() {
+                Ok(m) if m.outputs.is_empty() => (m, Some("No sound outputs were found.".into())),
+                Ok(m) => (m, None),
+                Err(e) => (sound::Mixer::default(), Some(e)),
+            };
+            notice = why;
+            let outs: Vec<(String, String)> = m
+                .outputs
+                .iter()
+                .map(|c| (c.id.to_string(), c.name.clone()))
+                .collect();
+            let cur = m.output().cloned();
+            let mut f = vec![
+                Field::new(
+                    "output",
+                    "Play sound on",
+                    choice(
+                        outs,
+                        &cur.as_ref().map(|c| c.id.to_string()).unwrap_or_default(),
+                    ),
+                ),
+                Field::new(
+                    "volume",
+                    "Volume",
+                    Value::Level(cur.as_ref().map_or(0, |c| c.percent().min(100))),
+                ),
+                Field::new(
+                    "mute",
+                    "Mute",
+                    Value::Check(cur.as_ref().is_some_and(|c| c.muted)),
+                ),
+            ];
+            if cur.is_none() {
+                for x in f.iter_mut() {
+                    x.enabled = false;
+                }
+            }
+            f.push(Field::new(
+                "ui_sounds",
+                "Interface sounds",
+                choice(opts(sound::UI_SOUNDS), &sound::ui_sounds()),
+            ));
+            f.push(Field::new("mixer", "Mixer", Value::Action(ACTION_MIXER)));
+            f
+        }
         Applet::Users => {
             let me = users::me();
             let list: Vec<(String, String)> = users::list()
@@ -540,6 +594,24 @@ pub fn apply(page: &Page) -> Result<Applied, String> {
         }
         // Users change through forms, at once; the page itself saves nothing.
         Applet::Users => {}
+        Applet::Sound => {
+            let id: Option<u32> = val("output").parse().ok();
+            if let Some(id) = id {
+                if page.changed("output") {
+                    sound::set_default(id)?;
+                }
+                if page.changed("volume") {
+                    let pct: f32 = val("volume").parse().unwrap_or(50.0);
+                    sound::set_volume(id, pct / 100.0)?;
+                }
+                if page.changed("mute") {
+                    sound::set_mute(id, val("mute") == "yes")?;
+                }
+            }
+            if page.changed("ui_sounds") {
+                sound::set_ui_sounds(&val("ui_sounds"))?;
+            }
+        }
         Applet::Network => {
             let wired = ["wired", "address", "gateway", "dns"];
             if wired.iter().any(|k| page.changed(k)) {
@@ -660,6 +732,7 @@ pub fn applet_named(name: &str) -> Option<Applet> {
         "keyboard" | "keyb" => Applet::Keyboard,
         "network" | "net" | "wifi" => Applet::Network,
         "users" | "user" | "accounts" => Applet::Users,
+        "sound" | "audio" | "volume" => Applet::Sound,
         _ => return None,
     })
 }

@@ -80,3 +80,34 @@ pub const CONTROL: Builtin = Builtin {
         sh.wait(cmd)
     },
 };
+
+pub const MIXER: Builtin = Builtin {
+    names: &["MIXER"],
+    summary: "Starts the volume mixer.",
+    usage: "MIXER\n\nOne bar for the sound output in use (MASTER) and one for each program\nplaying. \u{2190}\u{2192} choose, \u{2191}\u{2193} change the volume, M mutes, O picks the output.",
+    run: |sh, _, io| run_tool(sh, &Args::new(""), io, "retro-mixer"),
+};
+
+pub const VOLUME: Builtin = Builtin {
+    names: &["VOLUME"],
+    summary: "Shows or sets the sound volume.",
+    usage: "VOLUME [n]\n\n  n   The volume of the sound output in use, 0 to 100.\n\nWithout n, shows the output and its volume. MIXER changes each program's.",
+    run: |sh, a, io| {
+        let Some(prog) = sh.find_program("retro-mixer") else {
+            return err(io, "retro-mixer is not installed");
+        };
+        let arg = match a.words.first() {
+            Some(n) if n.trim_end_matches('%').parse::<u32>().is_ok_and(|v| v <= 100) => n.clone(),
+            Some(n) => return err(io, &format!("Invalid volume - {n}")),
+            None => "--status".into(),
+        };
+        match sh.command(&prog, &[arg]).output() {
+            Ok(o) => {
+                let _ = io.out.write_all(&o.stdout);
+                let _ = io.out.write_all(&o.stderr);
+                o.status.code().unwrap_or(1)
+            }
+            Err(e) => err(io, &e.to_string()),
+        }
+    },
+};

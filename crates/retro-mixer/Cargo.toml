@@ -1,0 +1,17 @@
+[package]
+name = "retro-mixer"
+description = "MIXER / VOLUME: the RetroOS volume mixer in text mode"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "retro-mixer"
+path = "src/main.rs"
+
+[dependencies]
+retro-tui = { path = "../retro-tui" }
+retro-sys = { path = "../retro-sys" }
+
+[lints]
+workspace = true

@@ -8,5 +8,6 @@ pub mod display;
 pub mod keyboard;
 pub mod net;
 pub mod netconf;
+pub mod sound;
 pub mod startup;
 pub mod users;

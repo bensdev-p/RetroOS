@@ -7,7 +7,7 @@ set -eu
 OUT=${1:-out}
 BIN=target/debug
 cargo build -p station -p retro-console -p retrodos -p retro-login -p retro-edit -p retro-filer \
-    -p retro-net -p retro-bar -p retro-progman -p retro-about -p retro-jot -p retro-cabinet -p retro-control
+    -p retro-net -p retro-bar -p retro-progman -p retro-about -p retro-jot -p retro-cabinet -p retro-control -p retro-mixer
 run() { name=$1; shift; echo ">> host test: $name"; python3 tests/host/station.py "$BIN" "$OUT/test-host$name" "$@"; }
 # Program Manager only where a scenario is about it.
 export RETROOS_NO_PROGMAN=1
@@ -21,6 +21,7 @@ RETROOS_NO_BAR=1 STATION_ARGS="--personality desktop" run -desktop-start tests/h
 run -bar tests/host/bar.steps
 run -scheme tests/host/scheme.steps
 run -mono tests/host/mono.steps
+RETROOS_TEST_SOUND=1 run -sound tests/host/sound.steps
 RETROOS_NO_PROGMAN= run -progman tests/host/progman.steps
 run -about tests/host/about.steps
 RETROOS_NO_BAR=1 run -jot tests/host/jot.steps

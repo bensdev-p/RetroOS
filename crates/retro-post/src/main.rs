@@ -370,8 +370,11 @@ fn marker(msg: &str) {
 fn play_chime() {
     for p in ["/usr/share/retroos/sounds/startup.wav"] {
         if Path::new(p).exists() {
+            // sysdefault: the sound card itself. "default" goes to PipeWire
+            // once pipewire-alsa is installed, and no PipeWire runs this
+            // early (D-047).
             let _ = std::process::Command::new("aplay")
-                .args(["-q", p])
+                .args(["-q", "-D", "sysdefault", p])
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .spawn();

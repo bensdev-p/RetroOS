@@ -44,6 +44,14 @@ firefox
 fonts-dejavu-core
 # --- sound (the startup chime plays through ALSA before PipeWire exists)
 alsa-utils
+# PipeWire + WirePlumber in each session, started when a program first asks
+# (D-047); -pulse for Firefox and other PulseAudio programs, -alsa for ALSA
+# ones; pw-dump/wpctl (pipewire-bin, wireplumber) are what retro-sys uses.
+pipewire
+pipewire-bin
+pipewire-pulse
+pipewire-alsa
+wireplumber
 # --- disks and power-user basics
 fdisk
 e2fsprogs

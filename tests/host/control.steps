@@ -5,7 +5,9 @@ type CONTROL
 key enter
 wait 1500
 shot 01-control-text
-# S → Startup; Enter opens the page; → changes "Start in"; Enter saves.
+# S S → Sound, then Startup; Enter opens the page; → changes "Start in";
+# Enter saves.
+type s
 type s
 key enter
 wait 500

@@ -1325,6 +1325,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-mixer"
+version = "0.1.0"
+dependencies = [
+ "retro-sys",
+ "retro-tui",
+]
+
+[[package]]
 name = "retro-net"
 version = "0.1.0"
 dependencies = [

@@ -476,6 +476,9 @@ impl App {
         if a == ACTION_WIFI {
             return Some(Action::Run("retro-net"));
         }
+        if a == crate::ACTION_MIXER {
+            return Some(Action::Run("retro-mixer"));
+        }
         match forms::form_for(a, &o.page) {
             Ok(form) => o.form = Some(TextForm::new(form)),
             Err(e) => self.message = Some(vec![e]),
@@ -581,7 +584,9 @@ mod tests {
         a.key(Key::Char('d'));
         assert_eq!(APPLETS[a.sel], Applet::DateTime, "D from Display goes on");
         a.key(Key::Char('s'));
-        assert_eq!(APPLETS[a.sel], Applet::Startup);
+        assert_eq!(APPLETS[a.sel], Applet::Sound);
+        a.key(Key::Char('s'));
+        assert_eq!(APPLETS[a.sel], Applet::Startup, "S again goes on to Startup");
         assert_eq!(a.key(Key::Enter), None);
         a.draw(&mut s);
         let t = s.dump();

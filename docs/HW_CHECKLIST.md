@@ -147,6 +147,11 @@ Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|S
 | 4.18 | Users: administrator rights | select test → Administrator rights: Change... → your password → Make Admin; then take them away again | the list marks test "administrator", then not; trying it on yourself says you cannot take away your own rights |
 | 4.19 | Users: password | select test → Password: Change...; a new password twice and yours | test can log on with the new password |
 | 4.20 | Users: remove; CONTROL | in RetroDOS `CONTROL USERS`, Tab to Remove user, Enter, your password, Enter | "test has been removed."; `DIR C:\..` (or `UNIX "ls /home"`) still shows test's folder |
+| 4.21 | Chime still plays | cold boot with the sound on the 15.6" monitor (HDMI) | the startup chime as before (now played on ALSA's `sysdefault`) |
+| 4.22 | VOLUME and MIXER | at `C:\>`, `VOLUME`; `VOLUME 30`; `MIXER` | VOLUME names the HDMI output and its volume (the first time may take a second: PipeWire starts); MIXER shows a MASTER bar; ↑↓ move it, M mutes, Esc returns |
+| 4.23 | Firefox sound | in the Desktop start Firefox, play a video with sound; open `MIXER` in a DOS Prompt | sound from the monitor; a Firefox bar next to MASTER; lowering Firefox's bar lowers only Firefox |
+| 4.24 | Control Panel → Sound | change the volume there and OK; switch Interface sounds to Off and back | `VOLUME` agrees with the new volume; no errors |
+| 4.25 | Memory with sound | after 4.23, close Firefox; `UNIX "ps -o rss,comm -u $USER"` (photo) | pipewire, wireplumber and pipewire-pulse listed with their RSS (for BUDGET.md) |
 
 ## Displays — Raspberry Pi Touch Display 2 (D-042)
 
