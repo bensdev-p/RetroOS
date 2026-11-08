@@ -586,7 +586,11 @@ mod tests {
         a.key(Key::Char('s'));
         assert_eq!(APPLETS[a.sel], Applet::Sound);
         a.key(Key::Char('s'));
-        assert_eq!(APPLETS[a.sel], Applet::Startup, "S again goes on to Startup");
+        assert_eq!(
+            APPLETS[a.sel],
+            Applet::Startup,
+            "S again goes on to Startup"
+        );
         assert_eq!(a.key(Key::Enter), None);
         a.draw(&mut s);
         let t = s.dump();

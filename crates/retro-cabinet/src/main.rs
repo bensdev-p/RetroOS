@@ -1017,7 +1017,7 @@ impl Cabinet {
         sf.text(f, 8, PATH_Y, 1, t.text, None, &path);
         // Content.
         let cr = self.content();
-        sf.fill_rect(cr.x, cr.y, cr.w as u32, cr.h as u32, t.light);
+        sf.fill_rect(cr.x, cr.y, cr.w as u32, cr.h as u32, t.well);
         let oy = cr.y - self.scroll;
         let visible = |r: Rect| r.y + oy + r.h > cr.y && r.y + oy < cr.y + cr.h;
         let f9 = lantern_9();

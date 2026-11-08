@@ -153,7 +153,7 @@ impl Ask {
 
 /// A small drop-down-looking box (the method, which a click steps).
 fn choice_box(sf: &mut Surface, x: i32, y: i32, w: i32, text: &str, focused: bool, t: &Theme) {
-    sf.fill_rect(x, y, w as u32, FIELD_H as u32, t.light);
+    sf.fill_rect(x, y, w as u32, FIELD_H as u32, t.well);
     sf.frame(x, y, w as u32, FIELD_H as u32, 1, t.line);
     let font = lantern_12();
     let fg = if focused {
@@ -313,7 +313,7 @@ impl WifiDlg {
             &ellipsize_in(font, &self.status(), W - 28),
         );
         let r = LIST;
-        sf.fill_rect(r.x, r.y, r.w as u32, r.h as u32, t.light);
+        sf.fill_rect(r.x, r.y, r.w as u32, r.h as u32, t.well);
         sf.frame(r.x, r.y, r.w as u32, r.h as u32, 1, t.line);
         for (row, i) in (self.top..self.nets.len())
             .take(WifiDlg::rows())
@@ -324,7 +324,7 @@ impl WifiDlg {
             let (fg, dim) = if i == self.sel {
                 let bg = if self.focus == 0 { t.sel } else { t.dark };
                 sf.fill_rect(r.x + 2, y, (r.w - 4) as u32, ROW_H as u32, bg);
-                (t.sel_text, t.light)
+                (t.sel_text, t.well)
             } else {
                 (t.text, t.disabled)
             };

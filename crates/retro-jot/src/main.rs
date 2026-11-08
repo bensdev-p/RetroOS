@@ -1024,7 +1024,7 @@ impl Jot {
         let (w, _) = (c.width as i32, c.height as i32);
         let mut sf = c.surface();
         let (text, v, hz) = areas(self.size);
-        sf.fill_rect(text.x, text.y, text.w as u32, text.h as u32, t.light);
+        sf.fill_rect(text.x, text.y, text.w as u32, text.h as u32, t.well);
         self.draw_text(&mut sf, text, t);
         let open = self.menu.as_ref().map(|m| m.title);
         self.bar.draw(&mut sf, w, open, t);

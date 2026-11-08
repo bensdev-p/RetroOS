@@ -54,13 +54,13 @@ impl MenuBar {
 
     /// Draw across `w` art pixels at the top; `open` is highlighted.
     pub fn draw(&self, sf: &mut Surface, w: i32, open: Option<usize>, t: &Theme) {
-        sf.fill_rect(0, 0, w as u32, (MENU_BAR_H - 1) as u32, t.light);
+        sf.fill_rect(0, 0, w as u32, (MENU_BAR_H - 1) as u32, t.well);
         sf.fill_rect(0, MENU_BAR_H - 1, w as u32, 1, t.line);
         for (i, (r, title)) in self.rects().into_iter().zip(&self.titles).enumerate() {
             let (fg, bg) = if open == Some(i) {
                 (t.sel_text, t.sel)
             } else {
-                (t.text, t.light)
+                (t.text, t.well)
             };
             sf.fill_rect(r.x, r.y, r.w as u32, r.h as u32, bg);
             sf.text(lantern_12(), r.x + 7, TEXT_Y, 1, fg, None, title);
@@ -193,7 +193,7 @@ impl TextField {
 
     /// Draw at (x, y), `w` wide; the cursor and selection show when focused.
     pub fn draw(&self, sf: &mut Surface, x: i32, y: i32, w: i32, focused: bool, t: &Theme) {
-        sf.fill_rect(x, y, w as u32, FIELD_H as u32, t.light);
+        sf.fill_rect(x, y, w as u32, FIELD_H as u32, t.well);
         sf.frame(x, y, w as u32, FIELD_H as u32, 1, t.line);
         let font = lantern_12();
         let cw = |c: &char| font.glyph_or_replacement(self.shown(*c)).width as i32;
@@ -312,7 +312,7 @@ impl ListBox {
     }
 
     pub fn draw(&self, sf: &mut Surface, r: Rect, focused: bool, t: &Theme) {
-        sf.fill_rect(r.x, r.y, r.w as u32, r.h as u32, t.light);
+        sf.fill_rect(r.x, r.y, r.w as u32, r.h as u32, t.well);
         sf.frame(r.x, r.y, r.w as u32, r.h as u32, 1, t.line);
         let font = lantern_12();
         for (row, i) in (self.top..self.items.len())
@@ -337,9 +337,9 @@ impl ListBox {
 
 /// A check box with its label at (x, y); 13 pixels tall.
 pub fn check_box(sf: &mut Surface, x: i32, y: i32, label: &str, on: bool, t: &Theme) {
-    sf.fill_rect(x, y, 13, 13, t.light);
+    sf.fill_rect(x, y, 13, 13, t.well);
     sf.frame(x, y, 13, 13, 1, t.line);
-    let mark = if t.light == t.text { t.face } else { t.text };
+    let mark = t.text;
     if on {
         for i in 2..11 {
             sf.put(x + i, y + i, mark);

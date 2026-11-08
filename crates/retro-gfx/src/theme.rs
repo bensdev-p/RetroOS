@@ -18,6 +18,11 @@ pub struct Theme {
     /// Bevels: top-left and bottom-right.
     pub light: Rgb,
     pub dark: Rgb,
+    /// Inside text fields, lists, check boxes and work areas; `text` on it.
+    /// (Classic and Paper: white; the phosphor schemes and High Contrast:
+    /// black, so the text stays readable — `light` there is as bright as
+    /// the text.)
+    pub well: Rgb,
     /// Title bars: active and inactive, background and text.
     pub active: Rgb,
     pub active_text: Rgb,
@@ -51,6 +56,7 @@ impl Theme {
                 line: BLACK,
                 light: WHITE,
                 dark: BLACK,
+                well: WHITE,
                 active: BLACK,
                 active_text: WHITE,
                 inactive: WHITE,
@@ -78,6 +84,7 @@ impl Theme {
                     line: mid,
                     light: bright,
                     dark,
+                    well: black,
                     active: bright,
                     active_text: black,
                     inactive: black,
@@ -101,6 +108,7 @@ impl Theme {
                 line: WHITE,
                 light: WHITE,
                 dark: WHITE,
+                well: 0x000000,
                 active: LEMON,
                 active_text: 0x000000,
                 inactive: 0x000000,
@@ -123,6 +131,7 @@ impl Theme {
                 line: BLACK,
                 light: WHITE,
                 dark: SLATE,
+                well: WHITE,
                 active: COBALT,
                 active_text: WHITE,
                 inactive: SILVER,

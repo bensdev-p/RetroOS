@@ -144,7 +144,7 @@ impl About {
                 &size,
             );
             // The bar: outlined, filled with the program's share.
-            sf.fill_rect(BAR_X, y + 4, BAR_W as u32, 12, t.light);
+            sf.fill_rect(BAR_X, y + 4, BAR_W as u32, 12, t.well);
             sf.frame(BAR_X, y + 4, BAR_W as u32, 12, 1, t.line);
             let fill = ((BAR_W - 2) as u64 * r.kb.min(used) / used) as u32;
             if fill > 0 {

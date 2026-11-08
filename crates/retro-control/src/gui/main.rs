@@ -299,7 +299,7 @@ const CHOICE_W: i32 = 190;
 
 fn draw_choice(sf: &mut Surface, r: Rect, text: &str, focused: bool, enabled: bool, t: &Theme) {
     let w = r.w.min(CHOICE_W);
-    sf.fill_rect(r.x, r.y, w as u32, FIELD_H as u32, t.light);
+    sf.fill_rect(r.x, r.y, w as u32, FIELD_H as u32, t.well);
     sf.frame(r.x, r.y, w as u32, FIELD_H as u32, 1, t.line);
     let font = lantern_12();
     let label = ellipsize_in(font, text, w - 30);
@@ -339,7 +339,7 @@ fn draw_level(
 ) {
     let w = 150;
     let y = r.y + 4;
-    sf.fill_rect(r.x, y, w as u32, 12, t.light);
+    sf.fill_rect(r.x, y, w as u32, 12, t.well);
     sf.frame(r.x, y, w as u32, 12, 1, t.line);
     let fill = ((w - 2) as u32 * n) / 100;
     if enabled && fill > 0 {
@@ -379,7 +379,7 @@ impl Panel {
     fn draw_window(&self, c: &mut Canvas, t: &Theme) {
         let (w, h) = (c.width as i32, c.height as i32);
         let mut sf = c.surface();
-        sf.clear(t.light);
+        sf.clear(t.well);
         let font = lantern_12();
         for (i, a) in APPLETS.iter().enumerate() {
             let r = cell(i);
@@ -564,7 +564,7 @@ impl Panel {
         };
         let (w, h) = (c.width as i32, c.height as i32);
         let mut sf = c.surface();
-        sf.fill_rect(0, 0, w as u32, h as u32, t.light);
+        sf.fill_rect(0, 0, w as u32, h as u32, t.well);
         sf.frame(0, 0, w as u32, h as u32, 1, t.line);
         let font = lantern_12();
         for (i, (_, label)) in opts.iter().enumerate() {
@@ -906,6 +906,14 @@ impl Panel {
         }
         if self.drop.as_ref().is_some_and(|d| d.surface == id) {
             return self.drop_event(ui, ev);
+        }
+        // A click anywhere else in our windows closes an open list and goes
+        // no further (Station only closes it for clicks on other programs;
+        // so the arrow closes it rather than opening it again).
+        if self.drop.is_some() {
+            if let Event::Button { pressed: true, .. } = ev {
+                return self.close_drop(ui);
+            }
         }
         if let Some(f) = self.form.as_mut().filter(|f| f.surface == id) {
             let out = f.event(ui, ev);

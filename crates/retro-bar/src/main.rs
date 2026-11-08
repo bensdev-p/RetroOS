@@ -409,9 +409,9 @@ impl Bar {
         sf.text(font, 16, 14, 1, t.text, None, question);
         if d.ask == Ask::ExitToDos {
             // A check box: outlined, light inside, an X when set.
-            sf.fill_rect(CHECK.x, CHECK.y, 13, 13, t.light);
+            sf.fill_rect(CHECK.x, CHECK.y, 13, 13, t.well);
             sf.frame(CHECK.x, CHECK.y, 13, 13, 1, t.line);
-            let mark = if t.light == t.text { t.face } else { t.text };
+            let mark = t.text;
             if d.close_all {
                 for i in 2..11 {
                     sf.put(CHECK.x + i, CHECK.y + i, mark);

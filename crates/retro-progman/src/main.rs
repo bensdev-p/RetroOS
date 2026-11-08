@@ -481,7 +481,7 @@ impl ProgMan {
         let (w, h) = (c.width as i32, c.height as i32);
         let mut sf = c.surface();
         // Workspace, then the groups (scrolled), then the menu bar over them.
-        sf.fill_rect(0, MENU_H, w as u32, (h - MENU_H).max(0) as u32, t.light);
+        sf.fill_rect(0, MENU_H, w as u32, (h - MENU_H).max(0) as u32, t.well);
         for (g, b) in self.boxes.iter().enumerate() {
             let oy = MENU_H - self.scroll;
             let r = b.rect;
@@ -490,14 +490,14 @@ impl ProgMan {
             }
             self.draw_group(&mut sf, g, b, oy, t);
         }
-        sf.fill_rect(0, 0, w as u32, (MENU_H - 1) as u32, t.light);
+        sf.fill_rect(0, 0, w as u32, (MENU_H - 1) as u32, t.well);
         sf.fill_rect(0, MENU_H - 1, w as u32, 1, t.line);
         let open = self.menu.as_ref().map(|m| m.title);
         for (i, (r, title)) in menu_title_rects().into_iter().zip(MENU_TITLES).enumerate() {
             let (fg, bg) = if open == Some(i) {
                 (t.sel_text, t.sel)
             } else {
-                (t.text, t.light)
+                (t.text, t.well)
             };
             sf.fill_rect(r.x, r.y, r.w as u32, r.h as u32, bg);
             sf.text(lantern_12(), r.x + 7, TEXT_Y, 1, fg, None, title);
@@ -538,7 +538,7 @@ impl ProgMan {
             cy + oy,
             (r.w - 2 * layout::BORDER) as u32,
             ch.max(0) as u32,
-            t.light,
+            t.well,
         );
         sf.frame(
             x + layout::BORDER - 1,
