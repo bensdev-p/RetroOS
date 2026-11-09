@@ -32,7 +32,6 @@ use smithay::wayland::shell::xdg::SurfaceCachedState;
 use std::collections::HashMap;
 
 /// Two clicks closer together than this are a double-click.
-const DOUBLE_CLICK_MS: u32 = 500;
 /// The mouse must move this far (logical px) before a title-bar drag moves.
 const DRAG_START: f64 = 3.0;
 
@@ -244,7 +243,9 @@ impl Station {
     ];
 
     pub fn metrics(&self) -> Metrics {
-        Metrics::new(self.scale, self.art_scale).with_theme(self.theme)
+        Metrics::new(self.scale, self.art_scale)
+            .with_theme(self.theme)
+            .with_pattern(retro_gfx::prefs::pattern(&self.prefs.pattern))
     }
 
     /// The screen minus reserved strips (the System Bar's exclusive zone).
@@ -1396,7 +1397,7 @@ impl Station {
             return true;
         }
         let hit = self.hit_test(pos);
-        let double = matches!(self.desktop.last_click, Some((h, t)) if h == hit && time.wrapping_sub(t) < DOUBLE_CLICK_MS);
+        let double = matches!(self.desktop.last_click, Some((h, t)) if h == hit && time.wrapping_sub(t) < self.prefs.double_click_ms);
         self.desktop.last_click = Some((hit, time));
         if self.desktop.menu.is_some() {
             match self.menu_item_at(pos) {

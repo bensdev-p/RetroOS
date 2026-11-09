@@ -103,6 +103,8 @@ pub struct Station {
     /// GUI theme.
     pub scheme: &'static retro_gfx::Scheme,
     pub theme: retro_gfx::Theme,
+    /// Mouse and desktop preferences (Control Panel; reloaded on PREFS).
+    pub prefs: retro_gfx::prefs::Prefs,
 }
 
 #[derive(Default)]
@@ -245,6 +247,7 @@ impl Station {
             desktop: Default::default(),
             scheme: retro_gfx::Scheme::system(),
             theme: retro_gfx::Theme::system(),
+            prefs: retro_gfx::prefs::load(),
         }
     }
 
@@ -304,6 +307,14 @@ impl Station {
         o.change_current_state(None, None, None, Some((x, 0).into()));
         self.space.map_output(&o, (x, 0));
         self.extra_outputs.push(o);
+        self.dirty = true;
+    }
+
+    /// Read desktop.conf again (Control Panel → Mouse, Desktop): the pattern
+    /// redraws (it is part of the drawing metrics), mice get the new speed.
+    pub fn reload_prefs(&mut self) {
+        self.prefs = retro_gfx::prefs::load();
+        crate::udev::apply_prefs_all(self);
         self.dirty = true;
     }
 

@@ -148,6 +148,29 @@ pub struct UdevData {
     gpu_idle_since: Option<Instant>,
     pub cursor: CursorCache,
     pub pointer_seen: bool,
+    /// Mice, touchpads and the like, for Control Panel → Mouse settings.
+    input_devices: Vec<smithay::reexports::input::Device>,
+}
+
+/// Pointer speed and button swap (Control Panel → Mouse) on one device.
+fn apply_prefs(d: &mut smithay::reexports::input::Device, p: &retro_gfx::prefs::Prefs) {
+    if d.config_accel_is_available() {
+        // -2..2 → libinput's -1..1 (not the very ends: they feel broken).
+        let _ = d.config_accel_set_speed(p.pointer_speed as f64 * 0.4);
+    }
+    if d.config_left_handed_is_available() {
+        let _ = d.config_left_handed_set(p.left_handed);
+    }
+}
+
+/// Settings changed: apply them to every pointing device.
+pub fn apply_prefs_all(st: &mut Station) {
+    let prefs = st.prefs.clone();
+    if let crate::Backend::Udev(ud) = &mut st.backend {
+        for d in ud.input_devices.iter_mut() {
+            apply_prefs(d, &prefs);
+        }
+    }
 }
 
 impl UdevData {
@@ -654,6 +677,7 @@ pub fn init(st: &mut Station) -> Result<(), String> {
         gpu_idle_since: None,
         cursor: CursorCache::default(),
         pointer_seen: false,
+        input_devices: Vec::new(),
     };
     let h = st.loop_handle.clone();
     let mut errors = Vec::new();
@@ -692,12 +716,23 @@ pub fn init(st: &mut Station) -> Result<(), String> {
     }
 
     h.insert_source(input_backend, |mut event, _, st: &mut Station| {
-        if let InputEvent::DeviceAdded { device } = &mut event {
-            if device.has_capability(DeviceCapability::Pointer) {
+        match &mut event {
+            InputEvent::DeviceAdded { device }
+                if device.has_capability(DeviceCapability::Pointer) =>
+            {
+                let prefs = st.prefs.clone();
                 if let crate::Backend::Udev(ud) = &mut st.backend {
                     ud.pointer_seen = true;
+                    apply_prefs(device, &prefs);
+                    ud.input_devices.push(device.clone());
                 }
             }
+            InputEvent::DeviceRemoved { device } => {
+                if let crate::Backend::Udev(ud) = &mut st.backend {
+                    ud.input_devices.retain(|d| d != device);
+                }
+            }
+            _ => {}
         }
         st.process_input_event(event);
     })

@@ -10,6 +10,7 @@ pub mod grid;
 pub mod icons;
 pub mod iconset;
 pub mod palette;
+pub mod prefs;
 pub mod screen;
 mod surface;
 pub mod theme;

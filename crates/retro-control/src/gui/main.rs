@@ -18,7 +18,7 @@ use retro_gfx::{Canvas, Surface, Theme};
 use retro_ui::controls::{check_box, ListBox, TextField, FIELD_H, ROW_H};
 use retro_ui::keys::*;
 use retro_ui::{station, Event, Program, Rect, SurfaceId, Ui};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 const TITLE: &str = "Control Panel";
 const CELL_W: i32 = 84;
@@ -86,14 +86,19 @@ const TEXT_W: i32 = 200;
 /// Width of an action button ("Open...").
 const ACTION_W: i32 = 100;
 
+/// Icons per row (Windows 3.1's Control Panel wraps its icons too).
+const PER_ROW: usize = 5;
+
 fn cell(i: usize) -> Rect {
-    Rect::new(8 + i as i32 * CELL_W, GRID_Y, CELL_W, CELL_H)
+    let (row, col) = ((i / PER_ROW) as i32, (i % PER_ROW) as i32);
+    Rect::new(8 + col * CELL_W, GRID_Y + row * CELL_H, CELL_W, CELL_H)
 }
 
 fn win_size() -> (i32, i32) {
+    let rows = APPLETS.len().div_ceil(PER_ROW) as i32;
     (
-        16 + APPLETS.len() as i32 * CELL_W,
-        GRID_Y + CELL_H + 8 + STATUS_H,
+        16 + PER_ROW.min(APPLETS.len()) as i32 * CELL_W,
+        GRID_Y + rows * CELL_H + 8 + STATUS_H,
     )
 }
 
@@ -640,6 +645,9 @@ impl Panel {
                 if let Some(s) = &done.scheme {
                     let _ = station::request(&["SCHEME", s]);
                 }
+                if done.prefs {
+                    let _ = station::request(&["PREFS"]);
+                }
                 if done.keymap {
                     let _ = station::request(&["KEYMAP"]);
                 }
@@ -947,9 +955,9 @@ impl Panel {
             } => {
                 if let Some(i) = (0..APPLETS.len()).find(|i| cell(*i).contains(x, y)) {
                     self.sel = i;
-                    let double = self
-                        .last_click
-                        .is_some_and(|(j, t)| j == i && t.elapsed() < Duration::from_millis(500));
+                    let double = self.last_click.is_some_and(|(j, t)| {
+                        j == i && t.elapsed() < retro_gfx::prefs::double_click()
+                    });
                     self.last_click = Some((i, Instant::now()));
                     if double {
                         self.last_click = None;
@@ -961,8 +969,11 @@ impl Panel {
             Event::Key { sym, text, .. } => {
                 let n = APPLETS.len();
                 match sym {
-                    LEFT | UP => self.sel = self.sel.saturating_sub(1),
-                    RIGHT | DOWN => self.sel = (self.sel + 1).min(n - 1),
+                    LEFT => self.sel = self.sel.saturating_sub(1),
+                    RIGHT => self.sel = (self.sel + 1).min(n - 1),
+                    UP => self.sel = self.sel.saturating_sub(PER_ROW),
+                    DOWN if self.sel + PER_ROW < n => self.sel += PER_ROW,
+                    DOWN => {}
                     HOME => self.sel = 0,
                     END => self.sel = n - 1,
                     RETURN | KP_ENTER => return self.open(ui, APPLETS[self.sel]),

@@ -28,10 +28,9 @@ use retro_ui::controls::{MenuBar, TextField, FIELD_H, MENU_BAR_H};
 use retro_ui::keys::*;
 use retro_ui::{station, Event, Program, Rect, SurfaceId, Ui};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 const BTN_LEFT: u32 = 0x110;
-const DOUBLE_CLICK: Duration = Duration::from_millis(450);
 const DRIVE_Y: i32 = MENU_BAR_H + 2;
 const PATH_Y: i32 = MENU_BAR_H + 28;
 const CONTENT_Y: i32 = MENU_BAR_H + 46;
@@ -957,9 +956,9 @@ impl Cabinet {
             return self.redraw(ui);
         };
         let now = Instant::now();
-        let double = self
-            .last_click
-            .is_some_and(|(li, t)| li == i && now.duration_since(t) < DOUBLE_CLICK);
+        let double = self.last_click.is_some_and(|(li, t)| {
+            li == i && now.duration_since(t) < retro_gfx::prefs::double_click()
+        });
         if ui.shift() && self.panel.entries[i].name != ".." {
             // Shift+click adds to (or takes from) the selection.
             if self.panel.marked.is_empty() {

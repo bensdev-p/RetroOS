@@ -30,7 +30,6 @@ const CW: i32 = 8;
 const CH: i32 = 16;
 const MARGIN: i32 = 2;
 const BLINK: u32 = 1;
-const DOUBLE_CLICK: Duration = Duration::from_millis(450);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Cmd {
@@ -713,7 +712,8 @@ impl Jot {
                             if let Some(i) = f.list.click(y - FILE_LIST.y) {
                                 let now = Instant::now();
                                 let double = f.last_click.is_some_and(|(li, t)| {
-                                    li == i && now.duration_since(t) < DOUBLE_CLICK
+                                    li == i
+                                        && now.duration_since(t) < retro_gfx::prefs::double_click()
                                 });
                                 f.last_click = Some((i, now));
                                 let (n, is_dir) = f.entries[i].clone();

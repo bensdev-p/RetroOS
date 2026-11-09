@@ -95,6 +95,9 @@ fn main() {
                         s.set_mono(retro_tui::is_mono(&scheme));
                         s.invalidate();
                     }
+                    if d.prefs {
+                        let _ = retro_ui::station::request(&["PREFS"]);
+                    }
                     if d.keymap {
                         let _ = retro_ui::station::request(&["KEYMAP"]);
                     }

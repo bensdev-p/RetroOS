@@ -108,6 +108,14 @@ const BUILTIN: &[(&str, &str)] = &[
         "cp-sound",
         include_str!("../../../assets/icons/cp-sound.icon"),
     ),
+    (
+        "cp-mouse",
+        include_str!("../../../assets/icons/cp-mouse.icon"),
+    ),
+    (
+        "cp-desktop",
+        include_str!("../../../assets/icons/cp-desktop.icon"),
+    ),
 ];
 
 /// Theme icon names (from .desktop files) that our own pictures stand for.

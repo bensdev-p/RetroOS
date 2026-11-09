@@ -43,8 +43,8 @@ pub const CORNER: i32 = TITLE + BORDER;
 pub const ICON_W: i32 = 80;
 pub const ICON_H: i32 = 52;
 
-/// How to draw: the pixel scales and the colour scheme's theme (so any
-/// cache keyed by Metrics is redrawn when either changes).
+/// How to draw: the pixel scales, the colour scheme's theme and the desktop
+/// pattern (so any cache keyed by Metrics is redrawn when one changes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Metrics {
     /// Logical pixels per art pixel.
@@ -54,6 +54,8 @@ pub struct Metrics {
     /// Output scale (physical pixels per logical pixel).
     pub scale: i32,
     pub theme: Theme,
+    /// The desktop pattern's rows (retro_gfx::prefs::PATTERNS).
+    pub pattern: [u8; 8],
 }
 
 impl Metrics {
@@ -67,11 +69,16 @@ impl Metrics {
             px: u * scale,
             scale,
             theme: Theme::default(),
+            pattern: retro_gfx::prefs::pattern("check"),
         }
     }
 
     pub fn with_theme(self, theme: Theme) -> Metrics {
         Metrics { theme, ..self }
+    }
+
+    pub fn with_pattern(self, pattern: [u8; 8]) -> Metrics {
+        Metrics { pattern, ..self }
     }
 
     pub fn border(&self) -> i32 {
@@ -359,10 +366,10 @@ pub fn outline_rects(
 // ----------------------------------------------------------------- desktop
 
 /// The desktop pattern at a physical pixel: an 8×8 two-colour dither
-/// (STYLE.md §4), a 50 % checkerboard of the theme's two desktop colours
-/// (Cobalt/Black in Phosphor Classic).
+/// (STYLE.md §4) in the theme's two desktop colours (Cobalt/Black in
+/// Phosphor Classic), the person's choice (Control Panel → Desktop).
 pub fn pattern_at(x: i32, y: i32, m: &Metrics) -> Rgb {
-    if ((x / m.px) + (y / m.px)) & 1 == 0 {
+    if retro_gfx::prefs::pattern_bit(&m.pattern, x / m.px, y / m.px) {
         m.theme.desktop.0
     } else {
         m.theme.desktop.1
@@ -517,6 +524,7 @@ mod tests {
                 px: 2,
                 scale: 1,
                 theme: Theme::default(),
+                pattern: retro_gfx::prefs::pattern("check"),
             }
         );
         assert_eq!(
@@ -526,6 +534,7 @@ mod tests {
                 px: 4,
                 scale: 2,
                 theme: Theme::default(),
+                pattern: retro_gfx::prefs::pattern("check"),
             }
         );
         assert_eq!(
@@ -535,6 +544,7 @@ mod tests {
                 px: 2,
                 scale: 2,
                 theme: Theme::default(),
+                pattern: retro_gfx::prefs::pattern("check"),
             }
         );
         let m = m2();

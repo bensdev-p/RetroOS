@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-052**).
+  (**next: D-053**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -211,8 +211,11 @@ Suggested order, each step leaving a working image:
   `--headless WxH+WxH`, host test `dual.steps`. HW D.5, D.7–D.11.
 - **Stashed for step 6**: `git stash list` — KDE server-decoration for GTK 3
   / Firefox frames (unbuilt; renumber its D-050 when applied).
-- **Order from here** (tester's wish, 2026-11-09: go in order): step 2's
-  Mouse and Desktop pages; the rest of step 3; step 4; step 5; then 6.
+- **Step 2 done except Bluetooth/Updates/Software Sources** (they come with
+  steps 4–5): Mouse and Desktop pages (D-052, `retro_gfx::prefs`, broker
+  `PREFS`).
+- **Order from here** (tester's wish, 2026-11-09: go in order): the rest of
+  step 3; step 4; step 5; then 6.
 
 ## 8. Open items carried over
 

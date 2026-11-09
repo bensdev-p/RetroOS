@@ -4,6 +4,7 @@
 //! exactly the same things. Each applet [`load`]s a page of [`Field`]s;
 //! the front-end lets the user edit them and calls [`apply`].
 
+use retro_gfx::prefs;
 use retro_sys::{clock, display, keyboard, netconf, sound, startup, users};
 
 pub mod forms;
@@ -12,6 +13,8 @@ pub use forms::{action_label, Form};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Applet {
     Display,
+    Desktop,
+    Mouse,
     Startup,
     DateTime,
     Keyboard,
@@ -23,7 +26,9 @@ pub enum Applet {
 pub const APPLETS: &[Applet] = &[
     Applet::Display,
     Applet::DateTime,
+    Applet::Desktop,
     Applet::Keyboard,
+    Applet::Mouse,
     Applet::Network,
     Applet::Sound,
     Applet::Startup,
@@ -39,6 +44,8 @@ impl Applet {
             Applet::Keyboard => "Keyboard",
             Applet::Network => "Network",
             Applet::Users => "Users",
+            Applet::Desktop => "Desktop",
+            Applet::Mouse => "Mouse",
             Applet::Sound => "Sound",
         }
     }
@@ -52,6 +59,8 @@ impl Applet {
             Applet::Keyboard => "cp-keyboard",
             Applet::Network => "cp-network",
             Applet::Users => "cp-users",
+            Applet::Desktop => "cp-desktop",
+            Applet::Mouse => "cp-mouse",
             Applet::Sound => "cp-sound",
         }
     }
@@ -64,6 +73,8 @@ impl Applet {
             Applet::Keyboard => "The keyboard layout.",
             Applet::Network => "Wi-Fi networks, the wired address, the country.",
             Applet::Users => "Who can log on, their passwords and rights.",
+            Applet::Desktop => "The pattern behind the windows.",
+            Applet::Mouse => "Pointer speed, buttons and double-click speed.",
             Applet::Sound => "Where sound plays, its volume, interface sounds.",
         }
     }
@@ -389,6 +400,46 @@ pub fn load(applet: Applet) -> Page {
             let i = list.iter().position(|(n, _)| *n == layout).unwrap_or(0);
             vec![Field::new("layout", "Layout", Value::List(list, i))]
         }
+        Applet::Mouse => {
+            let p = prefs::load();
+            vec![
+                Field::new(
+                    "speed",
+                    "Pointer speed",
+                    choice(
+                        opts(&[
+                            ("-2", "Slowest"),
+                            ("-1", "Slow"),
+                            ("0", "Normal"),
+                            ("1", "Fast"),
+                            ("2", "Fastest"),
+                        ]),
+                        &p.pointer_speed.to_string(),
+                    ),
+                ),
+                Field::new(
+                    "left_handed",
+                    "Swap left and right buttons",
+                    Value::Check(p.left_handed),
+                ),
+                Field::new(
+                    "double_click",
+                    "Double-click speed",
+                    choice(
+                        opts(&[("700", "Slow"), ("500", "Normal"), ("350", "Fast")]),
+                        &p.double_click_ms.to_string(),
+                    ),
+                ),
+            ]
+        }
+        Applet::Desktop => {
+            let p = prefs::load();
+            let list: Vec<(String, String)> = prefs::PATTERNS
+                .iter()
+                .map(|(k, n, _)| (k.to_string(), n.to_string()))
+                .collect();
+            vec![Field::new("pattern", "Pattern", choice(list, &p.pattern))]
+        }
         Applet::Sound => {
             let (m, why) = match sound::mixer() {
                 Ok(m) if m.outputs.is_empty() => (m, Some("No sound outputs were found.".into())),
@@ -523,6 +574,8 @@ pub struct Applied {
     pub restart: bool,
     /// Settings that take effect when the computer next starts.
     pub reboot: bool,
+    /// desktop.conf changed: Station reloads it (broker PREFS).
+    pub prefs: bool,
 }
 
 impl Applied {
@@ -594,6 +647,18 @@ pub fn apply(page: &Page) -> Result<Applied, String> {
         }
         // Users change through forms, at once; the page itself saves nothing.
         Applet::Users => {}
+        Applet::Mouse | Applet::Desktop => {
+            let mut p = prefs::load();
+            if page.applet == Applet::Mouse {
+                p.pointer_speed = val("speed").parse().unwrap_or(0);
+                p.left_handed = val("left_handed") == "yes";
+                p.double_click_ms = val("double_click").parse().unwrap_or(500);
+            } else {
+                p.pattern = val("pattern");
+            }
+            prefs::save(&p).map_err(|e| format!("Cannot save the settings: {e}"))?;
+            done.prefs = true;
+        }
         Applet::Sound => {
             let id: Option<u32> = val("output").parse().ok();
             if let Some(id) = id {
@@ -733,6 +798,8 @@ pub fn applet_named(name: &str) -> Option<Applet> {
         "network" | "net" | "wifi" => Applet::Network,
         "users" | "user" | "accounts" => Applet::Users,
         "sound" | "audio" | "volume" => Applet::Sound,
+        "desktop" | "pattern" => Applet::Desktop,
+        "mouse" | "pointer" => Applet::Mouse,
         _ => return None,
     })
 }

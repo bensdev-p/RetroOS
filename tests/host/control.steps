@@ -152,6 +152,22 @@ key escape
 wait 300
 key escape
 wait 500
+# Desktop: the Diagonal pattern; Station redraws the desktop at once (PREFS).
+key home
+type d
+type d
+key enter
+wait 800
+key space
+wait 400
+key down
+key down
+key enter
+wait 300
+key enter
+wait 1200
+expect-file .config/retroos/desktop.conf pattern=diagonal
+shot 11-diagonal
 key alt+f4
 wait 800
 expect-task 1

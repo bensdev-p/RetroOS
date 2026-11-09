@@ -284,6 +284,11 @@ impl Station {
                     None => "ERR	no such task".into(),
                 }
             }
+            "PREFS" => {
+                // desktop.conf changed (Control Panel → Mouse, Desktop).
+                self.reload_prefs();
+                "OK".into()
+            }
             "KEYMAP" => {
                 // /etc/default/keyboard changed (KEYB): load it now.
                 let cfg = crate::input::xkb_config();

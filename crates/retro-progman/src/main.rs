@@ -19,12 +19,11 @@ use retro_gfx::widgets::{MenuItem, TEXT_Y};
 use retro_gfx::{Canvas, Theme};
 use retro_ui::keys::*;
 use retro_ui::{station, Event, Program, Rect, SurfaceId, Ui};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 const TITLE: &str = "Program Manager";
 const APP_ID: &str = "retroos.progman";
 const BTN_LEFT: u32 = 0x110;
-const DOUBLE_CLICK: Duration = Duration::from_millis(450);
 const MENU_TITLES: [&str; 4] = ["File", "Options", "Window", "Help"];
 
 struct Item {
@@ -458,7 +457,7 @@ impl ProgMan {
             Some(Hit::Icon(g, i)) => {
                 let now = Instant::now();
                 let double = self.last_click.is_some_and(|(lg, li, t)| {
-                    lg == g && li == i && now.duration_since(t) < DOUBLE_CLICK
+                    lg == g && li == i && now.duration_since(t) < retro_gfx::prefs::double_click()
                 });
                 self.active = g;
                 self.sel[g] = Some(i);
