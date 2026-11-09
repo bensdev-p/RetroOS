@@ -599,6 +599,7 @@ pub fn render(st: &mut Station) {
         personality: st.personality,
         desktop: &st.desktop,
         x11_overrides: &st.x11_overrides,
+        origin: (0, 0).into(),
     };
     let cursor = &mut ud.cursor;
     let Some(gpu) = ud.gpu.as_mut() else {

@@ -160,6 +160,8 @@ pub struct Desktop {
     band_ids: Vec<Id>,
     outline_ids: Vec<Id>,
     pub draw: Vec<DrawItem>,
+    /// In RetroDOS: the desktop pattern for the extra screens (D-051).
+    pub side: Vec<DrawItem>,
     /// The System Bar process, and how often it was started.
     bar_pid: Option<u32>,
     bar_starts: u32,
@@ -292,7 +294,7 @@ impl Station {
     /// Programs with their own title bar get the whole work area.
     pub(crate) fn maximized_rect(&self, t: &Task) -> Rectangle<i32, Logical> {
         let m = self.metrics();
-        let w = self.work_area();
+        let w = self.work_area_of(t);
         if !Self::is_ssd(t) {
             return w;
         }
@@ -301,6 +303,18 @@ impl Station {
             (w.loc.x - b, w.loc.y - b).into(),
             (w.size.w + 2 * b, w.size.h + 2 * b).into(),
         ))
+    }
+
+    /// The work area of the screen a window is on (by the middle of its
+    /// normal place): the main screen's work area, or a whole extra screen
+    /// (D-051).
+    pub(crate) fn work_area_of(&self, t: &Task) -> Rectangle<i32, Logical> {
+        let r = t.place.rect;
+        let mid: Point<i32, Logical> = (r.loc.x + r.size.w / 2, r.loc.y + r.size.h / 2).into();
+        match self.output_at(mid) {
+            0 => self.work_area(),
+            i => self.output_rects()[i],
+        }
     }
 
     /// The largest normal client area that fits on the screen with its frame.
@@ -1111,14 +1125,13 @@ impl Station {
         let mut r = d.from;
         match d.kind {
             DragKind::Move => {
-                // Keep part of the title bar on the screen.
+                // Keep part of the title bar on a screen; any screen will do.
                 let keep = 3 * chrome::TITLE * m.u;
-                r.loc.x = (r.loc.x + dx).clamp(
-                    work.loc.x - r.size.w + keep,
-                    work.loc.x + work.size.w - keep,
-                );
-                r.loc.y = (r.loc.y + dy)
-                    .clamp(work.loc.y - m.border(), work.loc.y + work.size.h - m.top());
+                let lay = self.layout_rect();
+                r.loc.x = (r.loc.x + dx)
+                    .clamp(lay.loc.x - r.size.w + keep, lay.loc.x + lay.size.w - keep);
+                let bottom = (work.loc.y + work.size.h).max(lay.loc.y + lay.size.h);
+                r.loc.y = (r.loc.y + dy).clamp(work.loc.y - m.border(), bottom - m.top());
             }
             DragKind::Resize(e) => {
                 let Some(t) = self.tasks.get(d.id) else {
@@ -1662,6 +1675,40 @@ impl Station {
             .into()
     }
 
+    /// The dithered desktop pattern in full-width bands covering every
+    /// screen (cached; one tile id per band for damage tracking).
+    pub fn pattern_bands(&mut self) -> Vec<DrawItem> {
+        const BAND: i32 = 64;
+        let m = self.metrics();
+        let lay = self.layout_rect();
+        let key = (lay.size.w, lay.size.h, m);
+        if self.desktop.band.as_ref().map(|(k, _)| k) != Some(&key) {
+            let c = chrome::pattern_band((lay.size.w * m.scale) as u32, BAND, &m);
+            self.desktop.band = Some((key, chrome::to_buffer(&c, m.scale)));
+        }
+        let band_h = BAND * m.px / m.scale;
+        let n = ((lay.size.h + band_h - 1) / band_h).max(1) as usize;
+        while self.desktop.band_ids.len() < n {
+            self.desktop.band_ids.push(Id::new());
+        }
+        let Some((_, b)) = &self.desktop.band else {
+            return Vec::new();
+        };
+        self.desktop
+            .band_ids
+            .iter()
+            .take(n)
+            .enumerate()
+            .map(|(i, id)| {
+                DrawItem::Buffer(
+                    b.clone(),
+                    (lay.loc.x, lay.loc.y + i as i32 * band_h).into(),
+                    Some(id.clone()),
+                )
+            })
+            .collect()
+    }
+
     /// Rebuild what changed and the list of things to draw.
     pub fn desktop_prepare(&mut self) {
         self.learn_app_icons();
@@ -1866,27 +1913,8 @@ impl Station {
             draw.push(DrawItem::Layer(l, at));
         }
 
-        // The dithered desktop, in full-width bands.
-        const BAND: i32 = 64;
-        let key = (out.w, out.h, m);
-        if self.desktop.band.as_ref().map(|(k, _)| k) != Some(&key) {
-            let c = chrome::pattern_band((out.w * m.scale) as u32, BAND, &m);
-            self.desktop.band = Some((key, chrome::to_buffer(&c, m.scale)));
-        }
-        let band_h = BAND * m.px / m.scale;
-        let n = ((out.h + band_h - 1) / band_h).max(1) as usize;
-        while self.desktop.band_ids.len() < n {
-            self.desktop.band_ids.push(Id::new());
-        }
-        if let Some((_, b)) = &self.desktop.band {
-            for (i, id) in self.desktop.band_ids.iter().take(n).enumerate() {
-                draw.push(DrawItem::Buffer(
-                    b.clone(),
-                    (0, i as i32 * band_h).into(),
-                    Some(id.clone()),
-                ));
-            }
-        }
+        // The dithered desktop, in full-width bands across every screen.
+        draw.extend(self.pattern_bands());
         self.desktop.draw = draw;
     }
 

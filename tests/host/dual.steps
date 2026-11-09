@@ -1,0 +1,29 @@
+# Two screens (D-051): the turned Touch Display 2 (main) and a 1080p
+# monitor to its right. RetroDOS on the main one, the pattern on the other;
+# the Desktop spans both; a window dragged across maximises on its screen.
+wait 1500
+shot 01-text
+type DESKTOP
+key enter
+wait 1500
+type START jot
+key enter
+wait 2500
+windows
+shot 02-desktop
+# Drag Jot by its title bar onto the second screen...
+pointer 400 110
+button down
+pointer 1500 200
+pointer 2600 300
+button up
+wait 800
+expect WINDOWS => 2 2252 320
+shot 03-moved
+# ... and maximise it there: it fills that screen.
+pointer 2600 300
+button click
+button click
+wait 1000
+expect WINDOWS => maximized
+shot 04-maximized

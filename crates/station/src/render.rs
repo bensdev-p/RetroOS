@@ -210,6 +210,15 @@ pub struct Scene<'a> {
     pub desktop: &'a Desktop,
     /// X11 menus and tooltips, drawn where they put themselves, topmost last.
     pub x11_overrides: &'a [Window],
+    /// Where this screen's picture starts in the desktop (D-051): (0, 0) for
+    /// the main screen, its place for an extra one.
+    pub origin: Point<i32, Logical>,
+}
+
+impl Scene<'_> {
+    fn main_screen(&self) -> bool {
+        self.origin == Point::from((0, 0))
+    }
 }
 
 /// Render elements, front to back.
@@ -220,11 +229,14 @@ where
 {
     let scale = Scale::from(scene.scale as f64);
     let mut out: Vec<StationElement<R>> = Vec::new();
+    // Desktop places to this screen's picture.
+    let o = scene.origin;
+    let at = |p: Point<i32, Logical>| p - o;
 
     // Pointer on top: the program's, or Station's own (the arrow, or a
     // sizing arrow over Desktop frames).
     if scene.show_pointer {
-        let pos: Point<f64, Physical> = scene.pointer.to_physical(scale);
+        let pos: Point<f64, Physical> = (scene.pointer - o.to_f64()).to_physical(scale);
         let own = match (scene.personality, scene.desktop.cursor, scene.cursor_status) {
             (Personality::Desktop, Some(shape), _) => Some(shape),
             (_, _, CursorImageStatus::Named(_)) => Some(CursorShape::Arrow),
@@ -270,13 +282,14 @@ where
     // X11 menus and tooltips: above every window (topmost first).
     for o in scene.x11_overrides.iter().rev() {
         let Some(x) = o.x11_surface() else { continue };
-        let loc = x.geometry().loc.to_physical_precise_round(scale);
+        let loc = at(x.geometry().loc).to_physical_precise_round(scale);
         out.extend(AsRenderElements::<R>::render_elements::<StationElement<R>>(
             o, renderer, loc, scale, 1.0,
         ));
     }
 
-    if let Some(buf) = scene.overlay {
+    // The Task List covers the main screen only.
+    if let Some(buf) = scene.overlay.filter(|_| scene.main_screen()) {
         if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(
             renderer,
             (0.0, 0.0),
@@ -294,18 +307,18 @@ where
     if scene.personality == Personality::Desktop {
         for item in &scene.desktop.draw {
             match item {
-                DrawItem::Window(id, at) => {
+                DrawItem::Window(id, pos) => {
                     let Some(t) = scene.tasks.get(*id) else {
                         continue;
                     };
                     let w = &t.window;
-                    let loc = (*at - w.geometry().loc).to_physical_precise_round(scale);
+                    let loc = (at(*pos) - w.geometry().loc).to_physical_precise_round(scale);
                     out.extend(AsRenderElements::<R>::render_elements::<StationElement<R>>(
                         w, renderer, loc, scale, 1.0,
                     ));
                 }
-                DrawItem::Layer(l, at) => {
-                    let loc = at.to_physical_precise_round(scale);
+                DrawItem::Layer(l, pos) => {
+                    let loc = at(*pos).to_physical_precise_round(scale);
                     out.extend(AsRenderElements::<R>::render_elements::<StationElement<R>>(
                         l, renderer, loc, scale, 1.0,
                     ));
@@ -319,14 +332,14 @@ where
                     ];
                     out.push(StationElement::Solid(SolidColorRenderElement::new(
                         id.clone(),
-                        r.to_physical(scene.scale),
+                        Rectangle::new(at(r.loc), r.size).to_physical(scene.scale),
                         CommitCounter::default(),
                         rgba,
                         Kind::Unspecified,
                     )));
                 }
-                DrawItem::Buffer(buf, at, id) => {
-                    let pos = at.to_f64().to_physical(scale);
+                DrawItem::Buffer(buf, p, id) => {
+                    let pos = at(*p).to_f64().to_physical(scale);
                     let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(
                         renderer,
                         pos,
@@ -338,6 +351,33 @@ where
                     ) else {
                         continue;
                     };
+                    out.push(match id {
+                        Some(id) => StationElement::Tile(Tile {
+                            id: id.clone(),
+                            inner: e,
+                        }),
+                        None => StationElement::Memory(e),
+                    });
+                }
+            }
+        }
+        return out;
+    }
+
+    // RetroDOS fills the main screen; the others show the desktop pattern.
+    if !scene.main_screen() {
+        for item in &scene.desktop.side {
+            if let DrawItem::Buffer(buf, p, id) = item {
+                let pos = at(*p).to_f64().to_physical(scale);
+                if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(
+                    renderer,
+                    pos,
+                    buf,
+                    None,
+                    None,
+                    None,
+                    Kind::Unspecified,
+                ) {
                     out.push(match id {
                         Some(id) => StationElement::Tile(Tile {
                             id: id.clone(),

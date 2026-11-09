@@ -1,6 +1,6 @@
 //! Station — the RetroOS compositor.
 //!
-//!   station [--headless WxH] [--personality text|desktop] [--exec CMD] [--spawn CMD]…
+//!   station [--headless WxH[+WxH…]] [--personality text|desktop] [--exec CMD] [--spawn CMD]…
 //!           [--test-ipc] [--screenshot-after MS PATH]
 //!
 //! `--exec` starts the primary client (normally retro-console); when it exits
@@ -86,6 +86,7 @@ pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
                 personality: st.personality,
                 desktop: &st.desktop,
                 x11_overrides: &st.x11_overrides,
+                origin: (0, 0).into(),
             };
             match ud.gpu.as_mut().ok_or("no renderer")? {
                 udev::Gpu::Pixman { renderer, .. } => {
@@ -113,7 +114,7 @@ fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    let mut headless: Option<(i32, i32)> = None;
+    let mut headless: Option<Vec<(i32, i32)>> = None;
     let mut exec: Option<String> = None;
     let mut spawns: Vec<String> = Vec::new();
     let mut test_ipc = false;
@@ -125,9 +126,15 @@ fn main() {
         let next = |i: usize| args.get(i + 1).cloned().unwrap_or_default();
         match args[i].as_str() {
             "--headless" => {
-                let v = next(i);
-                let (w, h) = v.split_once('x').unwrap_or(("1920", "1080"));
-                headless = Some((w.parse().unwrap_or(1920), h.parse().unwrap_or(1080)));
+                // WxH, or WxH+WxH… for more screens (D-051).
+                let sizes = next(i)
+                    .split('+')
+                    .map(|v| {
+                        let (w, h) = v.split_once('x').unwrap_or(("1920", "1080"));
+                        (w.parse().unwrap_or(1920), h.parse().unwrap_or(1080))
+                    })
+                    .collect();
+                headless = Some(sizes);
                 i += 1;
             }
             "--exec" => {
@@ -178,7 +185,7 @@ fn main() {
     st.broker.test_ipc = test_ipc;
 
     match headless {
-        Some((w, h)) => headless::init(&mut st, w, h),
+        Some(sizes) => headless::init(&mut st, &sizes),
         None => {
             if let Err(e) = udev::init(&mut st) {
                 tracing::error!("cannot start on this display: {e}");

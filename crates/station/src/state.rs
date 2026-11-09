@@ -12,7 +12,7 @@ use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Display, DisplayHandle, Resource};
-use smithay::utils::{Logical, Physical, Point, Size};
+use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 use smithay::wayland::compositor::{with_states, CompositorClientState, CompositorState};
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
 use smithay::wayland::output::OutputManagerState;
@@ -65,7 +65,12 @@ pub struct Station {
     pub space: Space<Window>,
     pub tasks: Tasks,
     pub personality: Personality,
+    /// The main output (D-051): the built-in screen when there is one. It is
+    /// at (0, 0); the System Bar, RetroDOS, the work area and Station's boxes
+    /// are on it.
     pub output: Option<Output>,
+    /// More screens, extending the desktop to the right of the main one.
+    pub extra_outputs: Vec<Output>,
     /// Integer output scale programs see (client_scale).
     pub scale: i32,
     /// Pixel scale of Station's bitmap art (integer_scale).
@@ -221,6 +226,7 @@ impl Station {
             tasks: Tasks::default(),
             personality,
             output: None,
+            extra_outputs: Vec::new(),
             scale: 1,
             art_scale: 1,
             pointer_location: (0.0, 0.0).into(),
@@ -242,7 +248,66 @@ impl Station {
         }
     }
 
-    /// Logical size of the (single, in text mode) output.
+    /// Where each screen is: the main one first, at (0, 0).
+    pub fn output_rects(&self) -> Vec<Rectangle<i32, Logical>> {
+        let mut v = vec![Rectangle::from_size(self.output_size())];
+        for o in &self.extra_outputs {
+            v.push(Rectangle::new(
+                o.current_location(),
+                self.logical_size_of(o),
+            ));
+        }
+        v
+    }
+
+    /// The box around every screen.
+    pub fn layout_rect(&self) -> Rectangle<i32, Logical> {
+        let rects = self.output_rects();
+        let mut r = rects[0];
+        for x in &rects[1..] {
+            r = r.merge(*x);
+        }
+        r
+    }
+
+    /// The screen at `p` (its index in [`Self::output_rects`]), else the
+    /// nearest one.
+    pub fn output_at(&self, p: Point<i32, Logical>) -> usize {
+        let rects = self.output_rects();
+        if let Some(i) = rects.iter().position(|r| r.contains(p)) {
+            return i;
+        }
+        let dist = |r: &Rectangle<i32, Logical>| {
+            let dx = (r.loc.x - p.x).max(p.x - (r.loc.x + r.size.w - 1)).max(0);
+            let dy = (r.loc.y - p.y).max(p.y - (r.loc.y + r.size.h - 1)).max(0);
+            dx as i64 * dx as i64 + dy as i64 * dy as i64
+        };
+        (0..rects.len())
+            .min_by_key(|i| dist(&rects[*i]))
+            .unwrap_or(0)
+    }
+
+    /// An output's logical size at the scale every screen shares (the main
+    /// screen's, D-051).
+    pub fn logical_size_of(&self, o: &Output) -> Size<i32, Logical> {
+        let s = o
+            .current_mode()
+            .map(|m| o.current_transform().transform_size(m.size))
+            .unwrap_or_else(|| (960, 540).into());
+        (s.w / self.scale.max(1), s.h / self.scale.max(1)).into()
+    }
+
+    /// Place a new extra screen right of the others and announce it.
+    pub fn add_extra_output(&mut self, o: Output) {
+        let right = self.layout_rect();
+        let x = right.loc.x + right.size.w;
+        o.change_current_state(None, None, None, Some((x, 0).into()));
+        self.space.map_output(&o, (x, 0));
+        self.extra_outputs.push(o);
+        self.dirty = true;
+    }
+
+    /// Logical size of the main output (the only one in text mode).
     pub fn output_size(&self) -> Size<i32, Logical> {
         self.output
             .as_ref()
@@ -266,6 +331,8 @@ impl Station {
         self.task_list_buffer();
         if self.personality == Personality::Desktop {
             self.desktop_prepare();
+        } else if !self.extra_outputs.is_empty() {
+            self.desktop.side = self.pattern_bands();
         }
     }
 

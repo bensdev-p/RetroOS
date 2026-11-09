@@ -30,4 +30,6 @@ RETROOS_NO_BAR=1 run -x11 tests/host/x11.steps
 RETROOS_TEST_WIFI=1 RETROOS_STARTUP_CONF="~/startup.conf" run -control tests/host/control.steps
 # A 10.1" Touch Display 2: 1200x1920 portrait panel shown landscape (D-042).
 RETROOS_NO_PROGMAN= RETROOS_ROTATE=auto STATION_ARGS="--headless 1200x1920" run -rotate tests/host/rotate.steps
+# The luggable with an HDMI monitor too: two screens, the panel the main one (D-051).
+RETROOS_NO_PROGMAN=1 RETROOS_ROTATE=auto STATION_ARGS="--headless 1200x1920+1920x1080" run -dual tests/host/dual.steps
 echo ">> host tests: all passed"

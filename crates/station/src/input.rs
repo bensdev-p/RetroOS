@@ -271,11 +271,14 @@ impl Station {
         self.clamp(panel_to_picture(o.current_transform(), on_panel, panel))
     }
 
+    /// Keep a point on a screen: the one it is on, else the nearest (the
+    /// pointer crosses between screens where they touch, D-051).
     fn clamp(&self, p: Point<f64, Logical>) -> Point<f64, Logical> {
-        let s = self.output_size();
+        let i = self.output_at(p.to_i32_round());
+        let r = self.output_rects()[i];
         (
-            p.x.clamp(0.0, s.w as f64 - 1.0),
-            p.y.clamp(0.0, s.h as f64 - 1.0),
+            p.x.clamp(r.loc.x as f64, (r.loc.x + r.size.w) as f64 - 1.0),
+            p.y.clamp(r.loc.y as f64, (r.loc.y + r.size.h) as f64 - 1.0),
         )
             .into()
     }
