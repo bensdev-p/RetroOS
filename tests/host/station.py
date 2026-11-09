@@ -5,7 +5,7 @@
 Starts `station --headless 1920x1080 --exec retro-console --test-ipc` with a
 private XDG_RUNTIME_DIR and HOME, then runs a script of steps:
     type <text> | key <combo> | wait <ms> | shot <name> | expect-task <n> | tasks
-    expect-file <name> <text>   (file under HOME contains text)
+    expect-file <name> <text>   (file under HOME contains text, within 5 s)
     request <BROKER REQUEST>    (fields separated by spaces; must answer OK)
     expect <REQUEST> => <text>  (the reply, all lines, contains text)
     pointer <x> <y> | button <down|up|click> [right]   (mouse, logical pixels)
@@ -88,10 +88,16 @@ def main():
         elif cmd == "expect-file":
             name, _, want = arg.partition(" ")
             want = want.replace("\\n", "\n")  # "\n" in a step is a line break
-            try:
-                got = open(os.path.join(home, name)).read()
-            except OSError as e:
-                got = str(e)
+            # Poll for up to 5 s: a slow machine (CI) may still be saving.
+            deadline = time.time() + 5
+            while True:
+                try:
+                    got = open(os.path.join(home, name)).read()
+                except OSError as e:
+                    got = str(e)
+                if want in got or time.time() > deadline:
+                    break
+                time.sleep(0.1)
             if want not in got:
                 print("FAIL file", name, repr(got)); ok = False
         elif cmd == "request":  # raw broker request; must answer OK

@@ -157,15 +157,15 @@ key home
 type d
 type d
 key enter
-wait 800
+wait 1500
 key space
-wait 400
+wait 800
 key down
 key down
 key enter
-wait 300
+wait 500
 key enter
-wait 1200
+wait 1500
 expect-file .config/retroos/desktop.conf pattern=diagonal
 shot 11-diagonal
 key alt+f4
