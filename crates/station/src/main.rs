@@ -19,6 +19,7 @@ mod render;
 mod state;
 mod tasklist;
 mod tasks;
+mod touch;
 mod udev;
 mod xwayland;
 

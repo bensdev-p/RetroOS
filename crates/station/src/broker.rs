@@ -405,6 +405,35 @@ impl Station {
                 }
                 "OK".into()
             }
+            // TOUCH down|move|up SLOT X Y: a finger on the touch screen; the
+            // reply says where a new finger went (touch, mouse, ignored).
+            "TOUCH" if self.broker.test_ipc && f.len() == 5 => {
+                let (Ok(slot), Ok(x), Ok(y)) = (
+                    f[2].parse::<u32>(),
+                    f[3].parse::<f64>(),
+                    f[4].parse::<f64>(),
+                ) else {
+                    self.broker.send(conn, "ERR\tbad touch");
+                    return;
+                };
+                let slot = smithay::backend::input::TouchSlot::from(Some(slot));
+                let t = self.now_ms();
+                match f[1] {
+                    "down" => {
+                        let went = self.finger_down(slot, (x, y).into(), t);
+                        format!("OK\t{}", format!("{went:?}").to_lowercase())
+                    }
+                    "move" => {
+                        self.finger_motion(slot, (x, y).into(), t);
+                        "OK".into()
+                    }
+                    "up" => {
+                        self.finger_up(slot, t);
+                        "OK".into()
+                    }
+                    _ => "ERR\tbad touch action".into(),
+                }
+            }
             "TYPE" if self.broker.test_ipc && f.len() >= 2 => {
                 self.inject_text(&f[1..].join("\t"));
                 "OK".into()

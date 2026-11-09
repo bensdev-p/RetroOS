@@ -17,8 +17,20 @@ expect-task 1
 # In RetroDOS an X11 program fills the screen like any other.
 key ctrl+alt+f1
 wait 1000
+# A finger on the DOS Prompt is the mouse (D-042) ...
+expect TOUCH down 0 500 500 => mouse
+request TOUCH up 0 500 500
 type START xclock
 key enter
 wait 4000
 expect-task 2
 shot 111-xclock-full-screen
+# ... and on a program from elsewhere it is touch (D-050), the second
+# finger too (pinch).
+expect TOUCH down 0 960 540 => touch
+expect TOUCH down 1 1100 600 => touch
+request TOUCH move 0 900 500
+request TOUCH up 1 1100 600
+request TOUCH up 0 900 500
+expect TOUCH down 0 960 540 => touch
+request TOUCH up 0 960 540

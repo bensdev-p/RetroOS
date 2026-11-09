@@ -19,7 +19,7 @@ use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotio
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
 
 /// evdev BTN_LEFT.
-const BTN_LEFT: u32 = 0x110;
+pub const BTN_LEFT: u32 = 0x110;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Action {
@@ -93,34 +93,23 @@ impl Station {
                 let loc = event.position_transformed(size);
                 self.pointer_motion(loc, event.time_msec());
             }
-            // A touch screen (Touch Display 2): one finger is the left mouse
-            // button, moved through the screen's rotation (D-042). Other
-            // fingers are ignored until programs get wl_touch.
+            // A touch screen (Touch Display 2): on a program from elsewhere
+            // the fingers are touch (D-050, touch.rs); elsewhere one finger
+            // is the left mouse button, moved through the screen's rotation
+            // (D-042), and other fingers are ignored.
             InputEvent::TouchDown { event } => {
-                if self.touch_slot.is_some() {
-                    return;
-                }
-                self.touch_slot = Some(event.slot());
                 let loc = self.touch_location(&event);
-                self.pointer_motion(loc, event.time_msec());
-                self.pointer_button(BTN_LEFT, ButtonState::Pressed, event.time_msec());
+                self.finger_down(event.slot(), loc, event.time_msec());
             }
             InputEvent::TouchMotion { event } => {
-                if self.touch_slot == Some(event.slot()) {
-                    let loc = self.touch_location(&event);
-                    self.pointer_motion(loc, event.time_msec());
-                }
+                let loc = self.touch_location(&event);
+                self.finger_motion(event.slot(), loc, event.time_msec());
             }
             InputEvent::TouchUp { event } => {
-                if self.touch_slot == Some(event.slot()) {
-                    self.touch_slot = None;
-                    self.pointer_button(BTN_LEFT, ButtonState::Released, event.time_msec());
-                }
+                self.finger_up(event.slot(), event.time_msec());
             }
             InputEvent::TouchCancel { event } => {
-                if self.touch_slot.take().is_some() {
-                    self.pointer_button(BTN_LEFT, ButtonState::Released, event.time_msec());
-                }
+                self.finger_cancel(event.time_msec());
             }
             InputEvent::PointerButton { event } => {
                 self.pointer_button(event.button_code(), event.state(), event.time_msec());

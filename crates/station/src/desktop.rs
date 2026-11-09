@@ -1355,6 +1355,14 @@ impl Station {
 
     /// A mouse button. Returns true when Station handled it (the program
     /// does not see it).
+    /// A menu, message box or keyboard move/size has the pointer.
+    pub fn desktop_busy(&self) -> bool {
+        self.desktop.menu.is_some()
+            || self.desktop.message.is_some()
+            || self.desktop.drag.is_some()
+            || self.desktop.captures_pointer()
+    }
+
     pub fn desktop_button(&mut self, button: u32, pressed: bool, time: u32) -> bool {
         const BTN_LEFT: u32 = 0x110;
         let pos = self.pointer_location;
@@ -1922,7 +1930,7 @@ fn is_dos_prompt(t: &Task) -> bool {
 }
 
 /// A task's app id (an X11 window's class).
-fn app_id(t: &Task) -> Option<String> {
+pub fn app_id(t: &Task) -> Option<String> {
     if let Some(x) = t.x11() {
         return Some(x.class()).filter(|c| !c.is_empty());
     }

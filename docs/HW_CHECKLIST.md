@@ -168,7 +168,7 @@ of the single line in `cmdline.txt` on the boot partition, and boot again.
 | D.2 | What the system sees | `ADMIN UNIX "grep -H . /sys/class/drm/*/status; dmesg \| grep -iE 'dsi\|ili9881\|panel\|touch' \| tail -20"` (photo) | a `DSI-1` (or `DSI-2`) connector `connected`; the panel and touch drivers loaded without errors |
 | D.3 | Text size | at `C:\>`, `DIR`, and `DESKTOP` | record whether the DOS text and the desktop are readable on the 7" panel (they draw at 1×) |
 | D.4 | Touch | in the Desktop: tap the System Bar's ◆; double-tap Program Manager's icon; drag a window by its title bar; in Jot tap where to type | each tap lands under the finger (not mirrored or turned); a drag moves the window with the finger |
-| D.5 | Touch in Firefox | Program Manager → Internet → Firefox; tap a link, tap the address bar and type, drag the page | links and fields work; dragging selects or drags like a mouse (finger scrolling comes with wl_touch) |
+| D.5 | Touch in Firefox (D-050) | Program Manager → Internet → Firefox; tap a link, tap the address bar and type; drag a long page up and down with one finger; pinch with two | links and fields work; one finger **scrolls** the page (no text selection); a pinch zooms. The title bar still drags the window and DOS Prompt / Control Panel still take taps as clicks |
 | D.6 | HDMI still works | power off, unplug the Touch Display 2, plug in the 15.6" monitor, cold boot | as before (1080p landscape, not turned) |
 
 ## Results

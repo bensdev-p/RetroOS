@@ -76,6 +76,8 @@ pub struct Station {
     pub pointer_moved: bool,
     /// The finger that is acting as the left mouse button (input.rs).
     pub touch_slot: Option<smithay::backend::input::TouchSlot>,
+    /// Fingers sent to a program as wl_touch (D-050).
+    pub touch: crate::touch::TouchSeq,
     pub cursor_status: CursorImageStatus,
     /// The program under the pointer.
     pub pointer_client: Option<ClientId>,
@@ -163,6 +165,7 @@ impl Station {
             let _ = seat.add_keyboard(Default::default(), 400, 25);
         }
         seat.add_pointer();
+        seat.add_touch();
 
         let socket = ListeningSocketSource::new_auto().expect("wayland socket");
         let socket_name = socket.socket_name().to_os_string();
@@ -222,6 +225,7 @@ impl Station {
             art_scale: 1,
             pointer_location: (0.0, 0.0).into(),
             pointer_moved: false,
+            touch: Default::default(),
             touch_slot: None,
             cursor_status: CursorImageStatus::default_named(),
             pointer_client: None,
