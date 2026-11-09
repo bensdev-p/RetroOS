@@ -202,6 +202,17 @@ Suggested order, each step leaving a working image:
 - **Next in step 3**: System Bar volume item + popup, the Desktop Volume
   window, interface sounds (Station `SOUND` request + console bell); then
   Bluetooth (step 4).
+- **Step 1 finished (D-050, D-051)**: touch for programs (`station/src/touch.rs`,
+  test-ipc `TOUCH`); two screens as an extended desktop with the built-in
+  panel the main one: layout in `state.rs` (`output_rects`, `output_at`,
+  extra outputs), per-screen origin in `render::build`, `udev.rs` drives
+  every connector of every DRM device as a head (hotplug via udev change
+  events; dmabuf only when every head is on the GPU), headless
+  `--headless WxH+WxH`, host test `dual.steps`. HW D.5, D.7–D.11.
+- **Stashed for step 6**: `git stash list` — KDE server-decoration for GTK 3
+  / Firefox frames (unbuilt; renumber its D-050 when applied).
+- **Order from here** (tester's wish, 2026-11-09: go in order): step 2's
+  Mouse and Desktop pages; the rest of step 3; step 4; step 5; then 6.
 
 ## 8. Open items carried over
 

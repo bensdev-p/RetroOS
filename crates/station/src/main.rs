@@ -88,7 +88,9 @@ pub fn screenshot(st: &mut Station, path: &Path) -> Result<(), String> {
                 x11_overrides: &st.x11_overrides,
                 origin: (0, 0).into(),
             };
-            match ud.gpu.as_mut().ok_or("no renderer")? {
+            // The main screen.
+            let head = ud.heads.first_mut().ok_or("no screen")?;
+            match head.gpu.as_mut().ok_or("no renderer")? {
                 udev::Gpu::Pixman { renderer, .. } => {
                     render::offscreen(renderer, &output, &scene, &mut ud.cursor)?
                 }

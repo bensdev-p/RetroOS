@@ -1,5 +1,6 @@
-//! The real-hardware backend: libseat session, one KMS output driven through
-//! Smithay's DrmCompositor, and libinput for keyboards and mice.
+//! The real-hardware backend: libseat session, every connected screen on
+//! every DRM device driven through Smithay's DrmCompositor (D-051; the main
+//! screen first), and libinput for keyboards and mice.
 //!
 //! Rendering is Pixman on the CPU into dumb buffers while only the console and
 //! other software-drawn programs are on screen, and GLES on the GPU (GBM/EGL;
@@ -26,7 +27,7 @@ use smithay::backend::renderer::pixman::PixmanRenderer;
 use smithay::backend::renderer::{ImportDma, Renderer as _, TextureFilter};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session};
-use smithay::backend::udev::UdevBackend;
+use smithay::backend::udev::{UdevBackend, UdevEvent};
 use smithay::output::{Mode, Output, OutputModeSource, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::drm::control::{
@@ -34,6 +35,7 @@ use smithay::reexports::drm::control::{
 };
 use smithay::reexports::input::{DeviceCapability, Libinput};
 use smithay::reexports::rustix::fs::OFlags;
+use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::DeviceFd;
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use std::path::Path;
@@ -109,70 +111,85 @@ macro_rules! with_gpu {
     };
 }
 
-/// What it takes to (re)create the DRM surface for the one output.
-struct Scanout {
-    fd: DrmDeviceFd,
+/// One screen: a connector on a DRM device, its CRTC and mode, the wl_output
+/// for it, and the renderer and compositor that draw it (D-051).
+pub struct Head {
+    /// Index into [`UdevData::devices`].
+    dev: usize,
     crtc: crtc::Handle,
     mode: DrmMode,
     connector: connector::Handle,
-    output: Output,
+    pub output: Output,
+    /// None only for the moment a renderer switch takes.
+    pub gpu: Option<Gpu>,
+    frame_pending: bool,
+    /// GLES failed on this device (no GPU, or none for this display
+    /// controller): stay on the CPU.
+    gpu_unavailable: bool,
+}
+
+/// An open DRM device (the Pi 5 has two with screens: `vc4` for HDMI and
+/// `rp1-dsi` for the Touch Display 2).
+pub struct Device {
+    id: libc::dev_t,
+    path: std::path::PathBuf,
+    fd: DrmDeviceFd,
+    drm: DrmDevice,
 }
 
 pub struct UdevData {
     pub session: LibSeatSession,
     libinput: Libinput,
-    drm: DrmDevice,
-    scanout: Scanout,
-    /// None only for the moment a renderer switch takes.
-    pub gpu: Option<Gpu>,
+    devices: Vec<Device>,
+    /// The main screen first (D-051).
+    pub heads: Vec<Head>,
     policy: RendererPolicy,
-    /// GLES failed once (no GPU, software only): don't keep retrying.
-    gpu_unavailable: bool,
+    gpu_on: bool,
     gpu_idle_since: Option<Instant>,
     pub cursor: CursorCache,
-    frame_pending: bool,
     pub pointer_seen: bool,
 }
 
 impl UdevData {
-    /// Import a client's dmabuf into the GPU renderer.
+    /// Import a client's dmabuf into every GPU renderer.
     pub fn import_dmabuf(&mut self, dmabuf: &Dmabuf) -> bool {
-        match &mut self.gpu {
-            Some(Gpu::Gles { renderer, .. }) => renderer.import_dmabuf(dmabuf, None).is_ok(),
-            _ => false,
+        let mut ok = false;
+        for h in self.heads.iter_mut() {
+            if let Some(Gpu::Gles { renderer, .. }) = &mut h.gpu {
+                ok |= renderer.import_dmabuf(dmabuf, None).is_ok();
+            }
         }
+        ok
     }
 
-    fn on_gpu(&self) -> bool {
-        matches!(self.gpu, Some(Gpu::Gles { .. }))
-    }
-
-    fn surface(&mut self) -> Result<DrmSurface, String> {
-        let sc = &self.scanout;
-        self.drm
-            .create_surface(sc.crtc, sc.mode, &[sc.connector])
+    fn surface(&mut self, i: usize) -> Result<DrmSurface, String> {
+        let h = &self.heads[i];
+        self.devices[h.dev]
+            .drm
+            .create_surface(h.crtc, h.mode, &[h.connector])
             .map_err(|e| format!("surface: {e}"))
     }
 
-    fn build_pixman(&mut self) -> Result<Gpu, String> {
+    fn build_pixman(&mut self, i: usize) -> Result<Gpu, String> {
         let mut renderer = PixmanRenderer::new().map_err(|e| format!("pixman: {e:?}"))?;
         // Integer enlargement must stay pixel-sharp (the console's 1× buffer).
         let _ = renderer.upscale_filter(TextureFilter::Nearest);
-        let surface = self.surface()?;
-        let compositor =
-            dumb_compositor(&self.scanout.output, surface, &self.scanout.fd, &renderer)?;
+        let surface = self.surface(i)?;
+        let fd = self.devices[self.heads[i].dev].fd.clone();
+        let compositor = dumb_compositor(&self.heads[i].output, surface, &fd, &renderer)?;
         Ok(Gpu::Pixman {
             renderer,
             compositor,
         })
     }
 
-    fn build_gles(&mut self) -> Result<Gpu, String> {
-        let (gbm, renderer, render_node) = open_gles(&self.scanout.fd)?;
+    fn build_gles(&mut self, i: usize) -> Result<Gpu, String> {
+        let fd = self.devices[self.heads[i].dev].fd.clone();
+        let (gbm, renderer, render_node) = open_gles(&fd)?;
         let formats = renderer.dmabuf_formats();
-        let surface = self.surface()?;
+        let surface = self.surface(i)?;
         let compositor = GbmCompositor::new(
-            OutputModeSource::Auto(self.scanout.output.clone()),
+            OutputModeSource::Auto(self.heads[i].output.clone()),
             surface,
             None,
             GbmAllocator::new(
@@ -192,13 +209,26 @@ impl UdevData {
             render_node,
         })
     }
-}
 
-struct Opened {
-    drm: DrmDevice,
-    notifier: smithay::backend::drm::DrmDeviceNotifier,
-    scanout: Scanout,
-    scale: i32,
+    /// (Re)build head `i`'s renderer, on the GPU if `gpu` and it can.
+    fn build(&mut self, i: usize, gpu: bool) {
+        // The old compositor holds the CRTC: drop it before building the new one.
+        self.heads[i].gpu = None;
+        self.heads[i].frame_pending = false;
+        let built = if gpu && !self.heads[i].gpu_unavailable {
+            self.build_gles(i).or_else(|e| {
+                tracing::info!(output = %self.heads[i].output.name(), "CPU rendering: {e}");
+                self.heads[i].gpu_unavailable = true;
+                self.build_pixman(i)
+            })
+        } else {
+            self.build_pixman(i)
+        };
+        match built {
+            Ok(g) => self.heads[i].gpu = Some(g),
+            Err(e) => tracing::error!(output = %self.heads[i].output.name(), "no renderer: {e}"),
+        }
+    }
 }
 
 /// A GLES renderer on this DRM device, unless there is no GPU or only a
@@ -260,11 +290,24 @@ fn dumb_compositor(
     .map_err(|e| format!("compositor: {e:?}"))
 }
 
+/// A connected screen found on a device, not yet driven.
+struct Found {
+    dev: usize,
+    connector: connector::Handle,
+    crtc: crtc::Handle,
+    mode: DrmMode,
+    name: String,
+    /// DSI, eDP or LVDS: a screen built into the machine.
+    builtin: bool,
+    mm: (u32, u32),
+}
+
+/// Open a DRM device (no screens chosen yet).
 fn open_device(
     session: &mut LibSeatSession,
+    id: libc::dev_t,
     path: &Path,
-    dh: &smithay::reexports::wayland_server::DisplayHandle,
-) -> Result<Opened, String> {
+) -> Result<(Device, smithay::backend::drm::DrmDeviceNotifier), String> {
     let fd = session
         .open(
             path,
@@ -273,69 +316,130 @@ fn open_device(
         .map_err(|e| format!("open {}: {e}", path.display()))?;
     let fd = DrmDeviceFd::new(DeviceFd::from(fd));
     let (drm, notifier) = DrmDevice::new(fd.clone(), true).map_err(|e| format!("drm: {e}"))?;
-    let res = drm
+    Ok((
+        Device {
+            id,
+            path: path.to_path_buf(),
+            fd,
+            drm,
+        },
+        notifier,
+    ))
+}
+
+/// The connected screens of device `dev` that are not driven yet, each with
+/// a free CRTC; `Err` lists every connector (a DSI panel missing here means
+/// its overlay was not loaded).
+fn find_screens(ud: &UdevData, dev: usize) -> Result<Vec<Found>, String> {
+    let d = &ud.devices[dev];
+    let res = d
+        .drm
         .resource_handles()
         .map_err(|e| format!("resources: {e}"))?;
     let conns: Vec<_> = res
         .connectors()
         .iter()
-        .filter_map(|c| drm.get_connector(*c, false).ok())
+        .filter_map(|c| d.drm.get_connector(*c, false).ok())
         .collect();
-    let conn = conns
+    let mut used: Vec<crtc::Handle> = ud
+        .heads
         .iter()
-        .find(|c| c.state() == connector::State::Connected && !c.modes().is_empty())
-        .cloned()
-        .ok_or_else(|| {
-            // Name every connector so the message says what the card has
-            // (a DSI panel missing here means its overlay was not loaded).
-            let list: Vec<String> = conns
-                .iter()
-                .map(|c| {
-                    format!(
-                        "{}-{} {:?}",
-                        c.interface().as_str(),
-                        c.interface_id(),
-                        c.state()
-                    )
-                })
-                .collect();
-            format!(
-                "{}: no connected display [{}]",
-                path.display(),
-                list.join(", ")
-            )
-        })?;
-    let mode = conn
-        .modes()
-        .iter()
-        .find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED))
-        .copied()
-        .unwrap_or(conn.modes()[0]);
-    let crtc = conn
-        .encoders()
-        .iter()
-        .filter_map(|e| drm.get_encoder(*e).ok())
-        .find_map(|enc| res.filter_crtcs(enc.possible_crtcs()).first().copied())
-        .ok_or("no CRTC for display")?;
+        .filter(|h| h.dev == dev)
+        .map(|h| h.crtc)
+        .collect();
+    let mut found = Vec::new();
+    for c in &conns {
+        if c.state() != connector::State::Connected || c.modes().is_empty() {
+            continue;
+        }
+        if ud
+            .heads
+            .iter()
+            .any(|h| h.dev == dev && h.connector == c.handle())
+        {
+            continue;
+        }
+        let mode = c
+            .modes()
+            .iter()
+            .find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED))
+            .copied()
+            .unwrap_or(c.modes()[0]);
+        let Some(crtc) = c
+            .encoders()
+            .iter()
+            .filter_map(|e| d.drm.get_encoder(*e).ok())
+            .flat_map(|enc| res.filter_crtcs(enc.possible_crtcs()))
+            .find(|crtc| !used.contains(crtc))
+        else {
+            tracing::warn!(
+                "no free CRTC for {}-{}",
+                c.interface().as_str(),
+                c.interface_id()
+            );
+            continue;
+        };
+        used.push(crtc);
+        found.push(Found {
+            dev,
+            connector: c.handle(),
+            crtc,
+            mode,
+            name: format!("{}-{}", c.interface().as_str(), c.interface_id()),
+            builtin: matches!(
+                c.interface(),
+                connector::Interface::DSI
+                    | connector::Interface::EmbeddedDisplayPort
+                    | connector::Interface::LVDS
+            ),
+            mm: c.size().unwrap_or((0, 0)),
+        });
+    }
+    if found.is_empty() && ud.heads.iter().all(|h| h.dev != dev) {
+        let list: Vec<String> = conns
+            .iter()
+            .map(|c| {
+                format!(
+                    "{}-{} {:?}",
+                    c.interface().as_str(),
+                    c.interface_id(),
+                    c.state()
+                )
+            })
+            .collect();
+        return Err(format!(
+            "{}: no connected display [{}]",
+            d.path.display(),
+            list.join(", ")
+        ));
+    }
+    Ok(found)
+}
 
-    let name = format!("{}-{}", conn.interface().as_str(), conn.interface_id());
-    let (mm_w, mm_h) = conn.size().unwrap_or((0, 0));
+/// The wl_output for a screen. The main one follows `rotate=` (D-042,
+/// D-044); the others turn only if they are portrait panels.
+fn make_output(f: &Found, main: bool, scale: Option<i32>, dh: &DisplayHandle) -> (Output, i32) {
     let output = Output::new(
-        name.clone(),
+        f.name.clone(),
         PhysicalProperties {
-            size: (mm_w as i32, mm_h as i32).into(),
+            size: (f.mm.0 as i32, f.mm.1 as i32).into(),
             subpixel: Subpixel::Unknown,
             make: "Phosphor".into(),
-            model: name,
+            model: f.name.clone(),
         },
     );
-    let (w, h) = mode.size();
-    // A portrait panel (Touch Display 2) is shown landscape; `rotate=` (D-042).
-    let transform = render::transform_for(retro_gfx::screen::rotation(w as u32, h as u32));
+    let (w, h) = f.mode.size();
+    let deg = if main {
+        retro_gfx::screen::rotation(w as u32, h as u32)
+    } else {
+        retro_gfx::screen::rotation_for(None, w as u32, h as u32)
+    };
+    let transform = render::transform_for(deg);
     let turned: smithay::utils::Size<i32, smithay::utils::Physical> =
         transform.transform_size((w as i32, h as i32).into());
-    let scale = client_scale(turned.w, turned.h);
-    let wl_mode = Mode::from(mode);
+    // Every screen uses the main screen's scale (D-051).
+    let scale = scale.unwrap_or_else(|| client_scale(turned.w, turned.h));
+    let wl_mode = Mode::from(f.mode);
     output.change_current_state(
         Some(wl_mode),
         Some(transform),
@@ -344,19 +448,84 @@ fn open_device(
     );
     output.set_preferred(wl_mode);
     let _global = output.create_global::<Station>(dh);
+    (output, scale)
+}
 
-    Ok(Opened {
-        drm,
-        notifier,
-        scanout: Scanout {
-            fd,
-            crtc,
-            mode,
-            connector: conn.handle(),
-            output,
-        },
-        scale,
-    })
+/// Drive screen `f` (a new head) and give it a renderer.
+fn add_head(st: &mut Station, f: Found, main: bool) {
+    let scale = (!main).then_some(st.scale);
+    let (output, scale) = make_output(&f, main, scale, &st.dh);
+    if main {
+        st.scale = scale;
+        st.space.map_output(&output, (0, 0));
+        st.output = Some(output.clone());
+        if let Some(s) = st.output_pixels() {
+            st.art_scale = integer_scale(s.w, s.h);
+            tracing::info!(width = s.w, height = s.h, transform = ?output.current_transform(), "picture");
+        }
+    } else {
+        st.add_extra_output(output.clone());
+    }
+    tracing::info!(output = %f.name, main, "screen");
+    let crate::Backend::Udev(ud) = &mut st.backend else {
+        return;
+    };
+    ud.heads.push(Head {
+        dev: f.dev,
+        crtc: f.crtc,
+        mode: f.mode,
+        connector: f.connector,
+        output,
+        gpu: None,
+        frame_pending: false,
+        gpu_unavailable: false,
+    });
+    let i = ud.heads.len() - 1;
+    let on = ud.gpu_on;
+    ud.build(i, on);
+    st.dirty = true;
+}
+
+/// A screen was unplugged: stop driving it; windows on it come back to the
+/// main screen.
+fn remove_head(st: &mut Station, i: usize) {
+    let crate::Backend::Udev(ud) = &mut st.backend else {
+        return;
+    };
+    let h = ud.heads.remove(i);
+    tracing::info!(output = %h.output.name(), "screen unplugged");
+    drop(h.gpu);
+    st.remove_extra_output(&h.output);
+}
+
+/// Look at device `dev`'s connectors again (a monitor plugged in or out).
+fn rescan(st: &mut Station, dev: usize) {
+    let crate::Backend::Udev(ud) = &mut st.backend else {
+        return;
+    };
+    // Gone: heads whose connector is no longer connected (never the main one).
+    let gone: Vec<usize> = (1..ud.heads.len())
+        .rev()
+        .filter(|i| {
+            let h = &ud.heads[*i];
+            h.dev == dev
+                && ud.devices[dev]
+                    .drm
+                    .get_connector(h.connector, false)
+                    .map_or(true, |c| c.state() != connector::State::Connected)
+        })
+        .collect();
+    for i in gone {
+        remove_head(st, i);
+    }
+    let crate::Backend::Udev(ud) = &st.backend else {
+        return;
+    };
+    let new = find_screens(ud, dev).unwrap_or_default();
+    for f in new {
+        add_head(st, f, false);
+    }
+    sync_dmabuf(st);
 }
 
 /// Switch between the CPU and GPU renderer (no-op if already there, if the
@@ -371,39 +540,47 @@ pub fn set_gpu(st: &mut Station, on: bool) {
         RendererPolicy::Cpu => false,
         RendererPolicy::Auto => on,
     };
-    if ud.gpu.is_some() && ud.on_gpu() == on {
+    if ud.gpu_on == on && ud.heads.iter().all(|h| h.gpu.is_some()) {
         return;
     }
-    if on && ud.gpu_unavailable {
-        return;
-    }
-    // The old compositor holds the CRTC: drop it before building the new one.
-    ud.gpu = None;
-    ud.frame_pending = false;
-    let built = if on {
-        ud.build_gles().or_else(|e| {
-            tracing::info!("CPU rendering: {e}");
-            ud.gpu_unavailable = true;
-            ud.build_pixman()
-        })
-    } else {
-        ud.build_pixman()
-    };
-    match built {
-        Ok(g) => ud.gpu = Some(g),
-        Err(e) => tracing::error!("no renderer: {e}"),
+    ud.gpu_on = on;
+    for i in 0..ud.heads.len() {
+        let want_gles = on && !ud.heads[i].gpu_unavailable;
+        let is_gles = matches!(ud.heads[i].gpu, Some(Gpu::Gles { .. }));
+        if ud.heads[i].gpu.is_none() || want_gles != is_gles {
+            ud.build(i, on);
+        }
     }
     ud.gpu_idle_since = None;
-    // GPU clients: linux-dmabuf, with feedback naming the render device.
-    match &ud.gpu {
+    sync_dmabuf(st);
+}
+
+/// Offer linux-dmabuf to programs exactly when every screen draws on the
+/// GPU (after a renderer switch or a screen coming or going).
+fn sync_dmabuf(st: &mut Station) {
+    let crate::Backend::Udev(ud) = &st.backend else {
+        return;
+    };
+    // GPU clients: linux-dmabuf, with feedback naming the main screen's
+    // render device — only when every screen draws on the GPU: a screen
+    // drawn on the CPU cannot show GPU buffers, so with one of those all
+    // programs keep to shared memory (D-051).
+    let all_gles = ud
+        .heads
+        .iter()
+        .all(|h| matches!(h.gpu, Some(Gpu::Gles { .. })));
+    let gles = ud.heads.iter().find_map(|h| match &h.gpu {
         Some(Gpu::Gles {
             renderer,
             render_node,
             ..
-        }) => {
+        }) if all_gles => Some((renderer.dmabuf_formats(), *render_node)),
+        _ => None,
+    });
+    match gles {
+        Some((formats, render_node)) => {
             tracing::info!("renderer: GPU");
             if st.dmabuf_global.is_none() {
-                let formats = renderer.dmabuf_formats();
                 let global = match render_node.and_then(|n| {
                     DmabufFeedbackBuilder::new(n.dev_id(), formats.clone())
                         .build()
@@ -417,7 +594,7 @@ pub fn set_gpu(st: &mut Station, on: bool) {
                 st.dmabuf_global = Some(global);
             }
         }
-        _ => {
+        None => {
             tracing::info!("renderer: CPU");
             if let Some(g) = st.dmabuf_global.take() {
                 st.dmabuf_state.destroy_global::<Station>(&st.dh, g);
@@ -437,7 +614,7 @@ fn gpu_idle_check(st: &mut Station) {
     let crate::Backend::Udev(ud) = &mut st.backend else {
         return;
     };
-    if !ud.on_gpu() || ud.policy != RendererPolicy::Auto {
+    if !ud.gpu_on || ud.policy != RendererPolicy::Auto {
         return;
     }
     if busy {
@@ -451,41 +628,15 @@ fn gpu_idle_check(st: &mut Station) {
 }
 
 pub fn init(st: &mut Station) -> Result<(), String> {
-    let (mut session, session_notifier) =
-        LibSeatSession::new().map_err(|e| format!("libseat: {e}"))?;
+    let (session, session_notifier) = LibSeatSession::new().map_err(|e| format!("libseat: {e}"))?;
     let seat = session.seat();
     let udev = UdevBackend::new(&seat).map_err(|e| format!("udev: {e}"))?;
 
-    let mut devices: Vec<_> = udev.device_list().map(|(_, p)| p.to_path_buf()).collect();
-    devices.sort();
-    let mut opened = None;
-    let mut errors = Vec::new();
-    for p in &devices {
-        match open_device(&mut session, p, &st.dh) {
-            Ok(o) => {
-                tracing::info!(device = %p.display(), output = %o.scanout.output.name(), scale = o.scale, "display");
-                opened = Some(o);
-                break;
-            }
-            Err(e) => errors.push(e),
-        }
-    }
-    let Opened {
-        drm,
-        notifier,
-        scanout,
-        scale,
-    } = opened.ok_or_else(|| format!("no usable display: {}", errors.join("; ")))?;
-    let output = scanout.output.clone();
-    st.scale = scale;
-    st.output = Some(output.clone());
-    if let Some(s) = st.output_pixels() {
-        st.art_scale = integer_scale(s.w, s.h);
-        tracing::info!(width = s.w, height = s.h, transform = ?output.current_transform(), "picture");
-    }
-    st.space.map_output(&output, (0, 0));
-    st.output = Some(output);
-
+    let mut list: Vec<(libc::dev_t, std::path::PathBuf)> = udev
+        .device_list()
+        .map(|(id, p)| (id, p.to_path_buf()))
+        .collect();
+    list.sort_by(|a, b| a.1.cmp(&b.1));
     let mut libinput =
         Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(session.clone().into());
     libinput
@@ -493,21 +644,53 @@ pub fn init(st: &mut Station) -> Result<(), String> {
         .map_err(|_| "libinput seat assign failed")?;
     let input_backend = LibinputInputBackend::new(libinput.clone());
 
-    st.backend = crate::Backend::Udev(Box::new(UdevData {
+    let mut ud = UdevData {
         session,
         libinput,
-        drm,
-        scanout,
-        gpu: None,
+        devices: Vec::new(),
+        heads: Vec::new(),
         policy: renderer_policy(),
-        gpu_unavailable: false,
+        gpu_on: false,
         gpu_idle_since: None,
         cursor: CursorCache::default(),
-        frame_pending: false,
         pointer_seen: false,
-    }));
-
+    };
     let h = st.loop_handle.clone();
+    let mut errors = Vec::new();
+    let mut found = Vec::new();
+    for (id, p) in &list {
+        let (dev, notifier) = match open_device(&mut ud.session, *id, p) {
+            Ok(x) => x,
+            Err(e) => {
+                errors.push(e);
+                continue;
+            }
+        };
+        ud.devices.push(dev);
+        let di = ud.devices.len() - 1;
+        match find_screens(&ud, di) {
+            Ok(f) => found.extend(f),
+            Err(e) => errors.push(e),
+        }
+        // Each device's vblanks go to its own screens.
+        h.insert_source(notifier, move |event, _, st: &mut Station| match event {
+            DrmEvent::VBlank(crtc) => frame_finish(st, di, crtc),
+            DrmEvent::Error(e) => tracing::error!("drm error: {e}"),
+        })
+        .map_err(|_| "drm source")?;
+    }
+    if found.is_empty() {
+        return Err(format!("no usable display: {}", errors.join("; ")));
+    }
+    // The main screen: the built-in one if any, else the first (D-051).
+    let main = found.iter().position(|f| f.builtin).unwrap_or(0);
+    let first = found.remove(main);
+    st.backend = crate::Backend::Udev(Box::new(ud));
+    add_head(st, first, true);
+    for f in found {
+        add_head(st, f, false);
+    }
+
     h.insert_source(input_backend, |mut event, _, st: &mut Station| {
         if let InputEvent::DeviceAdded { device } = &mut event {
             if device.has_capability(DeviceCapability::Pointer) {
@@ -520,11 +703,18 @@ pub fn init(st: &mut Station) -> Result<(), String> {
     })
     .map_err(|_| "input source")?;
 
-    h.insert_source(notifier, |event, _, st: &mut Station| match event {
-        DrmEvent::VBlank(_) => frame_finish(st),
-        DrmEvent::Error(e) => tracing::error!("drm error: {e}"),
+    // Monitors plugged in or out while running.
+    h.insert_source(udev, |event, _, st: &mut Station| {
+        if let UdevEvent::Changed { device_id } = event {
+            let crate::Backend::Udev(ud) = &st.backend else {
+                return;
+            };
+            if let Some(dev) = ud.devices.iter().position(|d| d.id == device_id) {
+                rescan(st, dev);
+            }
+        }
     })
-    .map_err(|_| "drm source")?;
+    .map_err(|_| "udev source")?;
 
     h.insert_source(session_notifier, |event, _, st: &mut Station| {
         let crate::Backend::Udev(ud) = &mut st.backend else {
@@ -534,16 +724,23 @@ pub fn init(st: &mut Station) -> Result<(), String> {
             SessionEvent::PauseSession => {
                 tracing::info!("session paused");
                 ud.libinput.suspend();
-                ud.drm.pause();
+                for d in ud.devices.iter_mut() {
+                    d.drm.pause();
+                }
             }
             SessionEvent::ActivateSession => {
                 tracing::info!("session resumed");
                 let _ = ud.libinput.resume();
-                let _ = ud.drm.activate(false);
-                if let Some(gpu) = ud.gpu.as_mut() {
-                    let _ = with_gpu!(gpu, |_r, c| c.reset_state().map_err(|e| format!("{e:?}")));
+                for d in ud.devices.iter_mut() {
+                    let _ = d.drm.activate(false);
                 }
-                ud.frame_pending = false;
+                for head in ud.heads.iter_mut() {
+                    if let Some(gpu) = head.gpu.as_mut() {
+                        let _ =
+                            with_gpu!(gpu, |_r, c| c.reset_state().map_err(|e| format!("{e:?}")));
+                    }
+                    head.frame_pending = false;
+                }
                 st.dirty = true;
                 render(st);
             }
@@ -565,7 +762,7 @@ pub fn init(st: &mut Station) -> Result<(), String> {
     // Start on the CPU (or the GPU if pinned); see set_gpu.
     set_gpu(st, false);
     if let crate::Backend::Udev(ud) = &st.backend {
-        if ud.gpu.is_none() {
+        if ud.heads.first().is_none_or(|h| h.gpu.is_none()) {
             return Err("no renderer for the display".into());
         }
     }
@@ -584,66 +781,78 @@ pub fn render(st: &mut Station) {
     let crate::Backend::Udev(ud) = &mut st.backend else {
         return;
     };
-    if !ud.session.is_active() || ud.frame_pending {
+    if !ud.session.is_active() {
         return;
     }
-    let scene = Scene {
-        space: &st.space,
-        tasks: &st.tasks,
-        cursor_status: &st.cursor_status,
-        pointer: st.pointer_location,
-        scale: st.scale,
-        art_scale: st.art_scale,
-        show_pointer: ud.pointer_seen && st.pointer_moved,
-        overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
-        personality: st.personality,
-        desktop: &st.desktop,
-        x11_overrides: &st.x11_overrides,
-        origin: (0, 0).into(),
-    };
-    let cursor = &mut ud.cursor;
-    let Some(gpu) = ud.gpu.as_mut() else {
-        return;
-    };
-    let result = with_gpu!(gpu, |r, c| {
-        let elements = render::build(r, &scene, cursor);
-        c.render_frame(r, &elements, render::CLEAR, FrameFlags::DEFAULT)
-            .map(|res| res.is_empty)
-            .map_err(|e| format!("{e:?}"))
-            .and_then(|empty| {
-                if empty {
-                    Ok(false)
-                } else {
-                    c.queue_frame(())
-                        .map(|_| true)
-                        .map_err(|e| format!("queue_frame: {e:?}"))
-                }
-            })
-    });
-    match result {
-        Ok(queued) => {
-            if queued {
-                ud.frame_pending = true;
-            }
-            st.dirty = false;
+    let mut drew = false;
+    let mut waiting = false;
+    for head in ud.heads.iter_mut() {
+        if head.frame_pending {
+            waiting = true;
+            continue;
         }
-        Err(e) => tracing::warn!("render: {e}"),
+        let scene = Scene {
+            space: &st.space,
+            tasks: &st.tasks,
+            cursor_status: &st.cursor_status,
+            pointer: st.pointer_location,
+            scale: st.scale,
+            art_scale: st.art_scale,
+            show_pointer: ud.pointer_seen && st.pointer_moved,
+            overlay: st.task_list.as_ref().and_then(|t| t.buffer()),
+            personality: st.personality,
+            desktop: &st.desktop,
+            x11_overrides: &st.x11_overrides,
+            origin: head.output.current_location(),
+        };
+        let cursor = &mut ud.cursor;
+        let Some(gpu) = head.gpu.as_mut() else {
+            continue;
+        };
+        let result = with_gpu!(gpu, |r, c| {
+            let elements = render::build(r, &scene, cursor);
+            c.render_frame(r, &elements, render::CLEAR, FrameFlags::DEFAULT)
+                .map(|res| res.is_empty)
+                .map_err(|e| format!("{e:?}"))
+                .and_then(|empty| {
+                    if empty {
+                        Ok(false)
+                    } else {
+                        c.queue_frame(())
+                            .map(|_| true)
+                            .map_err(|e| format!("queue_frame: {e:?}"))
+                    }
+                })
+        });
+        match result {
+            Ok(queued) => {
+                head.frame_pending = queued;
+                drew = true;
+            }
+            Err(e) => tracing::warn!(output = %head.output.name(), "render: {e}"),
+        }
+    }
+    // A screen still showing its last frame draws this change at its vblank.
+    if drew && !waiting {
+        st.dirty = false;
     }
     crate::send_frames(st);
 }
 
-fn frame_finish(st: &mut Station) {
+fn frame_finish(st: &mut Station, dev: usize, crtc: crtc::Handle) {
     if let crate::Backend::Udev(ud) = &mut st.backend {
-        if let Some(gpu) = ud.gpu.as_mut() {
-            if let Err(e) = with_gpu!(gpu, |_r, c| c
-                .frame_submitted()
-                .map(|_| ())
-                .map_err(|e| format!("{e:?}")))
-            {
-                tracing::warn!("frame_submitted: {e:?}");
+        if let Some(head) = ud.heads.iter_mut().find(|h| h.dev == dev && h.crtc == crtc) {
+            if let Some(gpu) = head.gpu.as_mut() {
+                if let Err(e) = with_gpu!(gpu, |_r, c| c
+                    .frame_submitted()
+                    .map(|_| ())
+                    .map_err(|e| format!("{e:?}")))
+                {
+                    tracing::warn!("frame_submitted: {e:?}");
+                }
             }
+            head.frame_pending = false;
         }
-        ud.frame_pending = false;
     }
     if st.dirty {
         render(st);

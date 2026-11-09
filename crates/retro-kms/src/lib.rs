@@ -54,23 +54,27 @@ const KD_TEXT: libc::c_int = 0;
 const KD_GRAPHICS: libc::c_int = 1;
 
 impl Display {
-    /// Open the first card with a connected display and light it up (black).
+    /// Open the main screen and light it up (black): a built-in panel (DSI,
+    /// eDP, LVDS) if one is connected, else the first card with a connected
+    /// display — the screen Station makes the main one (D-051).
     pub fn open() -> io::Result<Display> {
         let mut last_err = io::Error::new(io::ErrorKind::NotFound, "no display connected");
-        for i in 0..8 {
-            let path = format!("/dev/dri/card{i}");
-            match Self::open_card(&path) {
-                Ok(d) => return Ok(d),
-                Err(e)
-                    if e.kind() == io::ErrorKind::NotFound
-                        && !std::path::Path::new(&path).exists() => {}
-                Err(e) => last_err = e,
+        for builtin in [true, false] {
+            for i in 0..8 {
+                let path = format!("/dev/dri/card{i}");
+                match Self::open_card(&path, builtin) {
+                    Ok(d) => return Ok(d),
+                    Err(e)
+                        if e.kind() == io::ErrorKind::NotFound
+                            && !std::path::Path::new(&path).exists() => {}
+                    Err(e) => last_err = e,
+                }
             }
         }
         Err(last_err)
     }
 
-    fn open_card(path: &str) -> io::Result<Display> {
+    fn open_card(path: &str, builtin_only: bool) -> io::Result<Display> {
         let f = OpenOptions::new()
             .read(true)
             .write(true)
@@ -85,7 +89,17 @@ impl Display {
             .collect();
         let con = conns
             .iter()
-            .find(|c| c.state() == connector::State::Connected && !c.modes().is_empty())
+            .find(|c| {
+                c.state() == connector::State::Connected
+                    && !c.modes().is_empty()
+                    && (!builtin_only
+                        || matches!(
+                            c.interface(),
+                            connector::Interface::DSI
+                                | connector::Interface::EmbeddedDisplayPort
+                                | connector::Interface::LVDS
+                        ))
+            })
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no connected connector"))?;
         // Preferred mode first, else the first listed.
         let mode = con

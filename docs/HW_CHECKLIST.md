@@ -170,6 +170,11 @@ of the single line in `cmdline.txt` on the boot partition, and boot again.
 | D.4 | Touch | in the Desktop: tap the System Bar's ◆; double-tap Program Manager's icon; drag a window by its title bar; in Jot tap where to type | each tap lands under the finger (not mirrored or turned); a drag moves the window with the finger |
 | D.5 | Touch in Firefox (D-050) | Program Manager → Internet → Firefox; tap a link, tap the address bar and type; drag a long page up and down with one finger; pinch with two | links and fields work; one finger **scrolls** the page (no text selection); a pinch zooms. The title bar still drags the window and DOS Prompt / Control Panel still take taps as clicks |
 | D.6 | HDMI still works | power off, unplug the Touch Display 2, plug in the 15.6" monitor, cold boot | as before (1080p landscape, not turned) |
+| D.7 | Two screens at boot (D-051) | Touch Display 2 and the 15.6" monitor both connected, cold boot | the POST screen and `C:\>` on the touch screen; the monitor shows the blue desktop pattern; `DESKTOP`: the System Bar and drive icons on the touch screen, the pattern continuing on the monitor |
+| D.8 | Across screens | in the Desktop, move the mouse off the right edge of the touch screen; drag Jot by its title bar onto the monitor; double-click its title bar | the pointer appears on the monitor; Jot moves there; maximised it fills the monitor (not the touch screen) |
+| D.9 | Firefox on both | start Firefox on the touch screen, play a video; drag it onto the monitor; then `UNIX "journalctl -b --user-unit=retro-session \| grep -iE 'renderer\|CPU rendering\|screen'"` (or `journalctl -b \| grep -iE ...`; photo) | Firefox shows and plays on both screens; the log lines say whether each screen draws on the GPU ("renderer: GPU") or the CPU — this decides how smooth video is |
+| D.10 | Plug and unplug | with the Desktop running, unplug the monitor's HDMI; plug it back in | unplugging: windows that were on it come back to the touch screen; plugging in: the monitor shows the pattern again within a few seconds and windows can go there |
+| D.11 | Touch with two screens | with the monitor connected, tap and drag on the touch screen (System Bar, a window, Firefox scrolling) | taps land under the finger on the touch screen (not on the monitor) |
 
 ## Results
 

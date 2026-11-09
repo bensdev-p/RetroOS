@@ -307,6 +307,46 @@ impl Station {
         self.dirty = true;
     }
 
+    /// An extra screen went away: the others close up, and windows left
+    /// with no screen under them come back to the main one.
+    pub fn remove_extra_output(&mut self, o: &Output) {
+        self.extra_outputs.retain(|x| x != o);
+        self.space.unmap_output(o);
+        let mut x = self.output_size().w;
+        for e in self.extra_outputs.clone() {
+            e.change_current_state(None, None, None, Some((x, 0).into()));
+            self.space.map_output(&e, (x, 0));
+            x += self.logical_size_of(&e).w;
+        }
+        let rects = self.output_rects();
+        let work = Rectangle::from_size(self.output_size());
+        let lost: Vec<u64> = self
+            .tasks
+            .iter()
+            .filter(|t| {
+                let r = t.place.rect;
+                let mid: Point<i32, Logical> =
+                    (r.loc.x + r.size.w / 2, r.loc.y + r.size.h / 2).into();
+                t.place.placed && !rects.iter().any(|s| s.contains(mid))
+            })
+            .map(|t| t.id)
+            .collect();
+        for id in lost {
+            if let Some(t) = self.tasks.get_mut(id) {
+                let s = t.place.rect.size;
+                t.place.rect.loc = (
+                    ((work.size.w - s.w) / 2).max(0),
+                    ((work.size.h - s.h) / 2).max(0),
+                )
+                    .into();
+            }
+            if self.personality == Personality::Desktop {
+                self.desktop_configure(id);
+            }
+        }
+        self.dirty = true;
+    }
+
     /// Logical size of the main output (the only one in text mode).
     pub fn output_size(&self) -> Size<i32, Logical> {
         self.output
