@@ -69,7 +69,7 @@ pub const WIFI: Builtin = Builtin {
 pub const CONTROL: Builtin = Builtin {
     names: &["CONTROL"],
     summary: "Changes RetroOS settings (Control Panel).",
-    usage: "CONTROL [DISPLAY | STARTUP | TIME | KEYBOARD | NETWORK | USERS]\n\nWithout a name, shows every Control Panel page; with one, opens that page.\n\u{2191}\u{2193} choose a setting, \u{2190}\u{2192} change it, Enter saves, Esc cancels.",
+    usage: "CONTROL [DISPLAY | STARTUP | TIME | KEYBOARD | MOUSE | DESKTOP | NETWORK |\n         SOUND | USERS | BLUETOOTH]\n\nWithout a name, shows every Control Panel page; with one, opens that page.\n\u{2191}\u{2193} choose a setting, \u{2190}\u{2192} change it, Enter saves, Esc cancels.",
     run: |sh, a, io| {
         let _ = io.out.flush();
         let Some(prog) = sh.find_program("retro-control") else {
@@ -86,6 +86,32 @@ pub const MIXER: Builtin = Builtin {
     summary: "Starts the volume mixer.",
     usage: "MIXER\n\nOne bar for the sound output in use (MASTER) and one for each program\nplaying. \u{2190}\u{2192} choose, \u{2191}\u{2193} change the volume, M mutes, O picks the output.",
     run: |sh, _, io| run_tool(sh, &Args::new(""), io, "retro-mixer"),
+};
+
+pub const BT: Builtin = Builtin {
+    names: &["BT"],
+    summary: "Pairs Bluetooth devices.",
+    usage: "BT [ON | OFF | /S]\n\n  ON    Turns Bluetooth on (it stays on).\n  OFF   Turns Bluetooth off.\n  /S    Shows whether it is on, and the paired devices.\n\nWithout a switch, lists the devices nearby: choose one and press Enter to\npair with it (keyboards, headphones, game pads).",
+    run: |sh, a, io| {
+        let Some(prog) = sh.find_program("retro-bt") else {
+            return err(io, "retro-bt is not installed");
+        };
+        let arg = match (a.words.first().map(|w| w.to_ascii_uppercase()), a.switches.first()) {
+            (None, None) => return run_tool(sh, &Args::new(""), io, "retro-bt"),
+            (None, Some(s)) if s == "S" => "--status".into(),
+            (None, Some(s)) => return err(io, &format!("Invalid switch - /{s}")),
+            (Some(w), _) if w == "ON" || w == "OFF" => w.to_ascii_lowercase(),
+            (Some(w), _) => return err(io, &format!("Invalid parameter - {w}")),
+        };
+        match sh.command(&prog, &[arg]).output() {
+            Ok(o) => {
+                let _ = io.out.write_all(&o.stdout);
+                let _ = io.out.write_all(&o.stderr);
+                o.status.code().unwrap_or(1)
+            }
+            Err(e) => err(io, &e.to_string()),
+        }
+    },
 };
 
 pub const VOLUME: Builtin = Builtin {

@@ -1,0 +1,24 @@
+#!/bin/sh
+# Turn Bluetooth on or off (run as root).
+#
+#   set-bluetooth on | off
+#
+# "on" enables bluetooth.service and starts it now: bluetoothd then runs at
+# every start (when the adapter appears), so paired keyboards and headphones
+# reconnect by themselves. "off" stops and disables it, so a RetroOS that
+# does not use Bluetooth carries no daemon (DESIGN.md §10.2, D-054). Used by
+# BT ON/OFF and Control Panel → Bluetooth; the admin group may run it
+# without a password.
+set -eu
+case ${1:-} in
+    on)
+        command -v rfkill >/dev/null 2>&1 && rfkill unblock bluetooth 2>/dev/null || true
+        systemctl enable --now bluetooth.service >/dev/null 2>&1 ||
+            { echo "Cannot start Bluetooth (bluetooth.service)" >&2; exit 1; }
+        ;;
+    off)
+        systemctl disable --now bluetooth.service >/dev/null 2>&1 ||
+            { echo "Cannot stop Bluetooth (bluetooth.service)" >&2; exit 1; }
+        ;;
+    *) echo "usage: set-bluetooth on|off" >&2; exit 2 ;;
+esac

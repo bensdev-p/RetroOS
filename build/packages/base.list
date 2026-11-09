@@ -52,6 +52,10 @@ pipewire-bin
 pipewire-pulse
 pipewire-alsa
 wireplumber
+# --- Bluetooth (D-054): bluetoothd, off until the user turns it on; the
+# PipeWire plugin plays to Bluetooth headphones and speakers.
+bluez
+libspa-0.2-bluetooth
 # --- disks and power-user basics
 fdisk
 e2fsprogs

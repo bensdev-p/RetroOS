@@ -476,6 +476,17 @@ impl App {
         if a == ACTION_WIFI {
             return Some(Action::Run("retro-net"));
         }
+        if a == crate::ACTION_BT {
+            match crate::apply_first(&o.page, a) {
+                Ok(Some(p)) => o.page = p,
+                Ok(None) => {}
+                Err(e) => {
+                    self.message = Some(vec![e]);
+                    return None;
+                }
+            }
+            return Some(Action::Run("retro-bt"));
+        }
         if a == crate::ACTION_MIXER {
             return Some(Action::Run("retro-mixer"));
         }

@@ -8,3 +8,5 @@
 %admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-wifi-country, /usr/libexec/retroos/set-wired, /usr/libexec/retroos/set-wifi-enterprise
 # Control Panel → Users runs /usr/libexec/retroos/user-admin with the
 # administrator's password (the %admin ALL rule above; no NOPASSWD, D-046).
+# Control Panel → Bluetooth and BT ON/OFF: turn Bluetooth on or off (D-054).
+%admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-bluetooth

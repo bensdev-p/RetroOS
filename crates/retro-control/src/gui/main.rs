@@ -5,6 +5,7 @@
 //!
 //!   control-panel [applet]     open that applet at once (DISPLAY, TIME, …)
 
+mod bt;
 mod formdlg;
 mod wifi;
 
@@ -76,6 +77,7 @@ struct Panel {
     dialog: Option<Dialog>,
     drop: Option<Drop>,
     wifi: Option<wifi::WifiDlg>,
+    bt: Option<bt::BtDlg>,
     form: Option<formdlg::FormDlg>,
     message: Option<Message>,
     start: Option<Applet>,
@@ -426,6 +428,23 @@ impl Panel {
             }
             return;
         }
+        if what == retro_control::ACTION_BT {
+            match retro_control::apply_first(&d.page, what) {
+                Ok(Some(p)) => {
+                    let surface = d.surface;
+                    if let Some(d) = self.dialog.as_mut() {
+                        d.set_page(p);
+                    }
+                    ui.redraw(surface);
+                }
+                Ok(None) => {}
+                Err(e) => return self.message(ui, &[&e]),
+            }
+            if let (None, Some(d)) = (&self.bt, &self.dialog) {
+                self.bt = Some(bt::BtDlg::new(ui, d.surface));
+            }
+            return;
+        }
         if what == ACTION_WIFI {
             if self.wifi.is_none() {
                 self.wifi = Some(wifi::WifiDlg::new(ui, d.surface));
@@ -470,6 +489,19 @@ impl Panel {
                 ui.close(a.surface);
             }
             ui.close(w.surface);
+        }
+    }
+
+    fn close_bt(&mut self, ui: &mut Ui) {
+        if let Some(b) = self.bt.take() {
+            ui.close(b.surface);
+        }
+    }
+
+    fn bt_out(&mut self, ui: &mut Ui, out: wifi::Out) {
+        match out {
+            wifi::Out::Close => self.close_bt(ui),
+            o => self.wifi_out(ui, o),
         }
     }
 
@@ -590,6 +622,7 @@ impl Panel {
     fn close_dialog(&mut self, ui: &mut Ui) {
         self.close_drop(ui);
         self.close_wifi(ui);
+        self.close_bt(ui);
         self.close_form(ui);
         if let Some(d) = self.dialog.take() {
             ui.close(d.surface);
@@ -602,11 +635,12 @@ impl Panel {
             ui.close(m.surface);
         }
         // Over the topmost box: a form, the sign-in, Wireless Networks, the page.
-        let parent = match (&self.form, &self.wifi, &self.dialog) {
-            (Some(f), _, _) => f.surface,
-            (None, Some(w), _) => w.ask.as_ref().map_or(w.surface, |a| a.surface),
-            (None, None, Some(d)) => d.surface,
-            (None, None, None) => win,
+        let parent = match (&self.form, &self.wifi, &self.bt, &self.dialog) {
+            (Some(f), ..) => f.surface,
+            (None, Some(w), ..) => w.ask.as_ref().map_or(w.surface, |a| a.surface),
+            (None, None, Some(b), _) => b.surface,
+            (None, None, None, Some(d)) => d.surface,
+            (None, None, None, None) => win,
         };
         let w = lines
             .iter()
@@ -827,6 +861,8 @@ impl Program for Panel {
             self.draw_drop(c, t);
         } else if let Some(f) = self.form.as_ref().filter(|f| f.surface == id) {
             f.draw(c, t);
+        } else if let Some(b) = self.bt.as_ref().filter(|b| b.surface == id) {
+            b.draw(c, t);
         } else if let Some(w) = self.wifi.as_ref() {
             if w.surface == id {
                 w.draw(c, t);
@@ -852,6 +888,10 @@ impl Program for Panel {
         if let Some(w) = self.wifi.as_mut() {
             let out = w.timer(ui, token);
             self.wifi_out(ui, out);
+        }
+        if let Some(b) = self.bt.as_mut() {
+            let out = b.timer(ui, token);
+            self.bt_out(ui, out);
         }
     }
 
@@ -921,6 +961,10 @@ impl Panel {
         if let Some(f) = self.form.as_mut().filter(|f| f.surface == id) {
             let out = f.event(ui, ev);
             return self.form_out(ui, out);
+        }
+        if let Some(b) = self.bt.as_mut().filter(|b| b.surface == id) {
+            let out = b.event(ui, ev);
+            return self.bt_out(ui, out);
         }
         if let Some(w) = self.wifi.as_mut() {
             let out = if w.surface == id {
@@ -995,6 +1039,7 @@ fn main() {
         dialog: None,
         drop: None,
         wifi: None,
+        bt: None,
         form: None,
         message: None,
         start,

@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-054**).
+  (**next: D-055**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -217,8 +217,13 @@ Suggested order, each step leaving a working image:
 - **Step 3 done** (D-053): System Bar speaker + popup (`retro-bar/src/volume.rs`),
   Volume window (`retro-mixer/src/gui.rs`, binary `volume`), Station `SOUND`
   (`station/src/sounds.rs`). HW 4.21–4.25, 4.30–4.32.
-- **Order from here** (tester's wish, 2026-11-09: go in order): step 4
-  (Bluetooth); step 5 (Software Library); then 6.
+- **Step 4 done** (D-054): `retro_sys::bt` (BlueZ; `RETROOS_TEST_BT=1` =
+  pretend adapter), BT (crate retro-bt), Control Panel → Bluetooth + the
+  Bluetooth Devices dialog (`retro-control/src/gui/bt.rs`), helper
+  `set-bluetooth` (bluetooth.service off in the image until turned on),
+  packages bluez + libspa-0.2-bluetooth; host test `bt.steps`; HW 4.33–4.38.
+- **Order from here** (tester's wish, 2026-11-09: go in order): step 5
+  (Software Library; then the Updates / Software Sources pages); then 6.
 
 ## 8. Open items carried over
 

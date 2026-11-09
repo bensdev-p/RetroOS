@@ -5,7 +5,7 @@
 //! the front-end lets the user edit them and calls [`apply`].
 
 use retro_gfx::prefs;
-use retro_sys::{clock, display, keyboard, netconf, sound, startup, users};
+use retro_sys::{bt, clock, display, keyboard, netconf, sound, startup, users};
 
 pub mod forms;
 pub use forms::{action_label, Form};
@@ -21,6 +21,7 @@ pub enum Applet {
     Network,
     Sound,
     Users,
+    Bluetooth,
 }
 
 pub const APPLETS: &[Applet] = &[
@@ -33,6 +34,7 @@ pub const APPLETS: &[Applet] = &[
     Applet::Sound,
     Applet::Startup,
     Applet::Users,
+    Applet::Bluetooth,
 ];
 
 impl Applet {
@@ -47,6 +49,7 @@ impl Applet {
             Applet::Desktop => "Desktop",
             Applet::Mouse => "Mouse",
             Applet::Sound => "Sound",
+            Applet::Bluetooth => "Bluetooth",
         }
     }
 
@@ -62,6 +65,7 @@ impl Applet {
             Applet::Desktop => "cp-desktop",
             Applet::Mouse => "cp-mouse",
             Applet::Sound => "cp-sound",
+            Applet::Bluetooth => "cp-bluetooth",
         }
     }
 
@@ -76,6 +80,7 @@ impl Applet {
             Applet::Desktop => "The pattern behind the windows.",
             Applet::Mouse => "Pointer speed, buttons and double-click speed.",
             Applet::Sound => "Where sound plays, its volume, interface sounds.",
+            Applet::Bluetooth => "Pair keyboards, headphones and game pads.",
         }
     }
 }
@@ -98,6 +103,10 @@ pub enum Value {
 
 /// The Sound page's "Mixer" button: MIXER (text) or the Volume window.
 pub const ACTION_MIXER: &str = "mixer";
+
+/// The Bluetooth page's "Devices" button: BT in text mode, the Bluetooth
+/// Devices dialog on the Desktop.
+pub const ACTION_BT: &str = "bt";
 
 /// The Network page's "Wireless networks" button: NET in text mode, the
 /// Wireless Networks dialog on the Desktop.
@@ -227,6 +236,12 @@ impl Page {
     /// Fields that depend on others: call after every change (the
     /// fixed-address fields only count when the address is fixed).
     pub fn update(&mut self) {
+        if self.applet == Applet::Bluetooth {
+            let on = self.field("power").is_some_and(|f| f.text() == "yes");
+            for f in self.fields.iter_mut().filter(|f| f.key == "devices") {
+                f.enabled = on;
+            }
+        }
         if self.applet == Applet::Network {
             let fixed = self.field("wired").is_some_and(|f| f.text() == "static");
             for f in self.fields.iter_mut() {
@@ -522,6 +537,15 @@ pub fn load(applet: Applet) -> Page {
                 ),
             ]
         }
+        Applet::Bluetooth => {
+            let on = bt::enabled();
+            if !on {
+                notice = Some("Bluetooth is off: turn it on to pair devices.".into());
+            }
+            let mut devs = Field::new("devices", "Devices", Value::Action(ACTION_BT));
+            devs.enabled = on;
+            vec![Field::new("power", "Bluetooth on", Value::Check(on)), devs]
+        }
         Applet::Network => {
             let cur = netconf::country();
             let mut list = vec![(
@@ -595,6 +619,16 @@ impl Applied {
             None
         }
     }
+}
+
+/// Before an action button opens more: Bluetooth just ticked on must be
+/// turned on first. Returns the page reloaded when it applied something.
+pub fn apply_first(page: &Page, action: &str) -> Result<Option<Page>, String> {
+    if action == ACTION_BT && page.changed("power") {
+        apply(page)?;
+        return Ok(Some(page.reloaded(None)));
+    }
+    Ok(None)
 }
 
 /// Save what changed on `page`.
@@ -675,6 +709,11 @@ pub fn apply(page: &Page) -> Result<Applied, String> {
             }
             if page.changed("ui_sounds") {
                 sound::set_ui_sounds(&val("ui_sounds"))?;
+            }
+        }
+        Applet::Bluetooth => {
+            if page.changed("power") {
+                bt::set_enabled(val("power") == "yes")?;
             }
         }
         Applet::Network => {
@@ -800,6 +839,7 @@ pub fn applet_named(name: &str) -> Option<Applet> {
         "sound" | "audio" | "volume" => Applet::Sound,
         "desktop" | "pattern" => Applet::Desktop,
         "mouse" | "pointer" => Applet::Mouse,
+        "bluetooth" | "bt" => Applet::Bluetooth,
         _ => return None,
     })
 }

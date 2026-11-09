@@ -95,6 +95,10 @@ ln -sf /usr/lib/systemd/system/greetd.service "$R/etc/systemd/system/display-man
 # normally do this; done here too so a chroot install cannot miss it.
 systemctl --root="$R" --global enable pipewire.socket pipewire-pulse.socket wireplumber.service \
     >/dev/null 2>&1 || echo "!! could not enable PipeWire user units" >&2
+# Bluetooth is off until the user turns it on (BT ON, Control Panel →
+# Bluetooth; D-054): no bluetoothd in memory otherwise. The bluez package
+# enables it when installed.
+systemctl --root="$R" disable bluetooth.service >/dev/null 2>&1 || true
 systemctl --root="$R" mask getty@tty1.service
 for t in apt-daily.timer apt-daily-upgrade.timer man-db.timer e2scrub_all.timer dpkg-db-backup.timer \
          e2scrub_reap.service systemd-networkd-wait-online.service; do

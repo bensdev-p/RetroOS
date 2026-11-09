@@ -1,0 +1,17 @@
+[package]
+name = "retro-bt"
+description = "BT: Bluetooth pairing in RetroDOS"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "retro-bt"
+path = "src/main.rs"
+
+[dependencies]
+retro-tui = { path = "../retro-tui" }
+retro-sys = { path = "../retro-sys" }
+
+[lints]
+workspace = true

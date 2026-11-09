@@ -3,6 +3,7 @@
 //! (docs/DESIGN.md §10).
 
 pub mod admin;
+pub mod bt;
 pub mod clock;
 pub mod display;
 pub mod keyboard;

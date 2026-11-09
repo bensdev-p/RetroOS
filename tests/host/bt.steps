@@ -1,0 +1,52 @@
+# Bluetooth (D-054) with a pretend adapter (RETROOS_TEST_BT): BT in
+# RetroDOS (pairing a keyboard shows the number to type), CONTROL's
+# Bluetooth page, and the Desktop's Bluetooth Devices dialog.
+wait 1500
+type BT /S
+key enter
+wait 800
+shot 01-bt-status
+type BT
+key enter
+wait 1500
+shot 02-bt
+key down
+key enter
+wait 1000
+shot 03-bt-pairing
+wait 3500
+shot 04-bt-paired
+key escape
+wait 500
+type CONTROL BLUETOOTH
+key enter
+wait 1500
+shot 05-control-bt
+key escape
+key escape
+wait 500
+type DESKTOP
+key enter
+wait 1500
+type START control-panel bluetooth
+key enter
+wait 2500
+expect WINDOWS => normal Bluetooth
+shot 06-bt-page
+key tab
+key enter
+wait 1500
+expect WINDOWS => Bluetooth Devices
+shot 07-bt-devices
+key down
+key enter
+wait 1000
+shot 08-bt-pairing
+wait 3500
+shot 09-bt-paired
+key escape
+wait 500
+key escape
+wait 500
+key alt+f4
+wait 800

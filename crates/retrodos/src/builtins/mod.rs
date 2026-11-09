@@ -122,6 +122,7 @@ static BUILTINS: &[Builtin] = &[
     programs::CONTROL,
     programs::MIXER,
     programs::VOLUME,
+    programs::BT,
     disk::ATTRIB,
     disk::XCOPY,
     disk::CHKDSK,

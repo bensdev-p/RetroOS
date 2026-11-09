@@ -116,6 +116,10 @@ const BUILTIN: &[(&str, &str)] = &[
         "cp-desktop",
         include_str!("../../../assets/icons/cp-desktop.icon"),
     ),
+    (
+        "cp-bluetooth",
+        include_str!("../../../assets/icons/cp-bluetooth.icon"),
+    ),
 ];
 
 /// Theme icon names (from .desktop files) that our own pictures stand for.
@@ -132,6 +136,8 @@ const ALIASES: &[(&str, &str)] = &[
     ("web-browser", "web-browser"),
     ("preferences-system", "control-panel"),
     ("multimedia-volume-control", "cp-sound"),
+    ("bluetooth", "cp-bluetooth"),
+    ("preferences-bluetooth", "cp-bluetooth"),
 ];
 
 /// One of our own icons by name ("jot", "file-cabinet", "web-browser").
