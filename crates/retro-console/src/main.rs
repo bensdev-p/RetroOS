@@ -195,10 +195,15 @@ impl App {
         let Some(s) = self.screen.as_ref() else {
             return;
         };
-        let (w, title) = {
+        let (w, title, bell) = {
             let mut o = s.outbox.borrow_mut();
-            (std::mem::take(&mut o.pty_write), o.title.take())
+            let bell = std::mem::take(&mut o.bell);
+            (std::mem::take(&mut o.pty_write), o.title.take(), bell)
         };
+        if bell {
+            // ^G: the PC-speaker beep, played by Station (D-053).
+            station_say("SOUND\tbeep");
+        }
         if !w.is_empty() {
             self.write_pty(&w);
         }
@@ -659,6 +664,16 @@ smithay_client_toolkit::delegate_dispatch2!(App);
 /// xterm TERM keeps ssh and remote tools working (docs/DECISIONS.md D-016).
 fn terminfo_name() -> String {
     std::env::var("RETROOS_TERM").unwrap_or_else(|_| "xterm-256color".into())
+}
+
+/// Send Station a request and do not wait for the answer.
+fn station_say(line: &str) {
+    use std::os::unix::net::UnixStream;
+    if let Some(path) = std::env::var_os("RETROOS_STATION") {
+        if let Ok(mut s) = UnixStream::connect(path) {
+            let _ = s.write_all(format!("{line}\n").as_bytes());
+        }
+    }
 }
 
 /// Follow Station's notices (WATCH on its broker): when the system's

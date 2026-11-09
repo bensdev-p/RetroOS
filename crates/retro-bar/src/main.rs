@@ -7,6 +7,7 @@
 //! and the underlined letters.
 
 mod clock;
+mod volume;
 
 use retro_gfx::widgets::{draw_menu, menu_hit, menu_layout, push_button, text_width, MenuItem};
 use retro_gfx::{font::lantern_12, Canvas, Theme};
@@ -17,6 +18,7 @@ use std::time::Duration;
 const HEIGHT: i32 = 20;
 const BTN_LEFT: u32 = 0x110;
 const CLOCK_TIMER: u32 = 1;
+const VOL_TIMER: u32 = 2;
 
 /// What a menu item does.
 #[derive(Clone, Debug, PartialEq)]
@@ -64,6 +66,22 @@ struct Bar {
     dialog: Option<Dialog>,
     /// Programs menu groups: name and (label, argv) entries.
     groups: Vec<Group>,
+    /// The output in use, while PipeWire runs (the volume item, D-053).
+    vol: Option<retro_sys::sound::Channel>,
+    vol_popup: Option<volume::Popup>,
+    /// Where the pointer is on the bar (the wheel over the speaker).
+    bar_x: i32,
+}
+
+/// The speaker's place on a bar `w` wide: left of the clock.
+fn speaker_rect(w: i32) -> Rect {
+    let clock = text_width(&clock::now_text());
+    Rect::new(
+        w - 8 - clock - 14 - volume::ICON_W,
+        0,
+        volume::ICON_W + 6,
+        HEIGHT - 1,
+    )
 }
 
 const TITLES: [&str; 3] = ["◆", "Programs", "Window"];
@@ -312,6 +330,10 @@ impl Bar {
                 } else {
                     "poweroff"
                 };
+                // The falling fifth first (STYLE.md §6, D-053).
+                if station::request(&["SOUND", "shutdown"]).is_ok_and(|(f, _)| f.is_empty()) {
+                    std::thread::sleep(Duration::from_millis(900));
+                }
                 let _ = std::process::Command::new("systemctl").arg(verb).status();
             }
             Ask::ExitToDos => {
@@ -327,6 +349,81 @@ impl Bar {
                 }
                 let _ = station::request(&["PERSONALITY", "text"]);
             }
+        }
+    }
+
+    /// Open or close the volume popup under the speaker.
+    fn toggle_volume(&mut self, ui: &mut Ui) {
+        self.close_menus(ui, 0);
+        if let Some(p) = self.vol_popup.take() {
+            ui.close(p.surface);
+        } else if let Some(bar) = self.bar {
+            let w = ui.size(bar).0;
+            let r = speaker_rect(w);
+            if let Some(s) = ui.popup(bar, r, (volume::POP_W, volume::POP_H), false, true) {
+                let p = volume::Popup::new(s);
+                self.vol = p.vol.clone();
+                self.vol_popup = Some(p);
+            }
+        }
+        if let Some(b) = self.bar {
+            ui.redraw(b);
+        }
+    }
+
+    /// The wheel over the speaker: ±5 % a step, no popup.
+    fn wheel(&mut self, ui: &mut Ui, steps: f64) {
+        let Some(mut v) = volume::read() else { return };
+        v.volume = (v.volume - steps as f32 * 0.05).clamp(0.0, 1.0);
+        if retro_sys::sound::set_volume(v.id, v.volume).is_ok() {
+            self.vol = Some(v);
+            if let Some(b) = self.bar {
+                ui.redraw(b);
+            }
+        }
+    }
+
+    fn popup_event(&mut self, ui: &mut Ui, ev: Event) {
+        let Some(p) = self.vol_popup.as_mut() else {
+            return;
+        };
+        let out = match ev {
+            Event::PopupDone => volume::Out::Close,
+            Event::Button {
+                button: BTN_LEFT,
+                pressed,
+                x,
+                y,
+            } => p.button(pressed, x, y),
+            Event::PointerMove { y, .. } => {
+                if !p.motion(y) {
+                    return;
+                }
+                volume::Out::None
+            }
+            Event::Scroll { steps } => {
+                p.step(-steps as f32 * 0.05);
+                volume::Out::None
+            }
+            Event::Key { sym, text, .. } => p.key(sym, text.as_deref()),
+            _ => return,
+        };
+        self.vol = p.vol.clone();
+        let surface = p.surface;
+        match out {
+            volume::Out::None => ui.redraw(surface),
+            volume::Out::Close => {
+                self.vol_popup = None;
+                ui.close(surface);
+            }
+            volume::Out::Mixer => {
+                self.vol_popup = None;
+                ui.close(surface);
+                let _ = station::launch("VOLUME", &["volume".to_string()]);
+            }
+        }
+        if let Some(b) = self.bar {
+            ui.redraw(b);
         }
     }
 
@@ -399,6 +496,14 @@ impl Bar {
         }
         let now = clock::now_text();
         sf.text(font, w - 8 - text_width(&now), 3, 1, t.bar_text, None, &now);
+        let r = speaker_rect(w);
+        let (fg, bg) = if self.vol_popup.is_some() {
+            (t.sel_text, t.sel)
+        } else {
+            (t.bar_text, t.bar)
+        };
+        sf.fill_rect(r.x, r.y, r.w as u32, r.h as u32, bg);
+        volume::draw_icon(&mut sf, r.x + 3, 4, self.vol.as_ref(), fg, bg);
     }
 
     fn draw_dialog(&self, d: &Dialog, c: &mut Canvas, t: &Theme) {
@@ -468,6 +573,7 @@ impl Program for Bar {
             return;
         }
         ui.timer(CLOCK_TIMER, clock::until_next_minute());
+        ui.timer(VOL_TIMER, Duration::from_secs(1));
     }
 
     fn draw(&mut self, ui: &Ui, id: SurfaceId, c: &mut Canvas) {
@@ -480,6 +586,9 @@ impl Program for Bar {
             c.surface().blit(&menu, 0, 0);
             return;
         }
+        if let Some(p) = self.vol_popup.as_ref().filter(|p| p.surface == id) {
+            return p.draw(c, &ui.theme);
+        }
         if let Some(d) = self.dialog.as_ref().filter(|d| d.surface == id) {
             self.draw_dialog(d, c, &ui.theme);
         }
@@ -489,7 +598,20 @@ impl Program for Bar {
         if std::env::var_os("RETRO_BAR_DEBUG").is_some() {
             eprintln!("retro-bar: {id:?} {ev:?}");
         }
+        if self.vol_popup.as_ref().is_some_and(|p| p.surface == id) {
+            return self.popup_event(ui, ev);
+        }
         if Some(id) == self.bar {
+            match ev {
+                Event::PointerMove { x, .. } | Event::PointerEnter { x, .. } => self.bar_x = x,
+                Event::Scroll { steps } => {
+                    let w = ui.size(id).0;
+                    if speaker_rect(w).contains(self.bar_x, 2) {
+                        self.wheel(ui, steps);
+                    }
+                }
+                _ => {}
+            }
             if let Event::Button {
                 button: BTN_LEFT,
                 pressed: true,
@@ -497,6 +619,11 @@ impl Program for Bar {
                 ..
             } = ev
             {
+                let w = ui.size(id).0;
+                if speaker_rect(w).contains(x, 2) {
+                    self.toggle_volume(ui);
+                    return;
+                }
                 let hit = title_rects()
                     .iter()
                     .position(|(tx, tw)| x >= *tx && x < tx + tw);
@@ -611,6 +738,21 @@ impl Program for Bar {
     }
 
     fn timer(&mut self, ui: &mut Ui, token: u32) {
+        if token == VOL_TIMER {
+            // Only while PipeWire runs: asking would start it.
+            let now = if volume::pipewire_running() {
+                volume::read()
+            } else {
+                self.vol.clone()
+            };
+            if now != self.vol {
+                self.vol = now;
+                if let Some(b) = self.bar {
+                    ui.redraw(b);
+                }
+            }
+            ui.timer(VOL_TIMER, Duration::from_secs(5));
+        }
         if token == CLOCK_TIMER {
             if let Some(b) = self.bar {
                 ui.redraw(b);
@@ -629,6 +771,9 @@ fn main() {
         menus: Vec::new(),
         dialog: None,
         groups: Vec::new(),
+        vol: None,
+        vol_popup: None,
+        bar_x: 0,
     };
     if let Err(e) = retro_ui::run(Box::new(bar)) {
         eprintln!("retro-bar: {e}");

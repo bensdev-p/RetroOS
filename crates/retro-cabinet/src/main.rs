@@ -638,6 +638,7 @@ impl Cabinet {
             Kind::Delete(files, for_good) => {
                 let mut other_fs = Vec::new();
                 let mut errors = Vec::new();
+                let mut thrown = false;
                 for f in &files {
                     let r = if for_good {
                         panel::delete(f)
@@ -650,8 +651,12 @@ impl Cabinet {
                             "{}: {e}",
                             f.file_name().unwrap_or_default().to_string_lossy()
                         )),
-                        Ok(()) => {}
+                        Ok(()) => thrown |= !for_good,
                     }
+                }
+                if thrown {
+                    // Into the Wastebasket (STYLE.md §6, D-053).
+                    let _ = station::request(&["SOUND", "crumple"]);
                 }
                 self.panel.marked.clear();
                 self.reload();

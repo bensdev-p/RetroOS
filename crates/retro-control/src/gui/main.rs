@@ -420,13 +420,8 @@ impl Panel {
     fn action(&mut self, ui: &mut Ui, what: &str) {
         let Some(d) = &self.dialog else { return };
         if what == retro_control::ACTION_MIXER {
-            // MIXER in a window of its own (the Desktop's Volume window will
-            // take over, D-047).
-            let argv: Vec<String> = ["retro-console", "--exec", "retro-mixer"]
-                .iter()
-                .map(|s| s.to_string())
-                .collect();
-            if let Err(e) = station::launch("MIXER", &argv) {
+            // The Volume window (D-053).
+            if let Err(e) = station::launch("VOLUME", &["volume".to_string()]) {
                 self.message(ui, &[&format!("Cannot start the mixer: {e}")]);
             }
             return;

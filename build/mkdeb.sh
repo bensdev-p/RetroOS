@@ -36,7 +36,7 @@ cp -a "$ROOT/packaging/retroos/root/." "$STAGE/"
 
 install -d "$STAGE/usr/bin" "$STAGE/usr/libexec/retroos" "$STAGE/usr/share/retroos/sounds" \
     "$STAGE/usr/share/retroos/fonts" "$STAGE/usr/share/doc/retroos"
-for b in retrodos retro-console station retro-session retro-greeter retro-setup retro-edit retro-filer retro-net retro-bar retro-progman retro-about jot file-cabinet retro-control control-panel retro-mixer; do
+for b in retrodos retro-console station retro-session retro-greeter retro-setup retro-edit retro-filer retro-net retro-bar retro-progman retro-about jot file-cabinet retro-control control-panel retro-mixer volume; do
     install -m 755 "$BIN/$b" "$STAGE/usr/bin/$b"
 done
 install -m 755 "$BIN/retro-post" "$STAGE/usr/libexec/retroos/retro-post"

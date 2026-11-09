@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Volume
+Comment=The sound volume of the output and of each program playing
+Exec=volume
+Icon=multimedia-volume-control
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;

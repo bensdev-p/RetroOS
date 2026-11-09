@@ -131,6 +131,7 @@ const ALIASES: &[(&str, &str)] = &[
     ("chromium-browser", "web-browser"),
     ("web-browser", "web-browser"),
     ("preferences-system", "control-panel"),
+    ("multimedia-volume-control", "cp-sound"),
 ];
 
 /// One of our own icons by name ("jot", "file-cabinet", "web-browser").

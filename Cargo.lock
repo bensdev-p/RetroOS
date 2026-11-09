@@ -1220,6 +1220,7 @@ dependencies = [
  "libc",
  "retro-apps",
  "retro-gfx",
+ "retro-sys",
  "retro-ui",
 ]
 
@@ -1328,8 +1329,10 @@ dependencies = [
 name = "retro-mixer"
 version = "0.1.0"
 dependencies = [
+ "retro-gfx",
  "retro-sys",
  "retro-tui",
+ "retro-ui",
 ]
 
 [[package]]

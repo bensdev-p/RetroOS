@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-053**).
+  (**next: D-054**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -214,8 +214,11 @@ Suggested order, each step leaving a working image:
 - **Step 2 done except Bluetooth/Updates/Software Sources** (they come with
   steps 4–5): Mouse and Desktop pages (D-052, `retro_gfx::prefs`, broker
   `PREFS`).
-- **Order from here** (tester's wish, 2026-11-09: go in order): the rest of
-  step 3; step 4; step 5; then 6.
+- **Step 3 done** (D-053): System Bar speaker + popup (`retro-bar/src/volume.rs`),
+  Volume window (`retro-mixer/src/gui.rs`, binary `volume`), Station `SOUND`
+  (`station/src/sounds.rs`). HW 4.21–4.25, 4.30–4.32.
+- **Order from here** (tester's wish, 2026-11-09: go in order): step 4
+  (Bluetooth); step 5 (Software Library); then 6.
 
 ## 8. Open items carried over
 

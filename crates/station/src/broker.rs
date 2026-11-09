@@ -284,6 +284,15 @@ impl Station {
                     None => "ERR	no such task".into(),
                 }
             }
+            // SOUND <name>: an interface sound (beep, alert, error, notify,
+            // crumple, shutdown), if the person wants it (D-053).
+            "SOUND" if f.len() == 2 => {
+                if self.play_sound(f[1]) {
+                    "OK".into()
+                } else {
+                    "OK\tquiet".into()
+                }
+            }
             "PREFS" => {
                 // desktop.conf changed (Control Panel → Mouse, Desktop).
                 self.reload_prefs();

@@ -1,6 +1,6 @@
 [package]
 name = "retro-mixer"
-description = "MIXER / VOLUME: the RetroOS volume mixer in text mode"
+description = "MIXER / VOLUME and the Desktop's Volume window: the RetroOS volume mixer"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,9 +9,15 @@ license.workspace = true
 name = "retro-mixer"
 path = "src/main.rs"
 
+[[bin]]
+name = "volume"
+path = "src/gui.rs"
+
 [dependencies]
 retro-tui = { path = "../retro-tui" }
 retro-sys = { path = "../retro-sys" }
+retro-gfx.workspace = true
+retro-ui.workspace = true
 
 [lints]
 workspace = true

@@ -16,6 +16,7 @@ mod inject;
 mod input;
 mod layers;
 mod render;
+mod sounds;
 mod state;
 mod tasklist;
 mod tasks;

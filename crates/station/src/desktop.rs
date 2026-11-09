@@ -794,6 +794,7 @@ impl Station {
     }
 
     pub fn show_message(&mut self, title: &str, lines: &[&str]) {
+        self.play_sound("alert");
         self.desktop.menu = None;
         self.desktop.message = Some(Message {
             title: title.into(),

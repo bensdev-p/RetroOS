@@ -33,3 +33,22 @@ wait 2500
 expect WINDOWS => normal Sound
 shot 05-sound-page
 key escape
+wait 500
+key alt+f4
+wait 1000
+# The Volume window (D-053) and the System Bar's speaker.
+type START volume
+key enter
+wait 2500
+expect WINDOWS => normal Volume
+shot 06-volume
+key escape
+wait 800
+pointer 1765 10
+button click
+wait 800
+shot 07-bar-volume
+key escape
+wait 500
+expect SOUND beep => OK
+expect SOUND nonsense => quiet

@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 retro-gfx.workspace = true
 retro-ui.workspace = true
+retro-sys = { path = "../retro-sys" }
 retro-apps.workspace = true
 libc = "0.2"
 

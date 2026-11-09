@@ -105,6 +105,8 @@ pub struct Station {
     pub theme: retro_gfx::Theme,
     /// Mouse and desktop preferences (Control Panel; reloaded on PREFS).
     pub prefs: retro_gfx::prefs::Prefs,
+    /// Interface sounds (D-053).
+    pub sounds: crate::sounds::Player,
 }
 
 #[derive(Default)]
@@ -248,6 +250,7 @@ impl Station {
             scheme: retro_gfx::Scheme::system(),
             theme: retro_gfx::Theme::system(),
             prefs: retro_gfx::prefs::load(),
+            sounds: Default::default(),
         }
     }
 
