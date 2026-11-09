@@ -254,3 +254,29 @@ keyboard unplugged would tell.
 On the firmware's clock `C:\>` is at ≈ 24 s, ≈ 4 s more than the stopwatch;
 the firmware clock probably starts before the stopwatch does (PMIC power-up),
 so the firmware times are upper bounds.
+
+## Milestone 4
+
+### Raspberry Pi 5 (8 GB), sound running (2026-11-09, HW_CHECKLIST 4.25)
+
+After playing a video in Firefox and closing it, the Desktop with a DOS
+Prompt, Program Manager and Control Panel open; `ps -o rss,comm -u $USER`
+(RSS in MB; RSS counts shared libraries in every process, so the sum is an
+upper bound):
+
+| Process | RSS |
+|---|---:|
+| pipewire | 13.0 |
+| pipewire (second instance) | 4.8 |
+| wireplumber | 18.1 |
+| pipewire-pulse | 13.3 |
+| **sound total (upper bound)** | **49.2** |
+| mpris-proxy (BlueZ's media-button helper) | 3.5 — ran with Bluetooth off; now only enabled with Bluetooth (D-054) |
+| station | 99.4 (Mesa/V3D libraries mapped while Firefox ran on the GPU; file pages) |
+| retro-console / retrodos / retro-bar / retro-progman / control-panel | 9.2 / 2.3 / 4.2 / 5.3 / 6.1 |
+| systemd (user) / dbus-broker(-launch) / retro-session | 12.7 / 2.5 + 3.9 / 1.8 |
+
+The sound server stays once started (socket activation starts it; it is not
+stopped when the last program closes). If the Desktop's budget gets tight,
+WirePlumber's idle exit or `pipewire-pulse` only on demand are the levers.
+

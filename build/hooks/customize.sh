@@ -99,6 +99,9 @@ systemctl --root="$R" --global enable pipewire.socket pipewire-pulse.socket wire
 # Bluetooth; D-054): no bluetoothd in memory otherwise. The bluez package
 # enables it when installed.
 systemctl --root="$R" disable bluetooth.service >/dev/null 2>&1 || true
+# Its media-button helper too (3.6 MB in every session, HW 4.25): set-bluetooth
+# turns it on with Bluetooth.
+systemctl --root="$R" --global disable mpris-proxy.service >/dev/null 2>&1 || true
 systemctl --root="$R" mask getty@tty1.service
 for t in apt-daily.timer apt-daily-upgrade.timer man-db.timer e2scrub_all.timer dpkg-db-backup.timer \
          e2scrub_reap.service systemd-networkd-wait-online.service; do

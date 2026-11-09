@@ -15,10 +15,13 @@ case ${1:-} in
         command -v rfkill >/dev/null 2>&1 && rfkill unblock bluetooth 2>/dev/null || true
         systemctl enable --now bluetooth.service >/dev/null 2>&1 ||
             { echo "Cannot start Bluetooth (bluetooth.service)" >&2; exit 1; }
+        # Headphone play/pause buttons for media players, from the next log on.
+        systemctl --global enable mpris-proxy.service >/dev/null 2>&1 || true
         ;;
     off)
         systemctl disable --now bluetooth.service >/dev/null 2>&1 ||
             { echo "Cannot stop Bluetooth (bluetooth.service)" >&2; exit 1; }
+        systemctl --global disable mpris-proxy.service >/dev/null 2>&1 || true
         ;;
     *) echo "usage: set-bluetooth on|off" >&2; exit 2 ;;
 esac

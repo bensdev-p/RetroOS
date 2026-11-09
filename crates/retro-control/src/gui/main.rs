@@ -1064,3 +1064,36 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    /// Every field label of every applet, from the applet model's source
+    /// (`Field::new("key", "Label", …)`).
+    fn labels() -> Vec<String> {
+        let src = include_str!("../lib.rs");
+        let mut out = Vec::new();
+        for part in src.split("Field::new(").skip(1) {
+            // The key, then the label: the second string literal.
+            let mut quoted = part.split('"').skip(1).step_by(2);
+            if let (Some(_key), Some(label)) = (quoted.next(), quoted.next()) {
+                out.push(label.to_string());
+            }
+        }
+        out
+    }
+
+    /// HW 4.28: "Swap left and right buttons" ran under its check box.
+    #[test]
+    fn every_label_fits_its_column() {
+        let all = labels();
+        assert!(all.len() > 20, "found {all:?}");
+        for l in all {
+            let w = retro_gfx::widgets::text_width(&format!("{l}:"));
+            assert!(w <= super::CTRL_X - 14 - 6, "Desktop: {l:?} is {w} px");
+            assert!(
+                l.chars().count() < 22,
+                "CONTROL: {l:?} needs a dot before the value"
+            );
+        }
+    }
+}

@@ -434,7 +434,7 @@ pub fn load(applet: Applet) -> Page {
                 ),
                 Field::new(
                     "left_handed",
-                    "Swap left and right buttons",
+                    "Swap mouse buttons",
                     Value::Check(p.left_handed),
                 ),
                 Field::new(
