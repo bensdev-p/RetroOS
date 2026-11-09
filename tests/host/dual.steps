@@ -3,6 +3,15 @@
 # the Desktop spans both; a window dragged across maximises on its screen.
 wait 1500
 shot 01-text
+# A new colour scheme reaches the second screen's pattern too (HW 4.26).
+type COLOR AMBER
+key enter
+wait 1200
+shot 01b-amber
+expect-pixel 01b-amber 2600 700 5A3A00
+type COLOR STANDARD
+key enter
+wait 1200
 type DESKTOP
 key enter
 wait 1500

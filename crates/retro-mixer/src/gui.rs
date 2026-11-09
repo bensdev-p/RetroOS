@@ -30,6 +30,8 @@ struct Vol {
     sel: usize,
     /// The channel being dragged.
     drag: Option<usize>,
+    /// When the volume was last set while dragging.
+    last_set: Option<std::time::Instant>,
 }
 
 fn track(i: usize) -> Rect {
@@ -275,6 +277,14 @@ impl Program for Vol {
             Event::PointerMove { y, .. } => {
                 let Some(i) = self.drag else { return };
                 self.set_from_y(i, y);
+                // The volume follows the drag (at most every 80 ms: wpctl).
+                if self
+                    .last_set
+                    .is_none_or(|t| t.elapsed() >= Duration::from_millis(80))
+                {
+                    self.last_set = Some(std::time::Instant::now());
+                    self.commit(i);
+                }
             }
             Event::Scroll { steps } => self.step(-steps as f32 * 0.05),
             Event::Key { sym, text, .. } => match sym {
@@ -318,6 +328,7 @@ fn main() {
         mixer: sound::mixer(),
         sel: 0,
         drag: None,
+        last_set: None,
     };
     if let Err(e) = retro_ui::run(Box::new(v)) {
         eprintln!("volume: {e}");

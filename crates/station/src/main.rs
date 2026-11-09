@@ -115,6 +115,8 @@ fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
+        // Colour codes only on a terminal, not in station.log.
+        .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
         .init();
 
     let mut headless: Option<Vec<(i32, i32)>> = None;

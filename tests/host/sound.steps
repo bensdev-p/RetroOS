@@ -1,6 +1,12 @@
 # Sound (D-047) with a pretend sound system (RETROOS_TEST_SOUND): VOLUME,
 # MIXER, and the Control Panel's Sound page in both front-ends.
 wait 1500
+# The console's bell (^G) asks Station for the beep (HW 4.32: it was lost
+# when the console hung up right after asking).
+type UNIX "printf '\a'"
+key enter
+wait 800
+expect LASTSOUND => beep
 type VOLUME
 key enter
 wait 600

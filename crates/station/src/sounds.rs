@@ -16,6 +16,9 @@ pub const SOUNDS: &[&str] = &[
 pub struct Player {
     child: Option<Child>,
     last: Option<(String, Instant)>,
+    /// The last sound asked for and wanted (the broker's LASTSOUND, for
+    /// host tests, which have no sound files or PipeWire).
+    pub wanted: Option<String>,
 }
 
 fn dir() -> std::path::PathBuf {
@@ -59,6 +62,7 @@ impl Station {
             return false;
         }
         let p = &mut self.sounds;
+        p.wanted = Some(name.to_string());
         // A burst of the same sound (a program printing BEL in a loop) is one.
         if p.last
             .as_ref()

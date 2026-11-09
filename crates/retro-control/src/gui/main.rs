@@ -715,7 +715,7 @@ impl Panel {
                     d.pressed = Some(b);
                     d.focus = n + b;
                 } else if let Some(i) =
-                    (0..n).find(|i| d.rects[*i].contains(x, y) || label_hit(d, *i, x, y))
+                    (0..n).find(|i| hit_rect(d, *i).contains(x, y) || label_hit(d, *i, x, y))
                 {
                     if !d.page.fields[i].enabled {
                         return;
@@ -819,6 +819,21 @@ impl Panel {
 }
 
 /// A click on a field's label focuses (and for a check box, toggles) it.
+/// Where field `i`'s control takes clicks: what is drawn, not the whole
+/// row (HW 4.9: a click beside a drop-down opened it).
+fn hit_rect(d: &Dialog, i: usize) -> Rect {
+    let r = d.rects[i];
+    let w = match (&d.ctls[i], &d.page.fields[i].value) {
+        (Ctl::List(_), _) => r.w,
+        (Ctl::Text(_), _) => TEXT_W,
+        (_, Value::Choice(..)) => CHOICE_W,
+        (_, Value::Action(_)) => ACTION_W,
+        (_, Value::Check(_)) => 16,
+        _ => r.w,
+    };
+    Rect::new(r.x, r.y, w.min(r.w), r.h)
+}
+
 fn label_hit(d: &Dialog, i: usize, x: i32, y: i32) -> bool {
     let r = d.rects[i];
     matches!(d.page.fields[i].value, Value::Check(_)) && x < r.x && y >= r.y && y < r.y + FIELD_H

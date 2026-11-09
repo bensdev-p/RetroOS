@@ -22,6 +22,8 @@ pub struct TouchSeq {
     /// The surface they went down on and its place on the screen.
     pub focus: Option<(WlSurface, Point<f64, Logical>)>,
     pub slots: Vec<TouchSlot>,
+    /// Where the first finger is now.
+    pub first: Option<Point<f64, Logical>>,
 }
 
 /// Whether a program takes real touch: everything but RetroOS's own.
@@ -85,6 +87,22 @@ impl Station {
         }
     }
 
+    /// A program asked to be moved or sized (its own title bar, Firefox's
+    /// tab strip) while a finger is on it: the program stops getting that
+    /// finger, which becomes the mouse there, so the move follows the
+    /// finger (HW D.5: it followed the pointer, wherever that was).
+    /// Returns where the finger is.
+    pub fn touch_to_mouse(&mut self) -> Option<Point<f64, Logical>> {
+        let slot = *self.touch.slots.first()?;
+        let loc = self.touch.first?;
+        if let Some(touch) = self.seat.get_touch() {
+            touch.cancel(self);
+        }
+        self.touch = TouchSeq::default();
+        self.touch_slot = Some(slot);
+        Some(loc)
+    }
+
     /// The task, surface and surface origin a new finger at `loc` goes to
     /// as touch; None: the finger is the mouse.
     fn touch_target(
@@ -126,6 +144,9 @@ impl Station {
             }
         };
         self.touch.focus = Some(focus.clone());
+        if self.touch.slots.is_empty() {
+            self.touch.first = Some(loc);
+        }
         self.touch.slots.push(slot);
         let serial = SERIAL_COUNTER.next_serial();
         touch.down(
@@ -146,6 +167,9 @@ impl Station {
     fn touch_motion(&mut self, slot: TouchSlot, loc: Point<f64, Logical>, time: u32) -> bool {
         if !self.touch.slots.contains(&slot) {
             return false;
+        }
+        if self.touch.slots.first() == Some(&slot) {
+            self.touch.first = Some(loc);
         }
         if let Some(touch) = self.seat.get_touch() {
             let focus = self.touch.focus.clone();

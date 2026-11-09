@@ -222,6 +222,13 @@ Suggested order, each step leaving a working image:
   Bluetooth Devices dialog (`retro-control/src/gui/bt.rs`), helper
   `set-bluetooth` (bluetooth.service off in the image until turned on),
   packages bluez + libspa-0.2-bluetooth; host test `bt.steps`; HW 4.33–4.38.
+- **Fixes from the 2026-11-09 hardware run** (HW_CHECKLIST results): Station's
+  log is now `~/.local/state/retroos/station.log` (retro-session; `.old` =
+  the previous session) with a "screen X: GPU/CPU rendering" line per
+  screen; the broker handles a request sent just before the client hangs
+  up (the console bell); the headless backend renders with buffer age 1, so
+  host tests catch damage bugs like the second screen's stale pattern;
+  a program's move request during a touch follows the finger.
 - **Order from here** (tester's wish, 2026-11-09: go in order): step 5
   (Software Library; then the Updates / Software Sources pages); then 6.
 

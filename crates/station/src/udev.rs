@@ -248,7 +248,14 @@ impl UdevData {
             self.build_pixman(i)
         };
         match built {
-            Ok(g) => self.heads[i].gpu = Some(g),
+            Ok(g) => {
+                let how = match g {
+                    Gpu::Gles { .. } => "GPU",
+                    _ => "CPU",
+                };
+                tracing::info!("screen {}: {how} rendering", self.heads[i].output.name());
+                self.heads[i].gpu = Some(g)
+            }
             Err(e) => tracing::error!(output = %self.heads[i].output.name(), "no renderer: {e}"),
         }
     }

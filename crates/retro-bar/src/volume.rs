@@ -36,6 +36,8 @@ const MIXER: Rect = Rect {
     h: 22,
 };
 
+const DRAG_SET: std::time::Duration = std::time::Duration::from_millis(80);
+
 /// Is a PipeWire daemon running (for this user)? Looks for its process.
 pub fn pipewire_running() -> bool {
     if std::env::var_os("RETROOS_TEST_SOUND").is_some() {
@@ -95,6 +97,8 @@ pub struct Popup {
     pub dragging: bool,
     pub pressed_mixer: bool,
     pub error: Option<String>,
+    /// When the volume was last set while dragging.
+    pub last_set: Option<std::time::Instant>,
 }
 
 /// What a popup event asks the bar to do.
@@ -119,6 +123,7 @@ impl Popup {
             dragging: false,
             pressed_mixer: false,
             error,
+            last_set: None,
         }
     }
 
@@ -249,9 +254,15 @@ impl Popup {
         Out::None
     }
 
+    /// Dragging the slider changes the volume as it goes (HW 4.30), at
+    /// most every [`DRAG_SET`] (each change runs wpctl).
     pub fn motion(&mut self, y: i32) -> bool {
         if self.dragging {
             self.set_from_y(y);
+            if self.last_set.is_none_or(|t| t.elapsed() >= DRAG_SET) {
+                self.last_set = Some(std::time::Instant::now());
+                self.commit();
+            }
             return true;
         }
         false

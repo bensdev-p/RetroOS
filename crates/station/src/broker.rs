@@ -157,27 +157,35 @@ impl Station {
             Generic::new(reader, Interest::READ, Mode::Level),
             move |_, r, st: &mut Station| {
                 let mut chunk = [0u8; 4096];
+                let mut closed = false;
                 loop {
                     // SAFETY: we only read from the stream; calloop keeps it registered.
                     match unsafe { r.get_mut() }.read(&mut chunk) {
                         Ok(0) => {
-                            st.broker.conns.remove(&id);
-                            return Ok(PostAction::Remove);
+                            closed = true;
+                            break;
                         }
                         Ok(n) => buf.extend_from_slice(&chunk[..n]),
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
                         Err(_) => {
-                            st.broker.conns.remove(&id);
-                            return Ok(PostAction::Remove);
+                            closed = true;
+                            break;
                         }
                     }
                 }
+                // Requests that came with the end of the connection still
+                // count: a client may say one thing and hang up (the
+                // console's bell, "SOUND beep"; HW 4.32).
                 while let Some(nl) = buf.iter().position(|b| *b == b'\n') {
                     let line = String::from_utf8_lossy(&buf[..nl])
                         .trim_end_matches('\r')
                         .to_string();
                     buf.drain(..=nl);
                     st.broker_request(id, &line);
+                }
+                if closed {
+                    st.broker.conns.remove(&id);
+                    return Ok(PostAction::Remove);
                 }
                 Ok(PostAction::Continue)
             },
@@ -293,6 +301,10 @@ impl Station {
                     "OK\tquiet".into()
                 }
             }
+            "LASTSOUND" => match &self.sounds.wanted {
+                Some(n) => format!("OK\t{n}"),
+                None => "OK".into(),
+            },
             "PREFS" => {
                 // desktop.conf changed (Control Panel → Mouse, Desktop).
                 self.reload_prefs();

@@ -68,7 +68,30 @@ pub fn mixer() -> Result<Mixer, String> {
     if !out.status.success() {
         return Err("The sound service is not running.".into());
     }
-    Ok(parse_dump(&String::from_utf8_lossy(&out.stdout)))
+    let mut m = parse_dump(&String::from_utf8_lossy(&out.stdout));
+    // An output's volume and mute as WirePlumber keeps them: on a sound
+    // card it can hold them on the card's route rather than the node's own
+    // properties, which then lag or disagree (HW 4.22: a mute seemed to
+    // undo itself). wpctl reads them the way set_volume/set_mute write them.
+    for o in m.outputs.iter_mut() {
+        if let Some((v, muted)) = Command::new("wpctl")
+            .args(["get-volume", &o.id.to_string()])
+            .output()
+            .ok()
+            .and_then(|r| parse_get_volume(&String::from_utf8_lossy(&r.stdout)))
+        {
+            o.volume = v;
+            o.muted = muted;
+        }
+    }
+    Ok(m)
+}
+
+/// `wpctl get-volume`'s answer: "Volume: 0.40" or "Volume: 0.40 [MUTED]".
+pub fn parse_get_volume(s: &str) -> Option<(f32, bool)> {
+    let rest = s.trim().strip_prefix("Volume:")?.trim();
+    let v: f32 = rest.split_whitespace().next()?.parse().ok()?;
+    Some((v.clamp(0.0, 1.5), rest.contains("[MUTED]")))
 }
 
 /// Read `pw-dump`'s JSON.
@@ -251,7 +274,7 @@ pub fn set_ui_sounds(level: &str) -> Result<(), String> {
 pub fn plays(level: &str, sound: &str) -> bool {
     match level {
         "off" => false,
-        "essential" => matches!(sound, "error" | "startup"),
+        "essential" => matches!(sound, "error" | "startup" | "shutdown"),
         _ => true,
     }
 }
@@ -342,6 +365,16 @@ mod tests {
             ("Firefox", 50)
         );
         assert_eq!(parse_dump("not json"), Mixer::default());
+    }
+
+    #[test]
+    fn wpctl_volume_lines() {
+        assert_eq!(parse_get_volume("Volume: 0.40\n"), Some((0.4, false)));
+        assert_eq!(
+            parse_get_volume("Volume: 1.00 [MUTED]\n"),
+            Some((1.0, true))
+        );
+        assert_eq!(parse_get_volume("Object not found\n"), None);
     }
 
     #[test]

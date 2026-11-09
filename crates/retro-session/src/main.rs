@@ -95,9 +95,12 @@ fn main() {
     let personality = if mode == "desktop" { "desktop" } else { "text" };
     let mut crashes: Vec<Instant> = Vec::new();
     loop {
-        let status = Command::new("station")
-            .args(["--personality", personality, "--exec", "retro-console"])
-            .status();
+        let mut cmd = Command::new("station");
+        cmd.args(["--personality", personality, "--exec", "retro-console"]);
+        if let Some(f) = station_log() {
+            cmd.stderr(f);
+        }
+        let status = cmd.status();
         match status {
             Ok(s) if s.success() => break,
             Ok(s) => {
@@ -117,4 +120,21 @@ fn main() {
             }
         }
     }
+}
+
+/// Station's log (and that of the programs it starts):
+/// ~/.local/state/retroos/station.log, the previous one kept as
+/// station.log.old. Read it with `TYPE` or `UNIX "grep ... station.log"`
+/// (HW D.9: greetd's sessions log nowhere journalctl shows).
+fn station_log() -> Option<std::fs::File> {
+    let base = std::env::var_os("XDG_STATE_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".local/state"))
+        })?;
+    let dir = base.join("retroos");
+    std::fs::create_dir_all(&dir).ok()?;
+    let log = dir.join("station.log");
+    let _ = std::fs::rename(&log, dir.join("station.log.old"));
+    std::fs::File::create(log).ok()
 }

@@ -1687,6 +1687,11 @@ impl Station {
         if self.desktop.band.as_ref().map(|(k, _)| k) != Some(&key) {
             let c = chrome::pattern_band((lay.size.w * m.scale) as u32, BAND, &m);
             self.desktop.band = Some((key, chrome::to_buffer(&c, m.scale)));
+            // New ids too: a fresh buffer starts its commit count again, so
+            // under the old ids a screen's damage tracker would see nothing
+            // new and keep the old pattern (HW 4.26/4.29: the second screen
+            // changed only where a window was dragged).
+            self.desktop.band_ids.clear();
         }
         let band_h = BAND * m.px / m.scale;
         let n = ((lay.size.h + band_h - 1) / band_h).max(1) as usize;

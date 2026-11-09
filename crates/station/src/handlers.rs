@@ -333,6 +333,10 @@ impl Station {
         // Station takes the pointer from the program for the drag.
         let serial = smithay::utils::SERIAL_COUNTER.next_serial();
         ptr.unset_grab(self, serial, self.now_ms());
+        // Asked with a finger: the drag starts under the finger.
+        if let Some(loc) = self.touch_to_mouse() {
+            self.pointer_location = loc;
+        }
         self.begin_drag(id, kind);
         let loc = self.pointer_location;
         let t = self.now_ms();

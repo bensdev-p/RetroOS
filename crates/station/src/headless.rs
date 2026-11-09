@@ -138,10 +138,12 @@ pub fn render(st: &mut Station) {
             origin: head.output.current_location(),
         };
         let elements = render::build(&mut hd.renderer, &scene, &mut hd.cursor);
+        // Age 1: the same image every frame, so only what changed is drawn,
+        // as on the screens (damage bugs show in host tests too).
         if let Ok(mut fb) = hd.renderer.bind(&mut head.image) {
             if let Err(e) =
                 head.damage
-                    .render_output(&mut hd.renderer, &mut fb, 0, &elements, render::CLEAR)
+                    .render_output(&mut hd.renderer, &mut fb, 1, &elements, render::CLEAR)
             {
                 tracing::warn!("headless render failed: {e:?}");
             }
