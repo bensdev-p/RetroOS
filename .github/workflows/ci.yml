@@ -41,22 +41,7 @@ jobs:
         if: always()
         with:
           name: host-test-screens
-          path: |
-            out/test-host
-            out/test-host-launch
-            out/test-host-edit
-            out/test-host-filer
-            out/test-host-tasklist
-            out/test-host-desktop
-            out/test-host-desktop-start
-            out/test-host-bar
-            out/test-host-scheme
-            out/test-host-progman
-            out/test-host-about
-            out/test-host-jot
-            out/test-host-cabinet
-            out/test-host-x11
-            out/test-host-rotate
+          path: out/test-host*
 
   bootloader:
     name: Pi 5 bootloader settings card
