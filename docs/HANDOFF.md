@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-057**).
+  (**next: D-058**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -248,8 +248,14 @@ Suggested order, each step leaving a working image:
   `FULLSCREEN`), Program Manager rereads programs when the applications
   folders change and wraps titles (golden images updated), the Library's
   generic picture for packages; host-test step `write`.
-- **Order from here** (tester's wish, 2026-11-09: go in order): step 7
-  (Media Player, Arcade, Geany preinstalled), then 8 (acceptance).
+- **Step 7 done** (D-057): Media Player (crate retro-media, mpv over its
+  IPC socket), `retro_ui::opendlg`, Arcade (crate retro-arcade; consoles in
+  `systems.rs`, games in ~/Games/<console>), Software Library
+  `--install PKG…` mode, mpv + Geany in the image; host test
+  `media.steps`; HW 4.49–4.53.
+- **Order from here**: step 8, **acceptance** (DESIGN.md §18 M4): install
+  and remove programs from both front-ends, Bluetooth audio and a game pad
+  on the Pi, the budget measured again.
 
 ## 8. Open items carried over
 

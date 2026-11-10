@@ -52,6 +52,10 @@ pipewire-bin
 pipewire-pulse
 pipewire-alsa
 wireplumber
+# --- Media Player plays through mpv (D-057); Geany, the programmer's
+# editor (DESIGN.md §18, M4)
+mpv
+geany
 # --- Bluetooth (D-054): bluetoothd, off until the user turns it on; the
 # PipeWire plugin plays to Bluetooth headphones and speakers.
 bluez

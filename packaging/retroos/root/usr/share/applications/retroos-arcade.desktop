@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Arcade
+Comment=Play console games with RetroArch and other emulators
+Exec=arcade
+Icon=retroos-arcade
+Terminal=false
+Categories=Game;Emulator;

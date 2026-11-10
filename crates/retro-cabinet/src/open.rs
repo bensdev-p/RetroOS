@@ -24,9 +24,17 @@ pub fn mime_of(name: &str) -> Option<&'static str> {
         "ogg" | "oga" => "audio/ogg",
         "flac" => "audio/flac",
         "wav" => "audio/x-wav",
+        "opus" => "audio/x-opus+ogg",
+        "m4a" | "aac" => "audio/mp4",
+        "mid" | "midi" => "audio/midi",
+        "mod" | "xm" | "s3m" | "it" => "audio/x-mod",
         "mp4" | "m4v" => "video/mp4",
         "mkv" => "video/x-matroska",
         "webm" => "video/webm",
+        "avi" => "video/x-msvideo",
+        "mov" => "video/quicktime",
+        "mpg" | "mpeg" => "video/mpeg",
+        "ogv" => "video/ogg",
         _ => return None,
     })
 }
@@ -64,7 +72,13 @@ pub fn command_for(path: &Path, apps: &[DesktopApp]) -> Option<(String, Vec<Stri
     }
     let mime = mime_of(&name);
     if let Some(m) = mime {
-        if let Some(a) = apps.iter().find(|a| a.mime_types.iter().any(|x| x == m)) {
+        // RetroOS's own program for a type first (Media Player before mpv).
+        let takes = |a: &&DesktopApp| a.mime_types.iter().any(|x| x == m);
+        let own = apps
+            .iter()
+            .filter(takes)
+            .find(|a| a.id.starts_with("retroos-"));
+        if let Some(a) = own.or_else(|| apps.iter().find(takes)) {
             let mut argv = a.exec.clone();
             argv.push(file);
             return Some((a.name.clone(), argv));

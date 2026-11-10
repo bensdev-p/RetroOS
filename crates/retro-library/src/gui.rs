@@ -104,6 +104,9 @@ struct Lib {
     message: Option<Message>,
     icons: HashMap<String, Option<Icon>>,
     start: Option<String>,
+    /// `--install PKG...` (Arcade's Install Emulator): install these, say
+    /// so, and close.
+    direct: Option<Vec<String>>,
 }
 
 fn button(i: usize) -> Rect {
@@ -729,6 +732,9 @@ impl Lib {
         if close {
             let a = self.ask.take().unwrap();
             ui.close(a.surface);
+            if self.direct.is_some() {
+                ui.quit();
+            }
             return;
         }
         ui.redraw(a.surface);
@@ -794,6 +800,18 @@ impl Lib {
 
 impl Program for Lib {
     fn start(&mut self, ui: &mut Ui) {
+        if let Some(pkgs) = self.direct.clone() {
+            // Installing for another program: our own small session.
+            self.win = Some(ui.window(TITLE, "retroos.software-library", (W, H), true));
+            self.cat = self.cats.len() - 1;
+            self.rows = pkgs
+                .iter()
+                .map(|p| Row::Package(p.clone(), "Asked for by another program".into()))
+                .collect();
+            let done = vec![format!("Installed: {}.", pkgs.join(", "))];
+            self.begin(ui, Op::Install(pkgs), done);
+            return;
+        }
         if let Some(w) = station::windows().iter().find(|w| w.title == TITLE) {
             let _ = station::request(&["SWITCH", &w.id.to_string()]);
             ui.quit();
@@ -838,6 +856,9 @@ impl Program for Lib {
             if close {
                 if let Some(m) = self.message.take() {
                     ui.close(m.surface);
+                }
+                if self.direct.is_some() && self.job.is_none() {
+                    ui.quit();
                 }
             }
             return;
@@ -893,7 +914,9 @@ fn main() {
         ask: None,
         message: None,
         icons: HashMap::new(),
-        start: std::env::args().nth(1),
+        start: std::env::args().nth(1).filter(|a| a != "--install"),
+        direct: (std::env::args().nth(1).as_deref() == Some("--install"))
+            .then(|| std::env::args().skip(2).collect()),
     };
     let mut lib = lib;
     lib.load();

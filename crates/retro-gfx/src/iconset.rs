@@ -160,6 +160,11 @@ const BUILTIN: &[(&str, &str)] = &[
         "cp-sources",
         include_str!("../../../assets/icons/cp-sources.icon"),
     ),
+    (
+        "media-player",
+        include_str!("../../../assets/icons/media-player.icon"),
+    ),
+    ("arcade", include_str!("../../../assets/icons/arcade.icon")),
 ];
 
 /// Theme icon names (from .desktop files) that our own pictures stand for.
@@ -182,6 +187,8 @@ const ALIASES: &[(&str, &str)] = &[
     // The Software Library's categories (catalog/*.toml).
     ("sl-internet", "web-browser"),
     ("sl-office", "jot"),
+    ("retroos-media-player", "media-player"),
+    ("retroos-arcade", "arcade"),
 ];
 
 /// One of our own icons by name ("jot", "file-cabinet", "web-browser").

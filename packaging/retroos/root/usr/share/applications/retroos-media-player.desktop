@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Media Player
+Comment=Play music and films
+Exec=media-player %f
+Icon=retroos-media-player
+Terminal=false
+Categories=AudioVideo;Audio;Video;Player;
+MimeType=audio/mpeg;audio/ogg;audio/flac;audio/x-wav;audio/x-opus+ogg;audio/mp4;audio/midi;audio/x-mod;video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/ogg;

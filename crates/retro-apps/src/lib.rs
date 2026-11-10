@@ -12,8 +12,9 @@ const ALIASES: &[(&str, &str)] = &[
     ("CHROME", "chromium"),
     ("BROWSER", "firefox"),
     ("VSCODE", "code"),
-    ("ARCADE", "retroarch"),
-    ("MEDIA", "mpv"),
+    ("ARCADE", "arcade"),
+    ("MEDIA", "media-player"),
+    ("PLAYER", "media-player"),
 ];
 
 /// Libraries whose presence in DT_NEEDED marks a GUI program.

@@ -1,0 +1,18 @@
+[package]
+name = "retro-arcade"
+description = "Arcade: the game library over RetroArch cores and standalone emulators"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "arcade"
+path = "src/main.rs"
+
+[dependencies]
+retro-gfx.workspace = true
+retro-ui.workspace = true
+retro-dosfs.workspace = true
+
+[lints]
+workspace = true

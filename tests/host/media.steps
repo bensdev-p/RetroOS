@@ -1,0 +1,39 @@
+# Media Player and Arcade (D-057), with a pretend player (RETROOS_TEST_MEDIA)
+# and a pretend system for installing (RETROOS_TEST_SOFTWARE).
+wait 1500
+type DESKTOP
+key enter
+wait 1500
+write Music/Moonlight.mp3 x
+write Games/NES/Super_Tux_Bros.nes x
+type START media-player C:\MUSIC\MOONLIGHT.MP3
+key enter
+wait 2500
+expect WINDOWS => normal Media Player
+shot 01-media-player
+key o
+wait 800
+shot 02-media-open
+key escape
+wait 400
+key alt+f4
+wait 800
+type START arcade
+key enter
+wait 2500
+expect WINDOWS => normal Arcade
+shot 03-arcade
+key enter
+wait 300
+shot 04-arcade-game
+# Install Emulator: the Software Library asks for the password and installs.
+key insert
+wait 2500
+expect WINDOWS => Administrator
+shot 05-arcade-install
+type retro
+key enter
+wait 3000
+shot 06-arcade-installed
+key enter
+wait 800

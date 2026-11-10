@@ -12,6 +12,7 @@
 //! A program implements [`Program`] and calls [`run`].
 
 pub mod controls;
+pub mod opendlg;
 pub mod station;
 
 use retro_gfx::widgets::CLEAR_PX;

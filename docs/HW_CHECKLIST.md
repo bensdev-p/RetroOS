@@ -171,6 +171,11 @@ Memory command (3.12): `UNIX "grep -E 'MemTotal|MemFree|MemAvail|Cached|Shmem:|S
 | 4.46 | Firefox follows the colour scheme | COLOR AMBER (or Control Panel → Display), then start Firefox again | Firefox's toolbars and menus in amber on black; the web page itself unchanged |
 | 4.47 | A GTK program from the Library | install Galculator (or Mousepad, GrafX2…) and start it | Station's frame; grey bevelled buttons, Lantern labels; check boxes with an X |
 | 4.48 | Program size 2x | Control Panel → Display → Program size 2x, restart the Desktop, start Firefox | Firefox's menus and buttons as large as RetroOS's own, the text crisp (not blurred) |
+| 4.49 | Media Player (D-057) | copy an MP3 to C:\MUSIC (USB stick, or Firefox download); in File Cabinet double-click it | the Media Player opens and plays it: the title, the time counting, the slider moving; Pause, Play, Stop, ◀◀ ▶▶, dragging the slider and the volume slider all work |
+| 4.50 | A film | Media Player → Eject, open a video file (.mp4 or .mkv) | a video window with Station's frame plays it smoothly (sound too); closing the Media Player stops it |
+| 4.51 | Arcade | ◆ Programs → Games → Arcade (or `ARCADE`); choose Nintendo (NES), Install Emulator (password) | C:\GAMES has a folder per console; the Library installs RetroArch and Nestopia, then Arcade's status changes |
+| 4.52 | A game | put a free NES game (e.g. a homebrew .nes) in C:\GAMES\NES; in Arcade choose it, Play | RetroArch full screen with the game; the keyboard (and a game pad, if paired) plays it; Esc / F1 menu to quit returns to Arcade |
+| 4.53 | Geany | Program Manager → Programming → Geany (or `GEANY`) | Geany opens in Station's frame with the Phosphor theme and Lantern menus |
 | 4.22 | VOLUME and MIXER | at `C:\>`, `VOLUME`; `VOLUME 30`; `MIXER` | VOLUME names the HDMI output and its volume (the first time may take a second: PipeWire starts); MIXER shows a MASTER bar; ↑↓ move it, M mutes, Esc returns |
 | 4.23 | Firefox sound | in the Desktop start Firefox, play a video with sound; open `MIXER` in a DOS Prompt | sound from the monitor; a Firefox bar next to MASTER; lowering Firefox's bar lowers only Firefox |
 | 4.24 | Control Panel → Sound | change the volume there and OK; switch Interface sounds to Off and back | `VOLUME` agrees with the new volume; no errors |
