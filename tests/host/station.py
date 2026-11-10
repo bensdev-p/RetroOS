@@ -33,7 +33,12 @@ def main():
                 "Exec=retro-console --once --app-id retroos.demo --exec retrodos /K ECHO This is the demo app.\n")
     # Applications come from the test HOME only, not from the machine.
     nodata = tempfile.mkdtemp(prefix="retro-data-")
-    env = dict(os.environ, XDG_RUNTIME_DIR=run, HOME=home, USER="retro", XDG_DATA_DIRS=nodata,
+    # Every per-person folder inside the test's HOME: CI runners set
+    # XDG_CONFIG_HOME to their own (programs then saved desktop.conf there).
+    xdg = {k: os.path.join(home, v) for k, v in [("XDG_CONFIG_HOME", ".config"),
+           ("XDG_DATA_HOME", ".local/share"), ("XDG_STATE_HOME", ".local/state"),
+           ("XDG_CACHE_HOME", ".cache")]}
+    env = dict(os.environ, **xdg, XDG_RUNTIME_DIR=run, HOME=home, USER="retro", XDG_DATA_DIRS=nodata,
                PATH=bindir + ":" + os.environ["PATH"], RUST_LOG="station=info")
     env.pop("WAYLAND_DISPLAY", None)
     log = open(os.path.join(outdir, "station.log"), "w")
