@@ -4,6 +4,9 @@
 //!   retro-fontc psf <out.psf>             PSF2 console font (CP437 order)
 //!   retro-fontc sample <out.png> <text>   render a text sample (Classic scheme)
 //!   retro-fontc json <out.json>           glyph bitmaps for the QEMU screen reader
+//!   retro-fontc ttf <out.ttf>             Lantern 12 as a TrueType font (D-056)
+
+mod ttf;
 
 use retro_gfx::font::{phosphor_mono, CP437};
 use retro_gfx::palette::{self, Scheme};
@@ -27,8 +30,24 @@ fn main() {
             retro_gfx::font::lantern_12(),
         ),
         Some("json") if args.len() == 3 => std::fs::write(&args[2], json()),
+        // Lantern 12: cell 13 rows, baseline under row 9, x-height 6, caps 9.
+        Some("ttf") if args.len() == 3 => std::fs::write(
+            &args[2],
+            ttf::write(
+                retro_gfx::font::lantern_12(),
+                9,
+                6,
+                9,
+                &ttf::Names {
+                    family: "Lantern",
+                    copyright:
+                        "(C) RetroOS contributors. Licensed under the SIL Open Font License 1.1.",
+                    version: "1.0",
+                },
+            ),
+        ),
         _ => {
-            eprintln!("usage: retro-fontc sheet <out.png> [scale] | psf <out.psf> | sample <out.png> <text> | lantern12 <out.png> <text>");
+            eprintln!("usage: retro-fontc sheet <out.png> [scale] | psf <out.psf> | sample <out.png> <text> | lantern12 <out.png> <text> | ttf <out.ttf>");
             std::process::exit(2);
         }
     };

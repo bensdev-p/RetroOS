@@ -1307,6 +1307,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-gtktheme"
+version = "0.1.0"
+dependencies = [
+ "png",
+ "retro-gfx",
+]
+
+[[package]]
 name = "retro-jot"
 version = "0.1.0"
 dependencies = [

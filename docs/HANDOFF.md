@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-056**).
+  (**next: D-057**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -237,9 +237,13 @@ Suggested order, each step leaving a working image:
   themselves), the prompt notice and the System Bar mark, Control Panel →
   Updates and Software Sources (helper `set-updates`); host test
   `library.steps`; HW 4.39–4.44.
-- **Order from here** (tester's wish, 2026-11-09: go in order): step 6
-  (theming others' programs: apply the stash, renumber its D-050 → next);
-  then 7 (Media Player, Arcade, Geany preinstalled), then 8 (acceptance).
+- **Step 6 done** (D-056): KDE server decoration in Station (GTK 3 /
+  Firefox get Station's frame), `tools/retro-gtktheme` (Phosphor GTK 3/4
+  themes per scheme; Station passes GTK_THEME), Lantern as a TrueType font
+  (`retro-fontc ttf`), Qt's Windows style, Chromium initial preferences;
+  host test `gtk.steps` (CI installs libgtk-3-bin); HW 4.45–4.48.
+- **Order from here** (tester's wish, 2026-11-09: go in order): step 7
+  (Media Player, Arcade, Geany preinstalled), then 8 (acceptance).
 
 ## 8. Open items carried over
 

@@ -1,0 +1,16 @@
+# Programs from elsewhere (D-056): a plain GTK 3 window gets Station's frame
+# (KDE server decoration) and the Phosphor theme's colours and Lantern.
+wait 1500
+type DESKTOP
+key enter
+wait 1500
+type START gtk-plain
+key enter
+wait 5000
+expect WINDOWS => Plain GTK Window
+shot 01-gtk-plain
+# Station's frame: its control-menu box at the left of the title bar (a
+# title bar GTK draws itself has none: there this is the desktop behind);
+# and the Classic face colour inside, not GTK's default grey.
+expect-pixel 01-gtk-plain 62 110 F5F5F0
+expect-pixel 01-gtk-plain 300 250 BDBDB8

@@ -30,6 +30,16 @@ RETROOS_NO_BAR=1 run -jot tests/host/jot.steps
 RETROOS_NO_BAR=1 run -cabinet tests/host/cabinet.steps
 RETROOS_NO_BAR=1 run -x11 tests/host/x11.steps
 RETROOS_TEST_WIFI=1 RETROOS_STARTUP_CONF="~/startup.conf" run -control tests/host/control.steps
+# A GTK 3 program in Station's frame and the Phosphor theme (D-056), where
+# GTK is installed (CI: libgtk-3-bin).
+if command -v gtk-builder-tool >/dev/null 2>&1; then
+    cargo run -q -p retro-gtktheme -- "$OUT/gtk-data/themes" >/dev/null
+    cargo run -q -p retro-fontc -- ttf "$OUT/gtk-data/Lantern.ttf"
+    RETRO_GTK_DATA="$PWD/$OUT/gtk-data" RETRO_GTK_FONT="$PWD/$OUT/gtk-data/Lantern.ttf" \
+        PATH="$PWD/tests/host/gtk:$PATH" run -gtk tests/host/gtk.steps
+else
+    echo ">> host test: -gtk skipped (no gtk-builder-tool)"
+fi
 # A 10.1" Touch Display 2: 1200x1920 portrait panel shown landscape (D-042).
 RETROOS_NO_PROGMAN= RETROOS_ROTATE=auto STATION_ARGS="--headless 1200x1920" run -rotate tests/host/rotate.steps
 # The luggable with an HDMI monitor too: two screens, the panel the main one (D-051).

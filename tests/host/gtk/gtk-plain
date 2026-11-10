@@ -1,0 +1,10 @@
+#!/bin/sh
+# Start tests/host/gtk/plain.ui in the Phosphor theme written to
+# $RETRO_GTK_DATA/themes, with the Lantern font from $RETRO_GTK_FONT
+# (tests/host/run-all.sh prepares both). The test HOME's data folders hide
+# the system's, which GTK needs for its own files.
+mkdir -p "$XDG_DATA_HOME/fonts"
+cp "$RETRO_GTK_FONT" "$XDG_DATA_HOME/fonts/"
+export XDG_DATA_DIRS="$RETRO_GTK_DATA:/usr/local/share:/usr/share"
+export GTK_THEME="${GTK_THEME:-Phosphor-classic}"
+exec gtk-builder-tool preview --id=w "$(dirname "$0")/plain.ui"

@@ -27,7 +27,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libxkbcommon-dev libinput-dev libudev-dev libseat-dev libgbm-dev libdrm-dev libpixman-1-dev python3-pil \
-            xwayland x11-apps libegl1 libegl-mesa0 libgl1-mesa-dri
+            xwayland x11-apps libegl1 libegl-mesa0 libgl1-mesa-dri libgtk-3-bin
       - uses: dtolnay/rust-toolchain@1.97.0
         with:
           components: rustfmt, clippy

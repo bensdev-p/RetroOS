@@ -35,7 +35,9 @@ fn startup_menu_choice() -> Option<String> {
     matches!(choice.as_str(), "text" | "desktop").then_some(choice)
 }
 
-fn configured_mode() -> String {
+/// A setting from /etc/retroos/startup.conf.
+fn startup_conf(key: &str) -> Option<String> {
+    let prefix = format!("{key}=");
     std::fs::read_to_string("/etc/retroos/startup.conf")
         .unwrap_or_default()
         .lines()
@@ -43,9 +45,13 @@ fn configured_mode() -> String {
             l.split('#')
                 .next()?
                 .trim()
-                .strip_prefix("mode=")
+                .strip_prefix(prefix.as_str())
                 .map(|v| v.trim().to_string())
         })
+}
+
+fn configured_mode() -> String {
+    startup_conf("mode")
         .filter(|m| m == "text" || m == "desktop")
         .unwrap_or_else(|| "text".into())
 }
@@ -71,8 +77,17 @@ fn main() {
     set("SDL_VIDEODRIVER", "wayland,x11");
     set("GDK_BACKEND", "wayland,x11");
     set("_JAVA_AWT_WM_NONREPARENTING", "1");
-    if std::path::Path::new("/usr/share/themes/Phosphor").exists() {
-        set("GTK_THEME", "Phosphor");
+    // Qt's own classic style: bevels and grey faces, like ours (D-056).
+    set("QT_STYLE_OVERRIDE", "Windows");
+    // GTK programs in the Phosphor theme of the system's colour scheme
+    // (Station names the one of the scheme in use for what it starts, D-056).
+    let scheme = startup_conf("scheme").unwrap_or_else(|| "classic".into());
+    let gtk = format!("Phosphor-{scheme}");
+    if std::path::Path::new("/usr/share/themes")
+        .join(&gtk)
+        .exists()
+    {
+        set("GTK_THEME", &gtk);
     }
     if std::path::Path::new("/usr/share/icons/Phosphor/cursors").exists() {
         set("XCURSOR_THEME", "Phosphor");

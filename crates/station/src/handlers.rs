@@ -23,6 +23,12 @@ use smithay::wayland::selection::data_device::{
 };
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationHandler;
+use smithay::delegate_kde_decoration;
+use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::{
+    Mode as KdeMode, OrgKdeKwinServerDecoration,
+};
+use smithay::reexports::wayland_server::WEnum;
+use smithay::wayland::shell::kde::decoration::{KdeDecorationHandler, KdeDecorationState};
 use smithay::wayland::shell::xdg::{PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState};
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
@@ -414,3 +420,67 @@ delegate_data_device!(Station);
 delegate_output!(Station);
 delegate_xdg_shell!(Station);
 delegate_xdg_decoration!(Station);
+
+/// Frame `top` (Station draws the title bar) or leave it to the program.
+pub fn set_decoration(top: &ToplevelSurface, server: bool) {
+    let mode = if server {
+        DecorationMode::ServerSide
+    } else {
+        DecorationMode::ClientSide
+    };
+    top.with_pending_state(|s| s.decoration_mode = Some(mode));
+    if top.is_initial_configure_sent() {
+        top.send_pending_configure();
+    }
+}
+
+impl Station {
+    fn set_kde_mode(&mut self, surface: &WlSurface, server: bool) {
+        let top = self
+            .xdg_shell_state
+            .toplevel_surfaces()
+            .iter()
+            .find(|t| t.wl_surface() == surface)
+            .cloned();
+        match top {
+            Some(t) => set_decoration(&t, server),
+            None => {
+                self.kde_pending
+                    .retain(|(s, _)| s != surface && s.is_alive());
+                self.kde_pending.push((surface.clone(), server));
+            }
+        }
+    }
+}
+
+/// GTK 3 programs (Firefox among them) ask for a frame through KDE's
+/// server-decoration protocol rather than xdg-decoration: the default is
+/// Station's frame, and a program that asks to draw its own (GTK header
+/// bars) keeps it, so nothing gets two title bars (D-050).
+impl KdeDecorationHandler for Station {
+    fn kde_decoration_state(&self) -> &KdeDecorationState {
+        &self.kde_decoration_state
+    }
+
+    fn new_decoration(&mut self, surface: &WlSurface, decoration: &OrgKdeKwinServerDecoration) {
+        decoration.mode(KdeMode::Server);
+        self.set_kde_mode(surface, true);
+    }
+
+    fn request_mode(
+        &mut self,
+        surface: &WlSurface,
+        decoration: &OrgKdeKwinServerDecoration,
+        mode: WEnum<KdeMode>,
+    ) {
+        let server = matches!(mode, WEnum::Value(KdeMode::Server));
+        decoration.mode(if server {
+            KdeMode::Server
+        } else {
+            KdeMode::Client
+        });
+        self.set_kde_mode(surface, server);
+    }
+}
+
+delegate_kde_decoration!(Station);

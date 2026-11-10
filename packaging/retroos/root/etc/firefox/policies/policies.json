@@ -21,7 +21,8 @@
       "browser.disableResetPrompt": { "Value": true, "Status": "default" },
       "browser.startup.homepage_override.mstone": { "Value": "ignore", "Status": "default" },
       "browser.tabs.inTitlebar": { "Value": 0, "Status": "default" },
-      "media.hardware-video-decoding.enabled": { "Value": true, "Status": "default" }
+      "media.hardware-video-decoding.enabled": { "Value": true, "Status": "default" },
+      "widget.gtk.overlay-scrollbars.enabled": { "Value": false, "Status": "default" }
     }
   }
 }

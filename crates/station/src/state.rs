@@ -44,6 +44,11 @@ pub struct Station {
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub xdg_decoration_state: XdgDecorationState,
+    /// KDE's older server-decoration protocol, which GTK 3 (Firefox) uses
+    /// to drop its own title bar (D-050).
+    pub kde_decoration_state: smithay::wayland::shell::kde::decoration::KdeDecorationState,
+    /// Frame choices made before the window's xdg_toplevel existed.
+    pub kde_pending: Vec<(WlSurface, bool)>,
     pub layer_shell_state: smithay::wayland::shell::wlr_layer::WlrLayerShellState,
     pub shm_state: ShmState,
     pub viewporter_state: smithay::wayland::viewporter::ViewporterState,
@@ -157,6 +162,11 @@ impl Station {
         let compositor_state = CompositorState::new::<Station>(&dh);
         let xdg_shell_state = XdgShellState::new::<Station>(&dh);
         let xdg_decoration_state = XdgDecorationState::new::<Station>(&dh);
+        let kde_decoration_state =
+            smithay::wayland::shell::kde::decoration::KdeDecorationState::new::<Station>(
+                &dh,
+                smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager::Mode::Server,
+            );
         let layer_shell_state =
             smithay::wayland::shell::wlr_layer::WlrLayerShellState::new::<Station>(&dh);
         let shm_state = ShmState::new::<Station>(&dh, vec![]);
@@ -212,6 +222,8 @@ impl Station {
             compositor_state,
             xdg_shell_state,
             xdg_decoration_state,
+            kde_decoration_state,
+            kde_pending: Vec::new(),
             layer_shell_state,
             shm_state,
             viewporter_state,
@@ -397,6 +409,15 @@ impl Station {
     // --------------------------------------------------------------- tasks
 
     pub fn add_toplevel(&mut self, surface: ToplevelSurface) {
+        // A frame choice that came first (KDE server decoration).
+        if let Some(i) = self
+            .kde_pending
+            .iter()
+            .position(|(s, _)| s == surface.wl_surface())
+        {
+            let (_, server) = self.kde_pending.remove(i);
+            crate::handlers::set_decoration(&surface, server);
+        }
         let window = Window::new_wayland_window(surface.clone());
         let pid = self
             .dh
@@ -682,6 +703,19 @@ impl Station {
             cmd.env("XCURSOR_THEME", "Phosphor");
         }
         cmd.env("XCURSOR_SIZE", (16 * self.art_scale.max(1)).to_string());
+        // GTK programs (Firefox among them) in the scheme's Phosphor theme
+        // (D-056): a program started after COLOR wears the new colours.
+        let gtk = format!("Phosphor-{}", self.scheme.key());
+        if std::path::Path::new("/usr/share/themes")
+            .join(&gtk)
+            .exists()
+        {
+            cmd.env("GTK_THEME", gtk);
+        }
+        // Scroll bars that stay (GTK 3 hides them until the pointer comes).
+        cmd.env("GTK_OVERLAY_SCROLLING", "0");
+        // Qt programs in Qt's own classic style (bevels, grey faces).
+        cmd.env("QT_STYLE_OVERRIDE", "Windows");
         // X11-only programs get Xwayland (started now if need be); once it
         // runs, every program gets DISPLAY.
         if crate::xwayland::needs_x11(&argv[0]) {

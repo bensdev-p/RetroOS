@@ -26,7 +26,7 @@ cargo build --manifest-path "$ROOT/Cargo.toml" --release --locked --target $TARG
 BIN=$ROOT/target/$TARGET/release
 
 echo ">> host tools (sounds)"
-cargo build --manifest-path "$ROOT/Cargo.toml" --release --locked -p retro-synth -p retro-fontc -p retro-cursors
+cargo build --manifest-path "$ROOT/Cargo.toml" --release --locked -p retro-synth -p retro-fontc -p retro-cursors -p retro-gtktheme
 HOST=$ROOT/target/release
 
 STAGE=$OUT/stage/retroos
@@ -44,6 +44,11 @@ install -m 755 "$BIN/retro-post" "$STAGE/usr/libexec/retroos/retro-post"
 "$HOST/retro-synth" "$STAGE/usr/share/retroos/sounds" 2>/dev/null
 "$HOST/retro-fontc" psf "$STAGE/usr/share/retroos/fonts/phosphor-mono-8x16.psf"
 "$HOST/retro-cursors" "$STAGE/usr/share/icons/Phosphor" >/dev/null
+# The Phosphor GTK themes, one per colour scheme (D-056).
+"$HOST/retro-gtktheme" "$STAGE/usr/share/themes" >/dev/null
+# Lantern, the system font, as a TrueType font for GTK, Firefox and Qt (D-056).
+install -d "$STAGE/usr/share/fonts/truetype/retroos"
+"$HOST/retro-fontc" ttf "$STAGE/usr/share/fonts/truetype/retroos/Lantern.ttf"
 
 # GNU Unifont glyphs as the console's fallback for characters we haven't
 # drawn (3.7 MB instead of the 58 MB unifont packages).
