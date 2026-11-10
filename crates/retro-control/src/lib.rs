@@ -5,7 +5,7 @@
 //! the front-end lets the user edit them and calls [`apply`].
 
 use retro_gfx::prefs;
-use retro_sys::{bt, clock, display, keyboard, netconf, sound, startup, users};
+use retro_sys::{bt, clock, display, keyboard, netconf, software, sound, startup, users};
 
 pub mod forms;
 pub use forms::{action_label, Form};
@@ -22,6 +22,8 @@ pub enum Applet {
     Sound,
     Users,
     Bluetooth,
+    Updates,
+    Sources,
 }
 
 pub const APPLETS: &[Applet] = &[
@@ -35,6 +37,8 @@ pub const APPLETS: &[Applet] = &[
     Applet::Startup,
     Applet::Users,
     Applet::Bluetooth,
+    Applet::Updates,
+    Applet::Sources,
 ];
 
 impl Applet {
@@ -50,6 +54,8 @@ impl Applet {
             Applet::Mouse => "Mouse",
             Applet::Sound => "Sound",
             Applet::Bluetooth => "Bluetooth",
+            Applet::Updates => "Updates",
+            Applet::Sources => "Software Sources",
         }
     }
 
@@ -66,6 +72,8 @@ impl Applet {
             Applet::Mouse => "cp-mouse",
             Applet::Sound => "cp-sound",
             Applet::Bluetooth => "cp-bluetooth",
+            Applet::Updates => "cp-updates",
+            Applet::Sources => "cp-sources",
         }
     }
 
@@ -81,6 +89,8 @@ impl Applet {
             Applet::Mouse => "Pointer speed, buttons and double-click speed.",
             Applet::Sound => "Where sound plays, its volume, interface sounds.",
             Applet::Bluetooth => "Pair keyboards, headphones and game pads.",
+            Applet::Updates => "Software updates, and security updates by themselves.",
+            Applet::Sources => "Where software comes from.",
         }
     }
 }
@@ -107,6 +117,10 @@ pub const ACTION_MIXER: &str = "mixer";
 /// The Bluetooth page's "Devices" button: BT in text mode, the Bluetooth
 /// Devices dialog on the Desktop.
 pub const ACTION_BT: &str = "bt";
+
+/// The Updates page's "Install updates" button: LIBRARY's Updates in text
+/// mode, the Software Library's on the Desktop.
+pub const ACTION_UPDATES: &str = "updates";
 
 /// The Network page's "Wireless networks" button: NET in text mode, the
 /// Wireless Networks dialog on the Desktop.
@@ -266,6 +280,24 @@ fn choice(list: Vec<(String, String)>, current: &str) -> Value {
 
 fn yes(v: &str) -> bool {
     matches!(v, "yes" | "on" | "true" | "1")
+}
+
+/// What the daily check found, for the Updates page.
+fn updates_notice(s: &software::Status) -> String {
+    let when = if s.checked == 0 {
+        "not checked yet".to_string()
+    } else {
+        let d = clock::date_text(clock::local(s.checked as i64));
+        format!("checked {d}")
+    };
+    match (s.count, s.security) {
+        (0, _) => format!("Up to date ({when})."),
+        (n, 0) => format!(
+            "{n} update{} waiting ({when}).",
+            if n == 1 { "" } else { "s" }
+        ),
+        (n, k) => format!("{n} updates waiting, {k} for security ({when})."),
+    }
 }
 
 /// Turns from the automatic picture (landscape, right way up), so the
@@ -546,6 +578,33 @@ pub fn load(applet: Applet) -> Page {
             devs.enabled = on;
             vec![Field::new("power", "Bluetooth on", Value::Check(on)), devs]
         }
+        Applet::Updates => {
+            let s = software::status();
+            notice = Some(updates_notice(&s));
+            vec![
+                Field::new(
+                    "security",
+                    "Security updates",
+                    choice(
+                        opts(&[("on", "Install by themselves"), ("off", "Ask me (UPDATE)")]),
+                        if software::auto_security() {
+                            "on"
+                        } else {
+                            "off"
+                        },
+                    ),
+                ),
+                Field::new("install", "Install updates", Value::Action(ACTION_UPDATES)),
+            ]
+        }
+        Applet::Sources => {
+            notice = Some("Debian 13, its security archive, and the Raspberry Pi archive.".into());
+            vec![Field::new(
+                "nonfree",
+                "Non-free software",
+                Value::Check(software::nonfree()),
+            )]
+        }
         Applet::Network => {
             let cur = netconf::country();
             let mut list = vec![(
@@ -711,6 +770,16 @@ pub fn apply(page: &Page) -> Result<Applied, String> {
                 sound::set_ui_sounds(&val("ui_sounds"))?;
             }
         }
+        Applet::Updates => {
+            if page.changed("security") {
+                software::set_setting("security", val("security") == "on")?;
+            }
+        }
+        Applet::Sources => {
+            if page.changed("nonfree") {
+                software::set_setting("nonfree", val("nonfree") == "yes")?;
+            }
+        }
         Applet::Bluetooth => {
             if page.changed("power") {
                 bt::set_enabled(val("power") == "yes")?;
@@ -840,6 +909,8 @@ pub fn applet_named(name: &str) -> Option<Applet> {
         "desktop" | "pattern" => Applet::Desktop,
         "mouse" | "pointer" => Applet::Mouse,
         "bluetooth" | "bt" => Applet::Bluetooth,
+        "updates" | "update" => Applet::Updates,
+        "sources" | "software" => Applet::Sources,
         _ => return None,
     })
 }

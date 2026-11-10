@@ -1,0 +1,12 @@
+[Unit]
+Description=RetroOS: look for software updates (security ones install by themselves)
+Documentation=file:/usr/share/doc/retroos/README
+After=network-online.target
+Wants=network-online.target
+ConditionACPower=true
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/retroos/software check
+Nice=10
+IOSchedulingClass=idle

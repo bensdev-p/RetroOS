@@ -393,16 +393,39 @@ impl Panel {
             if let Some(icon) = iconset::builtin(a.icon()) {
                 iconset::draw(&mut sf, icon, r.x + (r.w - 32) / 2, r.y + 4, 1, t);
             }
-            let label = ellipsize_in(font, a.name(), r.w - 6);
-            let tw = font.text_width(&label) as i32;
-            let (lx, ly) = (r.x + (r.w - tw) / 2, r.y + 42);
+            // A long name takes two lines, as Windows 3.1's icon titles did.
+            let lines = wrap_label(a.name(), r.w - 6);
+            let tw = lines
+                .iter()
+                .map(|l| font.text_width(l) as i32)
+                .max()
+                .unwrap_or(0);
+            let ly = r.y + 42;
             let fg = if i == self.sel {
-                sf.fill_rect(lx - 2, ly - 1, (tw + 3) as u32, 13, t.sel);
+                let lx = r.x + (r.w - tw) / 2;
+                sf.fill_rect(
+                    lx - 2,
+                    ly - 1,
+                    (tw + 3) as u32,
+                    12 * lines.len() as u32 + 1,
+                    t.sel,
+                );
                 t.sel_text
             } else {
                 t.text
             };
-            sf.text(font, lx, ly, 1, fg, None, &label);
+            for (k, l) in lines.iter().enumerate() {
+                let lw = font.text_width(l) as i32;
+                sf.text(
+                    font,
+                    r.x + (r.w - lw) / 2,
+                    ly + 12 * k as i32,
+                    1,
+                    fg,
+                    None,
+                    l,
+                );
+            }
         }
         // Status line.
         let sy = h - STATUS_H;
@@ -442,6 +465,13 @@ impl Panel {
             }
             if let (None, Some(d)) = (&self.bt, &self.dialog) {
                 self.bt = Some(bt::BtDlg::new(ui, d.surface));
+            }
+            return;
+        }
+        if what == retro_control::ACTION_UPDATES {
+            let argv = ["software-library".to_string(), "Updates".to_string()];
+            if let Err(e) = station::launch("LIBRARY", &argv) {
+                self.message(ui, &[&format!("Cannot start the Software Library: {e}")]);
             }
             return;
         }
@@ -819,6 +849,19 @@ impl Panel {
 }
 
 /// A click on a field's label focuses (and for a check box, toggles) it.
+/// An icon title in one line, or two split at a space; still too long:
+/// shortened with "...".
+fn wrap_label(name: &str, w: i32) -> Vec<String> {
+    let font = lantern_12();
+    if font.text_width(name) as i32 <= w {
+        return vec![name.to_string()];
+    }
+    match name.rsplit_once(' ') {
+        Some((a, b)) => vec![ellipsize_in(font, a, w), ellipsize_in(font, b, w)],
+        None => vec![ellipsize_in(font, name, w)],
+    }
+}
+
 /// Where field `i`'s control takes clicks: what is drawn, not the whole
 /// row (HW 4.9: a click beside a drop-down opened it).
 fn hit_rect(d: &Dialog, i: usize) -> Rect {

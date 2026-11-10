@@ -1,0 +1,22 @@
+#!/bin/sh
+# Software settings (run as root; D-055).
+#
+#   set-updates security on|off   install security updates by themselves
+#   set-updates nonfree on|off    Debian's non-free section in the sources
+#
+# Used by Control Panel → Updates and Software Sources; the admin group may
+# run it without a password.
+set -eu
+CONF=/etc/retroos/updates.conf
+SRC=/etc/apt/sources.list.d/debian.sources
+case ${1:-}:${2:-} in
+    security:on|security:off)
+        mkdir -p /etc/retroos
+        printf '# Security updates install by themselves (on) or not (off).\nsecurity=%s\n' "$2" >"$CONF.new"
+        chmod 644 "$CONF.new"; mv "$CONF.new" "$CONF" ;;
+    nonfree:on)
+        sed -i '/^Components:/{/ non-free\( \|$\)/!s/$/ non-free/}' "$SRC" ;;
+    nonfree:off)
+        sed -i '/^Components:/s/ non-free\( \|$\)/\1/' "$SRC" ;;
+    *) echo "usage: set-updates security|nonfree on|off" >&2; exit 2 ;;
+esac

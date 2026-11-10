@@ -1,0 +1,70 @@
+# Games — RetroOS Software Library catalog (catalog/README.md).
+category = "Games"
+icon = "sl-games"
+
+[[app]]
+name = "SuperTux"
+packages = ["supertux"]
+run = "supertux2"
+blurb = "A side-scrolling platform game starring Tux the penguin."
+
+[[app]]
+name = "SuperTuxKart"
+packages = ["supertuxkart"]
+run = "supertuxkart"
+blurb = "Kart racing with a game pad or the keyboard."
+note = "SuperTuxKart needs the GPU; it runs best full screen."
+
+[[app]]
+name = "Frozen Bubble"
+packages = ["frozen-bubble"]
+run = "frozen-bubble"
+blurb = "Pop the coloured bubbles before they reach you."
+
+[[app]]
+name = "Pingus"
+packages = ["pingus"]
+alias = ["LEMMINGS"]
+run = "pingus"
+blurb = "Guide the penguins home; give them jobs on the way."
+
+[[app]]
+name = "The Battle for Wesnoth"
+packages = ["wesnoth"]
+alias = ["WESNOTH"]
+run = "wesnoth"
+blurb = "Turn-based fantasy strategy on a hex map."
+
+[[app]]
+name = "OpenTTD"
+packages = ["openttd"]
+alias = ["TTD"]
+run = "openttd"
+blurb = "Build a transport empire, in the manner of Transport Tycoon Deluxe."
+
+[[app]]
+name = "Freeciv"
+packages = ["freeciv-client-gtk3"]
+alias = ["CIV"]
+run = "freeciv-gtk3.22"
+blurb = "Grow a civilisation from the stone age to the space age."
+
+[[app]]
+name = "Solitaire"
+packages = ["aisleriot"]
+alias = ["SOL"]
+run = "sol"
+blurb = "Klondike, FreeCell and eighty more patience games."
+
+[[app]]
+name = "NetHack"
+packages = ["nethack-console"]
+run = "nethack"
+blurb = "The classic dungeon adventure, drawn in letters."
+
+[[app]]
+name = "Bastet"
+packages = ["bastet"]
+alias = ["TETRIS"]
+run = "bastet"
+blurb = "Falling blocks in RetroDOS (it picks the worst one for you)."

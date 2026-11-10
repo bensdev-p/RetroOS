@@ -87,7 +87,7 @@ chroot "$R" passwd -l root >/dev/null
 
 echo ">> customize: services"
 systemctl --root="$R" set-default graphical.target
-systemctl --root="$R" enable retro-post.service retro-firstboot.service retro-setup.service greetd.service \
+systemctl --root="$R" enable retro-post.service retro-firstboot.service retro-setup.service greetd.service retroos-updates.timer \
     systemd-networkd.service systemd-resolved.service systemd-timesyncd.service iwd.service nftables.service
 ln -sf /usr/lib/systemd/system/greetd.service "$R/etc/systemd/system/display-manager.service"
 # Sound: PipeWire's sockets in every user session; it (and WirePlumber, which

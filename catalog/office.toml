@@ -1,0 +1,49 @@
+# Office — RetroOS Software Library catalog (catalog/README.md).
+category = "Office"
+icon = "sl-office"
+
+[[app]]
+name = "LibreOffice Writer"
+packages = ["libreoffice-writer", "libreoffice-gtk3"]
+alias = ["WRITER", "WORD"]
+run = "lowriter"
+blurb = "A full word processor that opens and saves Word documents."
+
+[[app]]
+name = "LibreOffice Calc"
+packages = ["libreoffice-calc", "libreoffice-gtk3"]
+alias = ["CALC", "EXCEL"]
+run = "localc"
+blurb = "Spreadsheets, charts and formulas; opens Excel files."
+
+[[app]]
+name = "LibreOffice Impress"
+packages = ["libreoffice-impress", "libreoffice-gtk3"]
+alias = ["IMPRESS"]
+run = "loimpress"
+blurb = "Slide shows; opens PowerPoint files."
+
+[[app]]
+name = "AbiWord"
+packages = ["abiword"]
+run = "abiword"
+blurb = "A light, quick word processor."
+
+[[app]]
+name = "Gnumeric"
+packages = ["gnumeric"]
+run = "gnumeric"
+blurb = "A light spreadsheet with serious maths."
+
+[[app]]
+name = "Atril"
+packages = ["atril"]
+alias = ["PDF"]
+run = "atril"
+blurb = "Read PDF documents."
+
+[[app]]
+name = "WordGrinder"
+packages = ["wordgrinder"]
+run = "wordgrinder"
+blurb = "A text-mode word processor in the spirit of WordStar."

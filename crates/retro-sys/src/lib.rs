@@ -4,11 +4,13 @@
 
 pub mod admin;
 pub mod bt;
+pub mod catalog;
 pub mod clock;
 pub mod display;
 pub mod keyboard;
 pub mod net;
 pub mod netconf;
+pub mod software;
 pub mod sound;
 pub mod startup;
 pub mod users;

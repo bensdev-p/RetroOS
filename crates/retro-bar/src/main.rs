@@ -71,6 +71,9 @@ struct Bar {
     vol_popup: Option<volume::Popup>,
     /// Where the pointer is on the bar (the wheel over the speaker).
     bar_x: i32,
+    /// Updates waiting (the daily check's count, D-055): a mark left of
+    /// the speaker; a click opens the Software Library's Updates.
+    updates: u32,
 }
 
 /// The speaker's place on a bar `w` wide: left of the clock.
@@ -82,6 +85,21 @@ fn speaker_rect(w: i32) -> Rect {
         volume::ICON_W + 6,
         HEIGHT - 1,
     )
+}
+
+/// The updates mark's place: left of the speaker.
+fn updates_rect(w: i32) -> Rect {
+    let s = speaker_rect(w);
+    Rect::new(s.x - 18, 0, 16, HEIGHT - 1)
+}
+
+/// A box with an arrow down into it.
+fn draw_updates_mark(sf: &mut retro_gfx::Surface, x: i32, y: i32, c: retro_gfx::Rgb) {
+    sf.frame(x, y + 5, 12, 7, 1, c);
+    sf.fill_rect(x + 5, y, 2, 6, c);
+    for i in 0..4 {
+        sf.fill_rect(x + 2 + i, y + 3 + i, (8 - 2 * i) as u32, 1, c);
+    }
 }
 
 const TITLES: [&str; 3] = ["◆", "Programs", "Window"];
@@ -161,7 +179,10 @@ impl Bar {
                     MenuItem::new("&Control Panel", "", true),
                     Cmd::Launch("CONTROL".into(), vec!["control-panel".into()]),
                 ),
-                (MenuItem::new("Software &Library", "", false), Cmd::None),
+                (
+                    MenuItem::new("Software &Library", "", true),
+                    Cmd::Launch("LIBRARY".into(), vec!["software-library".into()]),
+                ),
                 sep(),
                 (MenuItem::new("&DOS Prompt", "", true), Cmd::DosPrompt),
                 (
@@ -504,6 +525,10 @@ impl Bar {
         };
         sf.fill_rect(r.x, r.y, r.w as u32, r.h as u32, bg);
         volume::draw_icon(&mut sf, r.x + 3, 4, self.vol.as_ref(), fg, bg);
+        if self.updates > 0 {
+            let u = updates_rect(w);
+            draw_updates_mark(&mut sf, u.x + 2, 3, t.bar_text);
+        }
     }
 
     fn draw_dialog(&self, d: &Dialog, c: &mut Canvas, t: &Theme) {
@@ -622,6 +647,12 @@ impl Program for Bar {
                 let w = ui.size(id).0;
                 if speaker_rect(w).contains(x, 2) {
                     self.toggle_volume(ui);
+                    return;
+                }
+                if self.updates > 0 && updates_rect(w).contains(x, 2) {
+                    self.close_menus(ui, 0);
+                    let argv = ["software-library".to_string(), "Updates".to_string()];
+                    let _ = station::launch("LIBRARY", &argv);
                     return;
                 }
                 let hit = title_rects()
@@ -751,6 +782,17 @@ impl Program for Bar {
                     ui.redraw(b);
                 }
             }
+            // New updates found by the daily check: the mark, and a chime.
+            let n = retro_sys::software::status().count;
+            if n != self.updates {
+                if n > self.updates {
+                    let _ = station::request(&["SOUND", "notify"]);
+                }
+                self.updates = n;
+                if let Some(b) = self.bar {
+                    ui.redraw(b);
+                }
+            }
             ui.timer(VOL_TIMER, Duration::from_secs(5));
         }
         if token == CLOCK_TIMER {
@@ -774,6 +816,7 @@ fn main() {
         vol: None,
         vol_popup: None,
         bar_x: 0,
+        updates: retro_sys::software::status().count,
     };
     if let Err(e) = retro_ui::run(Box::new(bar)) {
         eprintln!("retro-bar: {e}");

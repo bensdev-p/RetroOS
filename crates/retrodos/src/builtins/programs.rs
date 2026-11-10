@@ -69,7 +69,7 @@ pub const WIFI: Builtin = Builtin {
 pub const CONTROL: Builtin = Builtin {
     names: &["CONTROL"],
     summary: "Changes RetroOS settings (Control Panel).",
-    usage: "CONTROL [DISPLAY | STARTUP | TIME | KEYBOARD | MOUSE | DESKTOP | NETWORK |\n         SOUND | USERS | BLUETOOTH]\n\nWithout a name, shows every Control Panel page; with one, opens that page.\n\u{2191}\u{2193} choose a setting, \u{2190}\u{2192} change it, Enter saves, Esc cancels.",
+    usage: "CONTROL [DISPLAY | STARTUP | TIME | KEYBOARD | MOUSE | DESKTOP | NETWORK |\n         SOUND | USERS | BLUETOOTH | UPDATES | SOURCES]\n\nWithout a name, shows every Control Panel page; with one, opens that page.\n\u{2191}\u{2193} choose a setting, \u{2190}\u{2192} change it, Enter saves, Esc cancels.",
     run: |sh, a, io| {
         let _ = io.out.flush();
         let Some(prog) = sh.find_program("retro-control") else {
@@ -112,6 +112,58 @@ pub const BT: Builtin = Builtin {
             Err(e) => err(io, &e.to_string()),
         }
     },
+};
+
+/// Run retro-library with `args` in this console and return its exit code.
+fn library(sh: &mut Shell, io: &mut Io, args: Vec<String>) -> i32 {
+    let _ = io.out.flush();
+    let Some(prog) = sh.find_program("retro-library") else {
+        return err(io, "retro-library is not installed");
+    };
+    let cmd = sh.command(&prog, &args);
+    sh.wait(cmd)
+}
+
+pub const LIBRARY: Builtin = Builtin {
+    names: &["LIBRARY"],
+    summary: "Starts the Software Library.",
+    usage: "LIBRARY [category]\n\nBrowse the programs RetroOS can install, by category; install, remove\nand update them. Enter installs the chosen program, U installs updates,\n/ searches everything Debian has.",
+    run: |sh, a, io| library(sh, io, a.words.iter().take(1).cloned().collect()),
+};
+
+pub const INSTALL: Builtin = Builtin {
+    names: &["INSTALL"],
+    summary: "Installs a program.",
+    usage: "INSTALL name [name...]\n\n  name   A program from the Software Library (CHROMIUM, GIMP, DOSBOX-X…) or\n         any Debian package name.\n\nAsks for the administrator's password, then downloads and installs it.\nType LIBRARY to see what there is.",
+    run: |sh, a, io| {
+        if a.words.is_empty() {
+            return err(io, "Required parameter missing");
+        }
+        let mut args = vec!["--install".to_string()];
+        args.extend(a.words.iter().cloned());
+        library(sh, io, args)
+    },
+};
+
+pub const UNINSTALL: Builtin = Builtin {
+    names: &["UNINSTALL"],
+    summary: "Removes a program.",
+    usage: "UNINSTALL name [name...]\n\nRemoves programs INSTALL (or the Software Library) put on, after asking.",
+    run: |sh, a, io| {
+        if a.words.is_empty() {
+            return err(io, "Required parameter missing");
+        }
+        let mut args = vec!["--remove".to_string()];
+        args.extend(a.words.iter().cloned());
+        library(sh, io, args)
+    },
+};
+
+pub const UPDATE: Builtin = Builtin {
+    names: &["UPDATE"],
+    summary: "Installs software updates.",
+    usage: "UPDATE\n\nLists the updates waiting and installs them. RetroOS looks for updates\nevery day and installs security updates by itself (Control Panel → Updates).",
+    run: |sh, _, io| library(sh, io, vec!["--update".to_string()]),
 };
 
 pub const VOLUME: Builtin = Builtin {

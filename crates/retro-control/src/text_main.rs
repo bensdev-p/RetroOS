@@ -27,12 +27,15 @@ fn close_screen(s: Screen) {
     drop(s);
 }
 
-fn run(program: &str) {
+/// Run "program [args…]" in this console and wait.
+fn run(command: &str) {
+    let mut words = command.split_whitespace();
+    let Some(program) = words.next() else { return };
     let found = std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).any(|d| d.join(program).is_file()))
         .unwrap_or(false);
     if found {
-        let _ = std::process::Command::new(program).status();
+        let _ = std::process::Command::new(program).args(words).status();
     }
 }
 
@@ -41,7 +44,7 @@ fn main() {
     let start = match arg.as_deref() {
         None => None,
         Some("/?" | "-h" | "--help") => {
-            println!("Changes RetroOS settings.\n\nCONTROL [DISPLAY | STARTUP | TIME | KEYBOARD | NETWORK | USERS]");
+            println!("Changes RetroOS settings.\n\nCONTROL [DISPLAY | STARTUP | TIME | KEYBOARD | MOUSE | DESKTOP | NETWORK | SOUND |\n         USERS | BLUETOOTH | UPDATES | SOURCES]");
             return;
         }
         Some(a) => match applet_named(a) {

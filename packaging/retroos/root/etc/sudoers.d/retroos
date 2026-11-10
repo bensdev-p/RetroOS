@@ -10,3 +10,7 @@
 # administrator's password (the %admin ALL rule above; no NOPASSWD, D-046).
 # Control Panel → Bluetooth and BT ON/OFF: turn Bluetooth on or off (D-054).
 %admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-bluetooth
+# Control Panel → Updates and Software Sources (D-055). Installing software
+# (/usr/libexec/retroos/software) needs the administrator's password: the
+# %admin ALL rule above, no NOPASSWD.
+%admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-updates

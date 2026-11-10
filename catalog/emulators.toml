@@ -1,0 +1,69 @@
+# Emulators — RetroOS Software Library catalog (catalog/README.md).
+category = "Emulators"
+icon = "sl-emulators"
+
+[[app]]
+name = "DOSBox-X"
+packages = ["dosbox-x"]
+run = "dosbox-x"
+blurb = "Run real MS-DOS programs and games, and Windows 3.1."
+
+[[app]]
+name = "DOSBox"
+packages = ["dosbox"]
+run = "dosbox"
+blurb = "The classic DOS game emulator."
+
+[[app]]
+name = "RetroArch"
+packages = ["retroarch"]
+run = "retroarch"
+blurb = "One front-end for many game consoles (cores installed separately)."
+
+[[app]]
+name = "Basilisk II"
+packages = ["basilisk2"]
+alias = ["MAC"]
+run = "BasiliskII"
+blurb = "A 68k Macintosh: System 7 to Mac OS 8 (needs a Mac ROM)."
+
+[[app]]
+name = "VICE"
+packages = ["vice"]
+alias = ["C64"]
+run = "x64sc"
+blurb = "Commodore 64, VIC-20 and other Commodore computers (needs ROMs)."
+
+[[app]]
+name = "Hatari"
+packages = ["hatari"]
+alias = ["ATARIST"]
+run = "hatari"
+blurb = "The Atari ST, STE, TT and Falcon."
+
+[[app]]
+name = "Stella"
+packages = ["stella"]
+alias = ["ATARI2600"]
+run = "stella"
+blurb = "The Atari 2600 game console."
+
+[[app]]
+name = "FCEUX"
+packages = ["fceux"]
+alias = ["NES"]
+run = "fceux"
+blurb = "The Nintendo Entertainment System."
+
+[[app]]
+name = "Mednafen"
+packages = ["mednafen"]
+run = "mednafen"
+blurb = "Many consoles, from the Game Boy to the PlayStation, from RetroDOS."
+
+[[app]]
+name = "MAME"
+packages = ["mame"]
+alias = ["ARCADE"]
+run = "mame"
+blurb = "Arcade machines (bring your own ROMs)."

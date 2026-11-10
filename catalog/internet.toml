@@ -1,0 +1,49 @@
+# Internet — RetroOS Software Library catalog (catalog/README.md).
+category = "Internet"
+icon = "sl-internet"
+
+[[app]]
+name = "Chromium"
+packages = ["chromium"]
+alias = ["CHROME"]
+run = "chromium"
+blurb = "The open-source web browser behind Google Chrome."
+note = "Each Chromium window can use a few hundred MB of memory."
+
+[[app]]
+name = "Thunderbird"
+packages = ["thunderbird"]
+run = "thunderbird"
+blurb = "E-mail, news and calendars from Mozilla."
+
+[[app]]
+name = "HexChat"
+packages = ["hexchat"]
+alias = ["IRC"]
+run = "hexchat"
+blurb = "Chat on IRC networks, as in the days of mIRC."
+
+[[app]]
+name = "Pidgin"
+packages = ["pidgin"]
+run = "pidgin"
+blurb = "One chat program for many instant-messaging networks."
+
+[[app]]
+name = "Transmission"
+packages = ["transmission-gtk"]
+run = "transmission-gtk"
+blurb = "A small, simple BitTorrent client."
+
+[[app]]
+name = "FileZilla"
+packages = ["filezilla"]
+alias = ["FTP"]
+run = "filezilla"
+blurb = "Copy files to and from FTP and SFTP servers."
+
+[[app]]
+name = "Lynx"
+packages = ["lynx"]
+run = "lynx"
+blurb = "The text-mode web browser: the Web as a DOS user saw it."

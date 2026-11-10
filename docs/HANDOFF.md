@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-055**).
+  (**next: D-056**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -229,8 +229,17 @@ Suggested order, each step leaving a working image:
   up (the console bell); the headless backend renders with buffer age 1, so
   host tests catch damage bugs like the second screen's stale pattern;
   a program's move request during a touch follows the finger.
-- **Order from here** (tester's wish, 2026-11-09: go in order): step 5
-  (Software Library; then the Updates / Software Sources pages); then 6.
+- **Step 5 done** (D-055): catalog (`catalog/*.toml`, 69 programs,
+  `tools/check-catalog.sh`), `retro_sys::catalog` + `software` (apt
+  through the root helper `software`, not PackageKit), crate retro-library
+  (LIBRARY / INSTALL / UNINSTALL / UPDATE and the Desktop
+  `software-library`), `retroos-updates.timer` (security updates by
+  themselves), the prompt notice and the System Bar mark, Control Panel →
+  Updates and Software Sources (helper `set-updates`); host test
+  `library.steps`; HW 4.39–4.44.
+- **Order from here** (tester's wish, 2026-11-09: go in order): step 6
+  (theming others' programs: apply the stash, renumber its D-050 → next);
+  then 7 (Media Player, Arcade, Geany preinstalled), then 8 (acceptance).
 
 ## 8. Open items carried over
 

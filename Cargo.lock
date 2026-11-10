@@ -1325,6 +1325,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "retro-library"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "retro-apps",
+ "retro-gfx",
+ "retro-sys",
+ "retro-tui",
+ "retro-ui",
+]
+
+[[package]]
 name = "retro-login"
 version = "0.1.0"
 dependencies = [
@@ -1388,6 +1400,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "toml_edit",
  "zbus",
 ]
 

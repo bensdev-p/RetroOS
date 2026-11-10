@@ -1,0 +1,107 @@
+#!/bin/sh
+# Install, remove and update software (run as root; D-055).
+#
+#   software install PKG...   fetch the package lists if stale, install
+#   software remove PKG...    remove (and what only they needed)
+#   software upgrade          fetch the lists, install every update
+#   software check            fetch the lists; security updates by themselves
+#                             unless turned off; count what is left
+#   software security         install only the security updates
+#
+# apt's progress goes to standard output as its status lines (dlstatus:…,
+# pmstatus:…) plus "step:" lines of our own; its messages go to
+# /var/log/retroos-software.log, errors also to standard error. The
+# Software Library, LIBRARY and INSTALL run this through sudo with the
+# administrator's password; the daily check (retroos-updates.timer) as root.
+set -eu
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+LOG=/var/log/retroos-software.log
+STATE=/var/lib/retroos/updates
+CONF=/etc/retroos/updates.conf
+ERR=$(mktemp)
+trap 'rm -f "$ERR"' EXIT
+
+step() { echo "step:$*"; }
+
+# apt-get with progress on fd 3 (our stdout), its chatter in the log.
+apt() {
+    if apt-get -q -y -o APT::Status-Fd=3 \
+        -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+        "$@" 3>&1 >>"$LOG" 2>"$ERR"; then
+        cat "$ERR" >>"$LOG"; return 0
+    fi
+    cat "$ERR" >>"$LOG"; cat "$ERR" >&2; return 1
+}
+
+# The package lists: fetched when missing or older than a day.
+fresh() {
+    if [ -z "$(find /var/lib/apt/lists -maxdepth 1 -name '*_Packages' -mtime -1 2>/dev/null | head -1)" ]; then
+        step "Reading the package lists from the internet"
+        apt update
+    fi
+}
+
+# Count what is waiting, for the prompt and the System Bar.
+count() {
+    sim=$(apt-get -s -q -o Debug::NoLocking=1 upgrade --with-new-pkgs 2>/dev/null | grep '^Inst ' || true)
+    n=$(printf '%s\n' "$sim" | grep -c '^Inst ' || true)
+    s=$(printf '%s\n' "$sim" | grep -ci 'security' || true)
+    mkdir -p "$(dirname "$STATE")"
+    printf 'count=%s\nsecurity=%s\nchecked=%s\n' "$n" "$s" "$(date +%s)" >"$STATE.new"
+    chmod 644 "$STATE.new"
+    mv "$STATE.new" "$STATE"
+}
+
+# Only the security archive: apt sees just its sources (the classic
+# security-only upgrade), so nothing else changes.
+security() {
+    d=$(mktemp -d)
+    awk 'BEGIN{RS=""; ORS="\n\n"} /security/' /etc/apt/sources.list.d/debian.sources >"$d/security.sources"
+    if [ -s "$d/security.sources" ]; then
+        step "Installing security updates"
+        apt -o Dir::Etc::SourceList=/dev/null -o Dir::Etc::SourceParts="$d" upgrade || { rm -rf "$d"; return 1; }
+    fi
+    rm -rf "$d"
+}
+
+valid() {
+    for p in "$@"; do
+        case $p in
+            [a-z0-9]*) ;;
+            *) echo "Not a package name: $p" >&2; exit 2 ;;
+        esac
+        if printf '%s' "$p" | LC_ALL=C grep -q '[^a-z0-9+.-]'; then
+            echo "Not a package name: $p" >&2; exit 2
+        fi
+    done
+}
+
+echo "$(date '+%F %T') software $*" >>"$LOG"
+cmd=${1:-}
+[ $# -gt 0 ] && shift
+case $cmd in
+    install)
+        [ $# -gt 0 ] || { echo "Nothing to install" >&2; exit 2; }
+        valid "$@"; fresh
+        step "Installing"
+        apt install -- "$@"; count ;;
+    remove)
+        [ $# -gt 0 ] || { echo "Nothing to remove" >&2; exit 2; }
+        valid "$@"
+        step "Removing"
+        apt remove --autoremove -- "$@"; count ;;
+    upgrade)
+        step "Reading the package lists from the internet"
+        apt update
+        step "Installing updates"
+        apt upgrade --with-new-pkgs; count ;;
+    check)
+        # Offline: count from the lists we have; try again tomorrow.
+        if apt update; then
+            grep -qx 'security=off' "$CONF" 2>/dev/null || security || true
+        fi
+        count ;;
+    security)
+        security; count ;;
+    *) echo "usage: software install|remove PKG... | upgrade | check | security" >&2; exit 2 ;;
+esac

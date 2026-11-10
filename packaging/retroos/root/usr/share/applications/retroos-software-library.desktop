@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Software Library
+Comment=Install, remove and update programs
+Exec=software-library
+Icon=system-software-install
+Terminal=false
+Categories=System;PackageManager;

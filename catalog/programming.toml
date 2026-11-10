@@ -1,0 +1,57 @@
+# Programming — RetroOS Software Library catalog (catalog/README.md).
+category = "Programming"
+icon = "sl-programming"
+
+[[app]]
+name = "Geany"
+packages = ["geany"]
+run = "geany"
+blurb = "A small, quick programmer's editor."
+
+[[app]]
+name = "Visual Studio Code"
+packages = ["code"]
+alias = ["VSCODE", "CODE"]
+run = "code"
+blurb = "Microsoft's code editor (from the Raspberry Pi archive)."
+note = "VS Code is an Electron program: it uses several hundred MB of memory."
+
+[[app]]
+name = "Free Pascal IDE"
+packages = ["fp-ide", "fp-compiler"]
+alias = ["FP", "PASCAL", "TP"]
+run = "fp"
+blurb = "A Turbo Pascal look-alike: blue screen, menus, compile with F9."
+
+[[app]]
+name = "Thonny"
+packages = ["thonny"]
+run = "thonny"
+blurb = "A friendly Python editor for learning to program."
+
+[[app]]
+name = "IDLE"
+packages = ["idle"]
+alias = ["PYTHON"]
+run = "idle"
+blurb = "Python's own little editor and shell."
+
+[[app]]
+name = "Git"
+packages = ["git"]
+run = "git"
+blurb = "Version control: keep every version of your code."
+
+[[app]]
+name = "Build tools"
+packages = ["build-essential"]
+alias = ["GCC", "MAKE"]
+run = "gcc"
+blurb = "The C and C++ compilers and make."
+
+[[app]]
+name = "Vim"
+packages = ["vim"]
+alias = ["VI"]
+run = "vim"
+blurb = "The modal text editor."

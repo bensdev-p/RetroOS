@@ -64,6 +64,7 @@ fn main() {
     if logo && sh.depth == 0 {
         println!("\nRetroDOS Version {VERSION}");
         println!("             (C)Copyright Phosphor Computer Company 1987-1993.\n");
+        updates_notice();
     }
     if sh.depth == 0 && keep.is_none() && std::env::var_os("RETROOS_SAFE_MODE").is_none() {
         if let Some(p) = sh.find_batch("C:\\AUTOEXEC.BAT") {
@@ -75,4 +76,21 @@ fn main() {
     }
     sh.interactive();
     std::process::exit(sh.errorlevel);
+}
+
+/// "3 updates available. Type UPDATE." under the logo, from what the daily
+/// check found (/var/lib/retroos/updates, retro_sys::software, D-055).
+fn updates_notice() {
+    let path = std::env::var("RETROOS_UPDATES_STATE")
+        .unwrap_or_else(|_| "/var/lib/retroos/updates".into());
+    let n: u32 = std::fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .find_map(|l| l.strip_prefix("count=")?.trim().parse().ok())
+        .unwrap_or(0);
+    match n {
+        0 => {}
+        1 => println!("1 update available. Type UPDATE.\n"),
+        n => println!("{n} updates available. Type UPDATE.\n"),
+    }
 }

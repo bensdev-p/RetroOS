@@ -1,0 +1,36 @@
+# Education — RetroOS Software Library catalog (catalog/README.md).
+category = "Education"
+icon = "sl-education"
+
+[[app]]
+name = "Scratch 3"
+packages = ["scratch3"]
+alias = ["SCRATCH"]
+run = "scratch3"
+blurb = "Program games and stories by snapping blocks together."
+note = "Scratch 3 is an Electron program: it uses a lot of memory."
+
+[[app]]
+name = "Stellarium"
+packages = ["stellarium"]
+run = "stellarium"
+blurb = "A planetarium: the night sky from anywhere on Earth."
+
+[[app]]
+name = "GCompris"
+packages = ["gcompris-qt"]
+run = "gcompris-qt"
+blurb = "Over a hundred learning games for children."
+
+[[app]]
+name = "Tux Paint"
+packages = ["tuxpaint"]
+run = "tuxpaint"
+blurb = "A painting program for children, with stamps and sounds."
+
+[[app]]
+name = "Tux Typing"
+packages = ["tuxtype"]
+alias = ["TYPING"]
+run = "tuxtype"
+blurb = "Learn to touch-type by popping fish."

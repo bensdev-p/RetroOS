@@ -120,6 +120,46 @@ const BUILTIN: &[(&str, &str)] = &[
         "cp-bluetooth",
         include_str!("../../../assets/icons/cp-bluetooth.icon"),
     ),
+    (
+        "software-library",
+        include_str!("../../../assets/icons/software-library.icon"),
+    ),
+    (
+        "sl-games",
+        include_str!("../../../assets/icons/sl-games.icon"),
+    ),
+    (
+        "sl-emulators",
+        include_str!("../../../assets/icons/sl-emulators.icon"),
+    ),
+    (
+        "sl-graphics",
+        include_str!("../../../assets/icons/sl-graphics.icon"),
+    ),
+    (
+        "sl-programming",
+        include_str!("../../../assets/icons/sl-programming.icon"),
+    ),
+    (
+        "sl-education",
+        include_str!("../../../assets/icons/sl-education.icon"),
+    ),
+    (
+        "sl-utilities",
+        include_str!("../../../assets/icons/sl-utilities.icon"),
+    ),
+    (
+        "sl-media",
+        include_str!("../../../assets/icons/sl-media.icon"),
+    ),
+    (
+        "cp-updates",
+        include_str!("../../../assets/icons/cp-updates.icon"),
+    ),
+    (
+        "cp-sources",
+        include_str!("../../../assets/icons/cp-sources.icon"),
+    ),
 ];
 
 /// Theme icon names (from .desktop files) that our own pictures stand for.
@@ -138,6 +178,10 @@ const ALIASES: &[(&str, &str)] = &[
     ("multimedia-volume-control", "cp-sound"),
     ("bluetooth", "cp-bluetooth"),
     ("preferences-bluetooth", "cp-bluetooth"),
+    ("system-software-install", "software-library"),
+    // The Software Library's categories (catalog/*.toml).
+    ("sl-internet", "web-browser"),
+    ("sl-office", "jot"),
 ];
 
 /// One of our own icons by name ("jot", "file-cabinet", "web-browser").

@@ -1,0 +1,13 @@
+[Unit]
+Description=RetroOS: look for software updates every day
+
+[Timer]
+# Ten minutes after the computer starts, then daily; spread out so a
+# classroom of Pis does not ask the mirrors all at once (DESIGN.md §10.5).
+OnBootSec=10min
+OnUnitActiveSec=1d
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

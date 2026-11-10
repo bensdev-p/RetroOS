@@ -1,0 +1,25 @@
+[package]
+name = "retro-library"
+description = "LIBRARY, INSTALL, UNINSTALL, UPDATE: the Software Library in RetroDOS"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "retro-library"
+path = "src/main.rs"
+
+[[bin]]
+name = "software-library"
+path = "src/gui.rs"
+
+[dependencies]
+retro-gfx.workspace = true
+retro-ui.workspace = true
+retro-apps.workspace = true
+retro-tui = { path = "../retro-tui" }
+retro-sys = { path = "../retro-sys" }
+libc = "0.2"
+
+[lints]
+workspace = true

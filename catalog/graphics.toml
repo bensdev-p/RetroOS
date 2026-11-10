@@ -1,0 +1,48 @@
+# Graphics — RetroOS Software Library catalog (catalog/README.md).
+category = "Graphics"
+icon = "sl-graphics"
+
+[[app]]
+name = "GrafX2"
+packages = ["grafx2"]
+run = "grafx2"
+blurb = "A pixel-art paint program in the style of Deluxe Paint."
+
+[[app]]
+name = "mtPaint"
+packages = ["mtpaint"]
+run = "mtpaint"
+blurb = "A simple painting program for pixel art and photos."
+
+[[app]]
+name = "KolourPaint"
+packages = ["kolourpaint"]
+alias = ["PAINT"]
+run = "kolourpaint"
+blurb = "Easy painting, much like Windows Paintbrush."
+
+[[app]]
+name = "GIMP"
+packages = ["gimp"]
+run = "gimp"
+blurb = "Edit photos and paint: the free Photoshop."
+note = "GIMP is large: it starts slowly the first time."
+
+[[app]]
+name = "Inkscape"
+packages = ["inkscape"]
+run = "inkscape"
+blurb = "Draw with lines and shapes (vector graphics, SVG)."
+
+[[app]]
+name = "Krita"
+packages = ["krita"]
+run = "krita"
+blurb = "Digital painting with brushes, layers and a tablet."
+
+[[app]]
+name = "Ristretto"
+packages = ["ristretto"]
+alias = ["PICTURES"]
+run = "ristretto"
+blurb = "Look through pictures quickly."

@@ -148,9 +148,15 @@ pub fn set_local(t: Local) -> Result<(), String> {
 
 /// The local time now.
 pub fn now() -> Local {
-    // SAFETY: time(NULL) and localtime_r with valid pointers.
+    // SAFETY: time(NULL) has no preconditions.
+    local(unsafe { libc::time(std::ptr::null_mut()) })
+}
+
+/// The local time at `t` seconds since 1970.
+pub fn local(t: i64) -> Local {
+    let t = t as libc::time_t;
+    // SAFETY: localtime_r with valid pointers.
     unsafe {
-        let t = libc::time(std::ptr::null_mut());
         let mut tm: libc::tm = std::mem::zeroed();
         libc::localtime_r(&t, &mut tm);
         Local {

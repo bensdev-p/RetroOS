@@ -1,0 +1,46 @@
+# Sound & Video — RetroOS Software Library catalog (catalog/README.md).
+category = "Sound & Video"
+icon = "sl-media"
+
+[[app]]
+name = "VLC"
+packages = ["vlc"]
+run = "vlc"
+blurb = "Plays nearly every video and music file, and DVDs."
+
+[[app]]
+name = "mpv"
+packages = ["mpv"]
+run = "mpv"
+blurb = "A small video player driven by the keyboard."
+
+[[app]]
+name = "Audacious"
+packages = ["audacious"]
+alias = ["WINAMP"]
+run = "audacious"
+blurb = "A music player that wears Winamp skins."
+
+[[app]]
+name = "cmus"
+packages = ["cmus"]
+run = "cmus"
+blurb = "A music player for RetroDOS: your library in text mode."
+
+[[app]]
+name = "Audacity"
+packages = ["audacity"]
+run = "audacity"
+blurb = "Record and edit sound."
+
+[[app]]
+name = "LMMS"
+packages = ["lmms"]
+run = "lmms"
+blurb = "Make music with synthesizers, samples and a piano roll."
+
+[[app]]
+name = "Hydrogen"
+packages = ["hydrogen"]
+run = "hydrogen"
+blurb = "A drum machine with pattern editor."

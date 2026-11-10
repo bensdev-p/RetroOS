@@ -1,0 +1,55 @@
+# Utilities — RetroOS Software Library catalog (catalog/README.md).
+category = "Utilities"
+icon = "sl-utilities"
+
+[[app]]
+name = "Midnight Commander"
+packages = ["mc"]
+alias = ["NC"]
+run = "mc"
+blurb = "Two blue file panels: the Norton Commander way of managing files."
+
+[[app]]
+name = "htop"
+packages = ["htop"]
+run = "htop"
+blurb = "See which programs use the processor and memory."
+
+[[app]]
+name = "ncdu"
+packages = ["ncdu"]
+run = "ncdu"
+blurb = "Find what fills the disk."
+
+[[app]]
+name = "GParted"
+packages = ["gparted"]
+alias = ["FDISK"]
+run = "gparted"
+blurb = "Partition and format disks and USB sticks."
+
+[[app]]
+name = "Galculator"
+packages = ["galculator"]
+alias = ["CALCULATOR"]
+run = "galculator"
+blurb = "A scientific calculator."
+
+[[app]]
+name = "Xarchiver"
+packages = ["xarchiver", "unzip", "zip"]
+alias = ["ZIP"]
+run = "xarchiver"
+blurb = "Open and make ZIP and other archives."
+
+[[app]]
+name = "KeePassXC"
+packages = ["keepassxc"]
+run = "keepassxc"
+blurb = "Keep your passwords in one locked file."
+
+[[app]]
+name = "Fastfetch"
+packages = ["fastfetch"]
+run = "fastfetch"
+blurb = "Show this computer's details next to its logo."

@@ -490,6 +490,9 @@ impl App {
         if a == crate::ACTION_MIXER {
             return Some(Action::Run("retro-mixer"));
         }
+        if a == crate::ACTION_UPDATES {
+            return Some(Action::Run("retro-library Updates"));
+        }
         match forms::form_for(a, &o.page) {
             Ok(form) => o.form = Some(TextForm::new(form)),
             Err(e) => self.message = Some(vec![e]),
