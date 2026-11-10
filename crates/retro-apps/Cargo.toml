@@ -7,3 +7,6 @@ license.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+retro-sys = { path = "../retro-sys" }

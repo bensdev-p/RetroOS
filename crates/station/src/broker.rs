@@ -21,6 +21,8 @@
 //!   WINDOWS                       → OK <n>, then n lines, top first:
 //!                                   WINDOW <id> <x> <y> <w> <h> <state> <title>
 //!                                   (state: normal maximized minimized fullscreen hidden)
+//!   SCREENS                       → OK <n>, then n lines, the main screen first:
+//!                                   SCREEN <x> <y> <w> <h> (logical pixels, as turned)
 //! Test-only (station --test-ipc):
 //!   TYPE <text>   KEY <combo>…   QUIT
 //!   POINTER <x> <y>               move the mouse (logical pixels)
@@ -361,6 +363,17 @@ impl Station {
                 self.broker.send(conn, "OK");
                 self.broker.send(conn, &format!("EVENT\tSCHEME\t{key}"));
                 return;
+            }
+            "SCREENS" => {
+                let rects = self.output_rects();
+                let mut lines = vec![format!("OK\t{}", rects.len())];
+                for r in rects {
+                    lines.push(format!(
+                        "SCREEN\t{}\t{}\t{}\t{}",
+                        r.loc.x, r.loc.y, r.size.w, r.size.h
+                    ));
+                }
+                lines.join("\n")
             }
             "WINDOWS" => {
                 let ids = self.tasks.z_order();

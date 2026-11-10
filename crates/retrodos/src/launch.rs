@@ -200,7 +200,13 @@ impl Shell {
         if cmd.contains(['\\', '/', ':']) {
             return None;
         }
-        apps::find_app(cmd).map(Target::App)
+        if let Some(a) = apps::find_app(cmd) {
+            return Some(Target::App(a));
+        }
+        // A Software Library name for a program without a menu entry
+        // (NC → mc).
+        let run = apps::resolve_alias(cmd)?;
+        self.find_program(&run).map(Target::Program)
     }
 
     /// Run `cmd rest` as an external program, through Station when it is a

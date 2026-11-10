@@ -114,7 +114,13 @@ fn load_groups() -> Vec<Group> {
             name: a.name.clone(),
             argv: a.exec.clone(),
             art: IconArt::Program,
-            icon: a.icon.as_deref().and_then(iconset::for_app),
+            // No picture of its own: its group's, as the Software Library
+            // shows it (HW 4.41), rather than the plain program icon.
+            icon: a
+                .icon
+                .as_deref()
+                .and_then(iconset::for_app)
+                .or_else(|| iconset::builtin(group_icon(g)).cloned()),
         };
         match rest.iter_mut().find(|x| x.name == g) {
             Some(x) => x.items.push(item),
@@ -127,6 +133,20 @@ fn load_groups() -> Vec<Group> {
     rest.sort_by(|a, b| a.name.cmp(&b.name));
     groups.extend(rest);
     groups
+}
+
+/// The Software Library's picture for a Program Manager group.
+fn group_icon(group: &str) -> &'static str {
+    match group {
+        "Games" => "sl-games",
+        "Internet" => "sl-internet",
+        "Multimedia" => "sl-media",
+        "Graphics" => "sl-graphics",
+        "Office" => "sl-office",
+        "Programming" => "sl-programming",
+        "Education" => "sl-education",
+        _ => "sl-utilities",
+    }
 }
 
 fn config_path() -> Option<std::path::PathBuf> {

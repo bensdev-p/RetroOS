@@ -133,20 +133,27 @@ impl System {
         }
     }
 
-    /// The command that plays `game` full screen.
-    pub fn command(&self, game: &Path) -> Vec<String> {
+    /// The command that plays `game` full screen; `extra` is a RetroArch
+    /// settings file to add (see [`fullscreen_cfg`]).
+    pub fn command(&self, game: &Path, extra: Option<&Path>) -> Vec<String> {
         let g = game.to_string_lossy().into_owned();
         match self.launch {
-            Launch::Core(c) => vec![
-                "retroarch".into(),
-                "-f".into(),
-                "-L".into(),
-                core_dir()
-                    .join(format!("{c}_libretro.so"))
-                    .to_string_lossy()
-                    .into_owned(),
-                g,
-            ],
+            Launch::Core(c) => {
+                let mut v: Vec<String> = vec!["retroarch".into(), "-f".into()];
+                if let Some(x) = extra {
+                    v.push("--appendconfig".into());
+                    v.push(x.to_string_lossy().into_owned());
+                }
+                v.push("-L".into());
+                v.push(
+                    core_dir()
+                        .join(format!("{c}_libretro.so"))
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+                v.push(g);
+                v
+            }
             Launch::Command(c, args) => {
                 let mut v = vec![c.to_string()];
                 v.extend(args.iter().map(|a| a.to_string()));
@@ -177,6 +184,20 @@ impl System {
         v.sort_by_key(|p| p.to_string_lossy().to_lowercase());
         v
     }
+}
+
+/// RetroArch settings for full screen at `size` (the screen's logical
+/// size). RetroArch on Wayland takes the panel's own mode as its full-screen
+/// size, without the rotation, and ignores the size Station asks for until
+/// it resizes itself: on the Touch Display 2 (an 800×1280 panel shown
+/// 1280×800) the game filled half the screen and ran off the bottom (HW
+/// 4.52). Telling it the size avoids that.
+pub fn fullscreen_cfg(size: (i32, i32)) -> String {
+    format!(
+        "video_fullscreen_x = \"{}\"\nvideo_fullscreen_y = \"{}\"\n",
+        size.0.max(0),
+        size.1.max(0)
+    )
 }
 
 /// A game's name for the list: the file name without its extension,
@@ -233,11 +254,20 @@ mod tests {
         let g = nes.games(&d);
         assert_eq!(g.len(), 1, "README.TXT and notes are not games");
         assert_eq!(title(&g[0]), "Super Tux Bros");
-        let cmd = nes.command(&g[0]);
+        let cmd = nes.command(&g[0], None);
         assert_eq!(cmd[..3], ["retroarch", "-f", "-L"]);
         assert!(cmd[3].ends_with("libretro/nestopia_libretro.so"));
+        let cmd = nes.command(&g[0], Some(Path::new("/run/a.cfg")));
+        assert_eq!(
+            cmd[..5],
+            ["retroarch", "-f", "--appendconfig", "/run/a.cfg", "-L"]
+        );
+        assert_eq!(
+            fullscreen_cfg((1280, 800)),
+            "video_fullscreen_x = \"1280\"\nvideo_fullscreen_y = \"800\"\n"
+        );
         let md = SYSTEMS.iter().find(|s| s.folder == "MegaDrive").unwrap();
-        assert_eq!(md.command(Path::new("/g/x.md"))[0], "mednafen");
+        assert_eq!(md.command(Path::new("/g/x.md"), None)[0], "mednafen");
         assert_eq!(md.emulator(), "Mednafen");
         std::fs::remove_dir_all(&d).unwrap();
     }

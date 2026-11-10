@@ -31,9 +31,12 @@ pub fn request(fields: &[&str]) -> Result<(Vec<String>, Vec<String>), String> {
             .cloned()
             .unwrap_or_else(|| "Station refused".into()));
     }
-    // TASKS and WINDOWS: "OK <n>" then n lines.
+    // TASKS, WINDOWS and SCREENS: "OK <n>" then n lines.
     let mut more = Vec::new();
-    if matches!(fields.first(), Some(&"TASKS") | Some(&"WINDOWS")) {
+    if matches!(
+        fields.first(),
+        Some(&"TASKS") | Some(&"WINDOWS") | Some(&"SCREENS")
+    ) {
         let n: usize = f.get(1).and_then(|v| v.parse().ok()).unwrap_or(0);
         for _ in 0..n {
             let mut l = String::new();
@@ -57,6 +60,25 @@ pub fn windows() -> Vec<WindowInfo> {
                 state: f[6].to_string(),
                 title: f[7..].join(" "),
             })
+        })
+        .collect()
+}
+
+/// The screens as Station shows them (x, y, w, h in logical pixels, a
+/// portrait panel turned landscape), the main screen first.
+pub fn screens() -> Vec<(i32, i32, i32, i32)> {
+    let Ok((_, lines)) = request(&["SCREENS"]) else {
+        return vec![];
+    };
+    lines
+        .iter()
+        .filter_map(|l| {
+            let f: Vec<i32> = l
+                .split('\t')
+                .skip(1)
+                .filter_map(|v| v.parse().ok())
+                .collect();
+            (l.starts_with("SCREEN\t") && f.len() == 4).then(|| (f[0], f[1], f[2], f[3]))
         })
         .collect()
 }

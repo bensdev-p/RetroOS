@@ -280,3 +280,20 @@ The sound server stays once started (socket activation starts it; it is not
 stopped when the last program closes). If the Desktop's budget gets tight,
 WirePlumber's idle exit or `pipewire-pulse` only on demand are the levers.
 
+### M4 acceptance measurements (2026-11-10, CI run 93, HW_CHECKLIST 4.55–4.57)
+
+From `/proc/meminfo` on the Pi 5 (8 GB), 1 minute after a cold boot:
+
+| Metric | Text mode (`C:\>`) | Desktop (Program Manager open) | M2 / M3 | Target |
+|---|---:|---:|---:|---:|
+| RetroOS userspace: AnonPages + Shmem | **58.0 MB** (49.9 + 8.0) | **66.7 MB** (56.3 + 10.5) | 44.4 (text, M2) / 52.8 (Desktop, M3) | text < 60 ✅, GUI < 160 ✅ (D-028) |
+| MemTotal − MemAvailable ("used") | 289.6 MB | 308.3 MB | 224.4 / 252.0 | < 200 ❌ (kernel side, D-028) |
+| About This Computer | — | RetroOS 387.3 MB, DOS Prompt 5.3, Program Manager 3.3 | RetroOS 334.0 | |
+| Power button → POST screen / → `C:\>` | **8 s / 13 s** | | 6 s / 9 s (M3, from plugging in) | ≤ 10 s to `C:\>` ❌ |
+
+Text mode grew 13.6 MB over M2 with M4's services (Bluetooth, the update
+check and the rest); the per-process list (HW_CHECKLIST 4.59) will say
+which, and is needed before the 60 MB line is crossed. The boot time was
+started from the power button rather than from plugging in, so it is not
+yet comparable with M3; the firmware and journal breakdown (4.58) splits it.
+

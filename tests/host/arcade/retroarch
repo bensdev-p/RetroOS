@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stands in for RetroArch in tests/host/arcade.steps: records how Arcade
+# started it (and the settings file it added).
+printf '%s\n' "$@" > "$HOME/retroarch-args"
+while [ $# -gt 0 ]; do
+    [ "$1" = --appendconfig ] && cp "$2" "$HOME/retroarch-append.cfg"
+    shift
+done

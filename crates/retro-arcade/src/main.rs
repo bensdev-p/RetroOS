@@ -16,7 +16,7 @@ use retro_ui::keys::*;
 use retro_ui::{station, Event, Program, Rect, SurfaceId, Ui};
 use std::path::PathBuf;
 use std::time::Duration;
-use systems::{games_dir, make_folders, title, System, SYSTEMS};
+use systems::{fullscreen_cfg, games_dir, make_folders, title, System, SYSTEMS};
 
 const TITLE: &str = "Arcade";
 const W: i32 = 540;
@@ -179,7 +179,7 @@ impl Arcade {
             self.note = Some(format!("{} is not installed yet.", s.emulator()));
             return;
         }
-        let argv = s.command(&game);
+        let argv = s.command(&game, fullscreen_file().as_deref());
         match station::launch(&title(&game).to_ascii_uppercase(), &argv) {
             Ok(_) => self.note = Some(format!("Starting {}...", title(&game))),
             Err(e) => self.note = Some(format!("Cannot start the game: {e}")),
@@ -286,6 +286,16 @@ impl Arcade {
             ui.redraw(w);
         }
     }
+}
+
+/// RetroArch's full-screen size for the main screen (where Station puts
+/// new windows), written to the runtime folder; None outside Station.
+fn fullscreen_file() -> Option<PathBuf> {
+    let (_, _, w, h) = *station::screens().first()?;
+    let dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from)?;
+    let path = dir.join("retroos-arcade-retroarch.cfg");
+    std::fs::write(&path, fullscreen_cfg((w, h))).ok()?;
+    Some(path)
 }
 
 impl Program for Arcade {

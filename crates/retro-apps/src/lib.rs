@@ -17,6 +17,71 @@ const ALIASES: &[(&str, &str)] = &[
     ("PLAYER", "media-player"),
 ];
 
+/// The Software Library's catalog (built into retro-sys too): its RetroDOS
+/// names (`alias = ["CALCULATOR"]`) and the command each one runs. Read
+/// here with a line scan so RetroDOS does not need retro-sys's D-Bus code;
+/// a unit test checks it against retro-sys's parser.
+const CATALOG: &[&str] = &[
+    include_str!("../../../catalog/internet.toml"),
+    include_str!("../../../catalog/office.toml"),
+    include_str!("../../../catalog/graphics.toml"),
+    include_str!("../../../catalog/sound-video.toml"),
+    include_str!("../../../catalog/games.toml"),
+    include_str!("../../../catalog/emulators.toml"),
+    include_str!("../../../catalog/programming.toml"),
+    include_str!("../../../catalog/utilities.toml"),
+    include_str!("../../../catalog/education.toml"),
+];
+
+/// (alias, command) for every catalog alias, in catalog order.
+pub fn catalog_aliases() -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for file in CATALOG {
+        let mut alias: Vec<String> = Vec::new();
+        let mut run: Option<String> = None;
+        let mut flush = |alias: &mut Vec<String>, run: &mut Option<String>| {
+            if let Some(r) = run.take() {
+                out.extend(alias.drain(..).map(|a| (a, r.clone())));
+            }
+            alias.clear();
+        };
+        for line in file.lines() {
+            let line = line.trim();
+            if line == "[[app]]" || line.starts_with('[') {
+                flush(&mut alias, &mut run);
+            } else if let Some(v) = line.strip_prefix("alias") {
+                let v = v.trim_start().trim_start_matches('=').trim();
+                alias = v
+                    .trim_start_matches('[')
+                    .trim_end_matches(']')
+                    .split(',')
+                    .map(|x| x.trim().trim_matches('"').to_string())
+                    .filter(|x| !x.is_empty())
+                    .collect();
+            } else if let Some(v) = line.strip_prefix("run") {
+                let v = v.trim_start();
+                if let Some(v) = v.strip_prefix('=') {
+                    run = Some(v.trim().trim_matches('"').to_string());
+                }
+            }
+        }
+        flush(&mut alias, &mut run);
+    }
+    out
+}
+
+/// What a RetroOS name stands for: RetroOS's own names first, then the
+/// Software Library's (`CALCULATOR` → `galculator`, HW 4.47).
+pub fn resolve_alias(cmd: &str) -> Option<String> {
+    if let Some((_, t)) = ALIASES.iter().find(|(a, _)| a.eq_ignore_ascii_case(cmd)) {
+        return Some(t.to_string());
+    }
+    catalog_aliases()
+        .into_iter()
+        .find(|(a, _)| a.eq_ignore_ascii_case(cmd))
+        .map(|(_, r)| r)
+}
+
 /// Libraries whose presence in DT_NEEDED marks a GUI program.
 const GUI_LIBS: &[&str] = &[
     "libwayland-client",
@@ -225,12 +290,9 @@ fn base(s: &str) -> &str {
 /// (`firefox`, `org.gnome.Foo` → `FOO`), program name, or display name
 /// without spaces.
 pub fn find_app(cmd: &str) -> Option<DesktopApp> {
-    let cmd = cmd.to_ascii_lowercase();
-    let want = ALIASES
-        .iter()
-        .find(|(a, _)| a.eq_ignore_ascii_case(&cmd))
-        .map(|(_, t)| t.to_string())
-        .unwrap_or(cmd);
+    let want = resolve_alias(cmd)
+        .unwrap_or_else(|| cmd.to_string())
+        .to_ascii_lowercase();
     let apps = desktop_apps();
     let matches = |a: &DesktopApp| {
         let id = a.id.to_ascii_lowercase();
@@ -342,6 +404,21 @@ pub fn elf_needed(path: &Path) -> Option<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catalog_aliases_match_the_library() {
+        let mut want = Vec::new();
+        for a in &retro_sys::catalog::catalog().apps {
+            for x in &a.alias {
+                want.push((x.clone(), a.run.clone()));
+            }
+        }
+        assert_eq!(catalog_aliases(), want);
+        assert_eq!(resolve_alias("calculator").as_deref(), Some("galculator"));
+        // RetroOS's own names win (MAME no longer claims ARCADE).
+        assert_eq!(resolve_alias("ARCADE").as_deref(), Some("arcade"));
+        assert_eq!(resolve_alias("nothing"), None);
+    }
 
     #[test]
     fn desktop_entries() {

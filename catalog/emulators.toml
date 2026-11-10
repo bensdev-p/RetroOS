@@ -64,6 +64,5 @@ blurb = "Many consoles, from the Game Boy to the PlayStation, from RetroDOS."
 [[app]]
 name = "MAME"
 packages = ["mame"]
-alias = ["ARCADE"]
 run = "mame"
 blurb = "Arcade machines (bring your own ROMs)."

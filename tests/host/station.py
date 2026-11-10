@@ -61,7 +61,7 @@ def main():
         f.write(line + "\n"); f.flush()
         first = f.readline().strip()
         out = [first]
-        if first.startswith("OK\t") and line in ("TASKS", "WINDOWS"):
+        if first.startswith("OK\t") and line in ("TASKS", "WINDOWS", "SCREENS"):
             for _ in range(int(first.split("\t")[1])):
                 out.append(f.readline().strip())
         return out

@@ -253,9 +253,14 @@ Suggested order, each step leaving a working image:
   `systems.rs`, games in ~/Games/<console>), Software Library
   `--install PKG…` mode, mpv + Geany in the image; host test
   `media.steps`; HW 4.49–4.53.
-- **Order from here**: step 8, **acceptance** (DESIGN.md §18 M4): install
-  and remove programs from both front-ends, Bluetooth audio and a game pad
-  on the Pi, the budget measured again.
+- **Step 8, acceptance — in progress** (run 93, HW_CHECKLIST results
+  2026-11-10): install and remove from both front-ends ✅ (4.54),
+  Bluetooth audio ✅ (4.35, run 89), memory ✅ (text 58.0 MB, Desktop
+  66.7 MB; BUDGET.md). Still open: a game pad (4.36, none to hand), the
+  game full screen (4.52, fixed after run 93: Station's `SCREENS`, Arcade
+  sets RetroArch's size), and boot time — 13 s to `C:\>` from the power
+  button against ≤ 10 s; 4.58 asks for the breakdown, 4.59 for text-mode
+  memory by process.
 
 ## 8. Open items carried over
 

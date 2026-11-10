@@ -1,0 +1,19 @@
+# Arcade starts RetroArch at the main screen's size as shown: the Touch
+# Display 2's 1200×1920 panel turned to 1920×1200 (HW 4.52; RetroArch
+# would take the unturned panel size). A stand-in retroarch records it.
+wait 1500
+type DESKTOP
+key enter
+wait 1500
+write Games/NES/Super_Tux_Bros.nes x
+type START arcade
+key enter
+wait 2500
+expect WINDOWS => normal Arcade
+key enter
+wait 300
+key enter
+expect-file retroarch-args --appendconfig
+expect-file retroarch-append.cfg video_fullscreen_x = "1920"\nvideo_fullscreen_y = "1200"\n
+wait 500
+shot 01-arcade-played

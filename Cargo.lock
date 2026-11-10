@@ -1212,6 +1212,9 @@ dependencies = [
 [[package]]
 name = "retro-apps"
 version = "0.1.0"
+dependencies = [
+ "retro-sys",
+]
 
 [[package]]
 name = "retro-arcade"
