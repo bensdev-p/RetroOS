@@ -68,7 +68,13 @@ struct ProgMan {
     menu: Option<Menu>,
     minimize_on_use: bool,
     last_click: Option<(usize, usize, Instant)>,
+    /// The applications folders' times, to notice programs installed or
+    /// removed while Program Manager is open (HW 4.41).
+    stamp: Vec<Option<std::time::SystemTime>>,
 }
+
+const RELOAD: u32 = 1;
+const RELOAD_EVERY: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Main first, then the categories in the System Bar's order.
 fn load_groups() -> Vec<Group> {
@@ -201,6 +207,41 @@ impl ProgMan {
             self.scroll = r.y + r.h + layout::GAP - self.view_h();
         }
         self.clamp_scroll();
+    }
+
+    /// Read the programs again, keeping the active group and selections
+    /// by name.
+    fn reload(&mut self) {
+        let active = self.groups.get(self.active).map(|g| g.name.clone());
+        let chosen: Vec<(String, Option<String>)> = self
+            .groups
+            .iter()
+            .zip(&self.sel)
+            .map(|(g, s)| {
+                (
+                    g.name.clone(),
+                    s.and_then(|i| g.items.get(i)).map(|it| it.name.clone()),
+                )
+            })
+            .collect();
+        self.groups = load_groups();
+        self.sel = self
+            .groups
+            .iter()
+            .map(|g| {
+                let before = chosen
+                    .iter()
+                    .find(|(n, _)| *n == g.name)
+                    .and_then(|(_, s)| s.clone());
+                before
+                    .and_then(|n| g.items.iter().position(|it| it.name == n))
+                    .or((!g.items.is_empty()).then_some(0))
+            })
+            .collect();
+        self.active = active
+            .and_then(|a| self.groups.iter().position(|g| g.name == a))
+            .unwrap_or(0);
+        self.relayout();
     }
 
     fn redraw(&self, ui: &mut Ui) {
@@ -555,18 +596,40 @@ impl ProgMan {
                 Some(i) => iconset::draw(sf, i, cx + (cell.w - 32) / 2, cy + 2, 1, t),
                 None => icon_picture(sf, item.art, cx + (cell.w - 32) / 2, cy + 2, 1, t),
             }
-            let label = ellipsize_in(font, &item.name, cell.w - 6);
-            let tw = font.text_width(&label) as i32;
-            let lx = cx + (cell.w - tw) / 2;
+            // A long title takes two lines, as Windows 3.1's did.
+            let lines = wrap_title(&item.name, cell.w - 6);
+            let tw = lines
+                .iter()
+                .map(|l| font.text_width(l) as i32)
+                .max()
+                .unwrap_or(0);
             let ly = cy + 38;
             let selected = active && self.sel[g] == Some(i);
             let fg = if selected {
-                sf.fill_rect(lx - 2, ly - 1, (tw + 3) as u32, 11, t.sel);
+                let lx = cx + (cell.w - tw) / 2;
+                sf.fill_rect(
+                    lx - 2,
+                    ly - 1,
+                    (tw + 3) as u32,
+                    10 * lines.len() as u32 + 1,
+                    t.sel,
+                );
                 t.sel_text
             } else {
                 t.text
             };
-            sf.text(font, lx, ly, 1, fg, None, &label);
+            for (k, l) in lines.iter().enumerate() {
+                let lw = font.text_width(l) as i32;
+                sf.text(
+                    font,
+                    cx + (cell.w - lw) / 2,
+                    ly + 10 * k as i32,
+                    1,
+                    fg,
+                    None,
+                    l,
+                );
+            }
         }
     }
 }
@@ -581,6 +644,20 @@ impl Program for ProgMan {
         }
         self.win = Some(ui.window(TITLE, APP_ID, self.size, false));
         self.relayout();
+        ui.timer(RELOAD, RELOAD_EVERY);
+    }
+
+    fn timer(&mut self, ui: &mut Ui, token: u32) {
+        if token != RELOAD {
+            return;
+        }
+        let now = apps_stamp();
+        if now != self.stamp {
+            self.stamp = now;
+            self.reload();
+            self.redraw(ui);
+        }
+        ui.timer(RELOAD, RELOAD_EVERY);
     }
 
     fn draw(&mut self, ui: &Ui, id: SurfaceId, c: &mut Canvas) {
@@ -660,6 +737,52 @@ impl Program for ProgMan {
     }
 }
 
+/// An icon title in one line, or two split at a space (the last one that
+/// lets the first line fit); still too long: shortened with "...".
+fn wrap_title(name: &str, w: i32) -> Vec<String> {
+    let font = lantern_9();
+    if font.text_width(name) as i32 <= w {
+        return vec![name.to_string()];
+    }
+    let split = name
+        .rmatch_indices(' ')
+        .map(|(i, _)| i)
+        .find(|i| font.text_width(&name[..*i]) as i32 <= w);
+    match split {
+        Some(i) => vec![name[..i].to_string(), ellipsize_in(font, &name[i + 1..], w)],
+        None => vec![ellipsize_in(font, name, w)],
+    }
+}
+
+/// When the program lists last changed (installing adds .desktop files).
+fn apps_stamp() -> Vec<Option<std::time::SystemTime>> {
+    let mut dirs = Vec::new();
+    match std::env::var_os("XDG_DATA_HOME") {
+        Some(h) => dirs.push(std::path::PathBuf::from(h)),
+        None => {
+            if let Some(h) = std::env::var_os("HOME") {
+                dirs.push(std::path::PathBuf::from(h).join(".local/share"));
+            }
+        }
+    }
+    let sys = std::env::var("XDG_DATA_DIRS")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "/usr/local/share:/usr/share".into());
+    dirs.extend(
+        sys.split(':')
+            .filter(|s| !s.is_empty())
+            .map(std::path::PathBuf::from),
+    );
+    dirs.iter()
+        .map(|d| {
+            std::fs::metadata(d.join("applications"))
+                .and_then(|m| m.modified())
+                .ok()
+        })
+        .collect()
+}
+
 fn main() {
     let groups = load_groups();
     let sel = groups
@@ -678,9 +801,22 @@ fn main() {
         menu: None,
         minimize_on_use: load_minimize_on_use(),
         last_click: None,
+        stamp: apps_stamp(),
     };
     if let Err(e) = retro_ui::run(Box::new(pm)) {
         eprintln!("retro-progman: {e}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod title_tests {
+    use super::*;
+
+    #[test]
+    fn long_titles_wrap() {
+        assert_eq!(wrap_title("Jot", 70), vec!["Jot"]);
+        let w = wrap_title("Software Library", 70);
+        assert_eq!(w, vec!["Software", "Library"], "split at the space");
     }
 }

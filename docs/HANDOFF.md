@@ -242,6 +242,12 @@ Suggested order, each step leaving a working image:
   themes per scheme; Station passes GTK_THEME), Lantern as a TrueType font
   (`retro-fontc ttf`), Qt's Windows style, Chromium initial preferences;
   host test `gtk.steps` (CI installs libgtk-3-bin); HW 4.45–4.48.
+- **Fixes from the 2026-11-10 hardware run** (run 89): every screen's
+  renderer imports a surface whose buffer changed size (the GL errors with
+  two screens), full screen fills the window's own screen (test-ipc
+  `FULLSCREEN`), Program Manager rereads programs when the applications
+  folders change and wraps titles (golden images updated), the Library's
+  generic picture for packages; host-test step `write`.
 - **Order from here** (tester's wish, 2026-11-09: go in order): step 7
   (Media Player, Arcade, Geany preinstalled), then 8 (acceptance).
 

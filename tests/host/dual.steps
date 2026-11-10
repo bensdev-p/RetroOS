@@ -9,7 +9,7 @@ key enter
 wait 1200
 shot 01b-amber
 expect-pixel 01b-amber 2600 700 5A3A00
-type COLOR STANDARD
+type COLOR CLASSIC
 key enter
 wait 1200
 type DESKTOP
@@ -36,3 +36,12 @@ button click
 wait 1000
 expect WINDOWS => maximized
 shot 04-maximized
+# Full screen on the screen it is on (HW D.9: a video on the monitor went
+# full screen on the panel).
+request FULLSCREEN 2 on
+wait 1000
+expect WINDOWS => 2 1920 0 1920 1080 fullscreen
+shot 05-fullscreen-monitor
+request FULLSCREEN 2 off
+wait 800
+

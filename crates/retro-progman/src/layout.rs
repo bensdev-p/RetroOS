@@ -16,7 +16,7 @@ pub const TITLE: i32 = 18;
 pub const PAD: i32 = 2;
 /// One icon with its label.
 pub const CELL_W: i32 = 76;
-pub const CELL_H: i32 = 54;
+pub const CELL_H: i32 = 60;
 /// A group window is at least this many icons wide.
 pub const MIN_PER_ROW: i32 = 3;
 

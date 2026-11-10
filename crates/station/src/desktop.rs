@@ -277,7 +277,7 @@ impl Station {
     pub fn shown_rect(&self, t: &Task) -> Rectangle<i32, Logical> {
         let size = t.window.geometry().size;
         if t.place.fullscreen {
-            return Rectangle::new((0, 0).into(), size);
+            return Rectangle::new(self.fullscreen_rect(t).loc, size);
         }
         if t.place.maximized {
             return Rectangle::new(self.maximized_rect(t).loc, size);
@@ -306,16 +306,27 @@ impl Station {
         ))
     }
 
-    /// The work area of the screen a window is on (by the middle of its
-    /// normal place): the main screen's work area, or a whole extra screen
-    /// (D-051).
-    pub(crate) fn work_area_of(&self, t: &Task) -> Rectangle<i32, Logical> {
+    /// The screen a window is on: by the middle of its normal place.
+    pub(crate) fn screen_of(&self, t: &Task) -> usize {
         let r = t.place.rect;
         let mid: Point<i32, Logical> = (r.loc.x + r.size.w / 2, r.loc.y + r.size.h / 2).into();
-        match self.output_at(mid) {
+        self.output_at(mid)
+    }
+
+    /// The work area of the screen a window is on: the main screen's work
+    /// area, or a whole extra screen (D-051).
+    pub(crate) fn work_area_of(&self, t: &Task) -> Rectangle<i32, Logical> {
+        match self.screen_of(t) {
             0 => self.work_area(),
             i => self.output_rects()[i],
         }
+    }
+
+    /// Where a full-screen window goes: the whole of the screen it is on
+    /// (HW D.9: a video made full screen on the monitor filled the panel).
+    pub(crate) fn fullscreen_rect(&self, t: &Task) -> Rectangle<i32, Logical> {
+        let rects = self.output_rects();
+        rects.get(self.screen_of(t)).copied().unwrap_or(rects[0])
     }
 
     /// The largest normal client area that fits on the screen with its frame.
@@ -384,11 +395,11 @@ impl Station {
 
     /// The configure the Desktop wants for a task.
     pub fn desktop_configure(&mut self, id: u64) {
-        let out = self.output_size();
         let focused = self.tasks.focused() == Some(id);
         let dos = self.dos_size();
         let Some(t) = self.tasks.get(id) else { return };
         let max = self.maximized_rect(t).size;
+        let out = self.fullscreen_rect(t).size;
         if t.x11().is_some() {
             return self.x11_configure(id);
         }
@@ -1265,7 +1276,11 @@ impl Station {
             }
             let r = self.shown_rect(t);
             if t.place.fullscreen {
-                return Hit::Window(id, Part::Client);
+                // It covers its own screen only.
+                if self.fullscreen_rect(t).to_f64().contains(pos) {
+                    return Hit::Window(id, Part::Client);
+                }
+                continue;
             }
             let origin = r.loc - t.window.geometry().loc;
             if t.window
@@ -1796,7 +1811,7 @@ impl Station {
             .into_iter()
             .filter_map(|id| self.tasks.get(id))
             .find(|t| self.visible(t))
-            .is_some_and(|t| t.place.fullscreen);
+            .is_some_and(|t| t.place.fullscreen && self.screen_of(t) == 0);
         let upper: &[Layer] = if fullscreen_on_top {
             &[Layer::Overlay]
         } else {
@@ -1849,8 +1864,8 @@ impl Station {
                     draw.push(DrawItem::Solid(sid.clone(), r, c));
                 }
             }
-            if t.place.fullscreen {
-                // Covers everything below.
+            if t.place.fullscreen && self.extra_outputs.is_empty() {
+                // Covers everything below (with more screens, only its own).
                 self.desktop.draw = draw;
                 return;
             }

@@ -160,7 +160,7 @@ impl Station {
                 (Rectangle::from_size(out), true, false)
             }
         } else if p.fullscreen {
-            (Rectangle::from_size(out), true, false)
+            (self.fullscreen_rect(t), true, false)
         } else if p.maximized {
             (self.maximized_rect(t), false, true)
         } else if p.placed {

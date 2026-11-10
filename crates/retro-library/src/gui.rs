@@ -294,9 +294,15 @@ impl Lib {
             };
             match icon {
                 Some(ic) => iconset::draw(&mut sf, &ic, r.x + 6, y + 4, 1, t),
-                None => {
-                    sf.frame(r.x + 10, y + 8, 24, 24, 1, dim);
-                }
+                // A package without a picture of its own (HW 4.42).
+                None => retro_gfx::icons::icon_picture(
+                    &mut sf,
+                    retro_gfx::icons::IconArt::Program,
+                    r.x + 6,
+                    y + 4,
+                    1,
+                    t,
+                ),
             }
             let tw = r.w - 56 - 80;
             sf.text(

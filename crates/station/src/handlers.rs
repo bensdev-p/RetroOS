@@ -52,6 +52,23 @@ impl CompositorHandler for Station {
 
     fn commit(&mut self, surface: &WlSurface) {
         on_commit_buffer_handler::<Self>(surface);
+        // A buffer of a new size: every screen's renderer takes it now, so
+        // none of them later gets damage piled up across sizes (the Pi's
+        // GL_INVALID_VALUE in glTexSubImage2D with two screens: a program's
+        // pointer changed shape while the other screen was still busy).
+        let size = smithay::backend::renderer::utils::with_renderer_surface_state(surface, |s| {
+            s.buffer_size()
+        })
+        .flatten();
+        let changed = smithay::wayland::compositor::with_states(surface, |s| {
+            let last = s.data_map.get_or_insert(|| {
+                std::cell::Cell::new(None::<smithay::utils::Size<i32, smithay::utils::Logical>>)
+            });
+            last.replace(size) != size
+        });
+        if changed && size.is_some() {
+            crate::udev::import_everywhere(self, surface);
+        }
         if !is_sync_subsurface(surface) {
             let mut root = surface.clone();
             while let Some(parent) = get_parent(&root) {

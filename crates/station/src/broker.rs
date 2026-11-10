@@ -473,6 +473,20 @@ impl Station {
                 }
                 "OK".into()
             }
+            // As a program asking to be full screen (xdg_toplevel).
+            "FULLSCREEN" if self.broker.test_ipc && f.len() == 3 => {
+                match f[1]
+                    .parse::<u64>()
+                    .ok()
+                    .filter(|id| self.tasks.get(*id).is_some())
+                {
+                    Some(id) if self.personality == Personality::Desktop => {
+                        self.set_fullscreen(id, f[2] == "on");
+                        "OK".into()
+                    }
+                    _ => "ERR\tno such window on the Desktop".into(),
+                }
+            }
             "QUIT" if self.broker.test_ipc => {
                 self.loop_signal.stop();
                 "OK".into()

@@ -38,6 +38,12 @@ wait 500
 shot 82-progman-file-menu
 key escape
 wait 300
+# A program installed while it is open shows up within a few seconds
+# (HW 4.41), its long title on two lines.
+write .local/share/applications/retro-test-tool.desktop [Desktop Entry]\nType=Application\nName=Long Program Name\nExec=xeyes\nCategories=Utility;\n
+wait 4500
+shot 82b-progman-new-program
+expect-golden 82b-progman-new-program progman-new-program 1244 140 480 176
 # Ctrl+Tab to the next group (if any) and back; Alt+F4 closes it.
 key alt+f4
 wait 800

@@ -908,3 +908,32 @@ pub fn change_vt(st: &mut Station, vt: i32) {
         }
     }
 }
+
+/// Import `surface`'s current buffer into every screen's renderer (when its
+/// size has changed; see the compositor commit handler). One screen: the
+/// frame will do it.
+pub fn import_everywhere(
+    st: &mut Station,
+    surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+) {
+    let crate::Backend::Udev(ud) = &mut st.backend else {
+        return;
+    };
+    if ud.heads.len() < 2 || !ud.session.is_active() {
+        return;
+    }
+    for head in ud.heads.iter_mut() {
+        let Some(gpu) = head.gpu.as_mut() else {
+            continue;
+        };
+        let r = with_gpu!(gpu, |r, _c| {
+            smithay::wayland::compositor::with_states(surface, |states| {
+                smithay::backend::renderer::utils::import_surface(r, states)
+                    .map_err(|e| format!("{e:?}"))
+            })
+        });
+        if let Err(e) = r {
+            tracing::debug!(output = %head.output.name(), "import: {e}");
+        }
+    }
+}

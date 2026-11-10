@@ -6,6 +6,7 @@ Starts `station --headless 1920x1080 --exec retro-console --test-ipc` with a
 private XDG_RUNTIME_DIR and HOME, then runs a script of steps:
     type <text> | key <combo> | wait <ms> | shot <name> | expect-task <n> | tasks
     expect-file <name> <text>   (file under HOME contains text, within 5 s)
+    write <name> <text>         (write a file under HOME; "\n" is a line break)
     request <BROKER REQUEST>    (fields separated by spaces; must answer OK)
     expect <REQUEST> => <text>  (the reply, all lines, contains text)
     pointer <x> <y> | button <down|up|click> [right]   (mouse, logical pixels)
@@ -90,6 +91,12 @@ def main():
             n = int(r[0].split("\t")[1])
             if n != int(arg):
                 print("FAIL tasks:", r); ok = False
+        elif cmd == "write":
+            name, _, text = arg.partition(" ")
+            path = os.path.join(home, name)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as out:
+                out.write(text.replace("\\n", "\n"))
         elif cmd == "expect-file":
             name, _, want = arg.partition(" ")
             want = want.replace("\\n", "\n")  # "\n" in a step is a line break
