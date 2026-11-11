@@ -23,7 +23,7 @@ run -scheme tests/host/scheme.steps
 run -mono tests/host/mono.steps
 RETROOS_TEST_SOUND=1 run -sound tests/host/sound.steps
 RETROOS_TEST_BT=1 run -bt tests/host/bt.steps
-RETROOS_TEST_SOFTWARE=1 RETROOS_UPDATES_STATE="$PWD/tests/host/updates.state" run -library tests/host/library.steps
+RETROOS_TEST_SOFTWARE=1 RETROOS_SOFTWARE_RUN="~/run" RETROOS_UPDATES_STATE="$PWD/tests/host/updates.state" run -library tests/host/library.steps
 RETROOS_TEST_SOFTWARE=1 RETROOS_TEST_MEDIA=1 run -media tests/host/media.steps
 RETROOS_ROTATE=auto STATION_ARGS="--headless 1200x1920" RETROOS_LIBRETRO_DIR="$PWD/tests/host/arcade" \
     PATH="$PWD/tests/host/arcade:$PATH" run -arcade tests/host/arcade.steps

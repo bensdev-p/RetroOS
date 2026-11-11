@@ -21,6 +21,9 @@ const HELPER: &str = "software";
 pub const STATE: &str = "/var/lib/retroos/updates";
 /// The automatic security updates switch.
 pub const CONF: &str = "/etc/retroos/updates.conf";
+/// Where the helper says which job is running (`job`: its pid, then what
+/// it does) and how far it has got (`progress`: apt's status lines).
+pub const RUN: &str = "/run/retroos-software";
 
 fn fake() -> bool {
     std::env::var_os("RETROOS_TEST_SOFTWARE").is_some()
@@ -126,6 +129,72 @@ impl Job {
     pub fn finished(&self) -> Option<Result<(), String>> {
         self.shared.lock().ok().and_then(|g| g.1.clone())
     }
+}
+
+/// A job the helper is running, started by any window or the daily check.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Running {
+    /// "Installing retroarch, libretro-nestopia"
+    pub what: String,
+    pub progress: Progress,
+}
+
+/// The helper's job file and progress, read: None when no job runs (no
+/// file, or its process has gone).
+pub fn parse_running(job: &str, progress: &str, alive: impl Fn(u32) -> bool) -> Option<Running> {
+    let mut l = job.lines();
+    let pid: u32 = l.next()?.trim().parse().ok()?;
+    if !alive(pid) {
+        return None;
+    }
+    let mut words = l.next().unwrap_or("").split_whitespace();
+    let verb = match words.next().unwrap_or("") {
+        "install" => "Installing",
+        "remove" => "Removing",
+        "upgrade" => "Installing updates",
+        "security" => "Installing security updates",
+        "check" => "Checking for updates",
+        _ => "Changing software",
+    };
+    let pkgs: Vec<&str> = words.collect();
+    let what = if pkgs.is_empty() {
+        verb.to_string()
+    } else {
+        format!("{verb} {}", pkgs.join(", "))
+    };
+    let mut p = Progress {
+        percent: 0,
+        text: "Starting...".into(),
+    };
+    for line in progress.lines() {
+        if let Some(q) = parse_status(line) {
+            p = q;
+        } else if let Some(t) = line.strip_prefix("step:") {
+            p.text = t.trim().to_string();
+        }
+    }
+    Some(Running { what, progress: p })
+}
+
+/// The job the helper is running now, if any (HW 4.52: an install started
+/// from another window, still going).
+///
+/// `$RETROOS_SOFTWARE_RUN` names another folder (tests; `~/` is the home
+/// folder); the pretend system has no other jobs without it.
+pub fn running() -> Option<Running> {
+    let dir: std::path::PathBuf = match std::env::var("RETROOS_SOFTWARE_RUN") {
+        Ok(d) => match d.strip_prefix("~/") {
+            Some(rest) => std::path::Path::new(&std::env::var("HOME").ok()?).join(rest),
+            None => d.into(),
+        },
+        Err(_) if fake() => return None,
+        Err(_) => RUN.into(),
+    };
+    let job = std::fs::read_to_string(dir.join("job")).ok()?;
+    let progress = std::fs::read_to_string(dir.join("progress")).unwrap_or_default();
+    parse_running(&job, &progress, |pid| {
+        std::path::Path::new(&format!("/proc/{pid}")).exists()
+    })
 }
 
 /// Does changing software need the administrator's password now? (False
@@ -555,6 +624,30 @@ mod fakesys {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_job_running_elsewhere() {
+        let job = "4242\ninstall retroarch libretro-nestopia\n";
+        let prog = "step:Reading the package lists from the internet\n\
+                    dlstatus:1:40:Retrieving file 2 of 5\nstep:Installing\n";
+        let r = parse_running(job, prog, |p| p == 4242).unwrap();
+        assert_eq!(r.what, "Installing retroarch, libretro-nestopia");
+        assert_eq!(
+            (r.progress.percent, r.progress.text.as_str()),
+            (20, "Installing")
+        );
+        assert_eq!(
+            parse_running(job, prog, |_| false),
+            None,
+            "its process is gone"
+        );
+        assert_eq!(parse_running("", "", |_| true), None);
+        let r = parse_running("7\ncheck\n", "", |_| true).unwrap();
+        assert_eq!(
+            (r.what.as_str(), r.progress.percent),
+            ("Checking for updates", 0)
+        );
+    }
 
     #[test]
     fn apt_status_lines() {

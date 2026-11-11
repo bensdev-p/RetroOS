@@ -100,6 +100,12 @@ struct Lib {
     focus: usize,
     pressed: Option<usize>,
     job: Option<(Job, Vec<String>)>,
+    /// A job another window (or INSTALL, or the daily check) started: shown
+    /// here, as GNOME Software shows PackageKit's transactions.
+    other: Option<software::Running>,
+    /// Asked for while `other` ran: starts when it has finished (a queue,
+    /// as PackageKit's).
+    queued: Option<(Op, Vec<String>)>,
     ask: Option<Ask>,
     message: Option<Message>,
     icons: HashMap<String, Option<Icon>>,
@@ -119,6 +125,12 @@ fn button(i: usize) -> Rect {
 }
 
 impl Lib {
+    /// Installing or removing (here or elsewhere), or asking for the
+    /// password: the buttons are greyed and do nothing.
+    fn busy(&self) -> bool {
+        self.job.is_some() || self.other.is_some() || self.ask.is_some()
+    }
+
     fn is_installed(&self, e: &Entry) -> bool {
         self.installed.contains(&e.packages[0])
     }
@@ -340,8 +352,16 @@ impl Lib {
         }
         // The chosen one, or the job's progress.
         let y = DETAIL_Y;
-        if let Some((job, _)) = &self.job {
-            let p = job.progress();
+        let shown = match (&self.job, &self.other) {
+            (Some((job, _)), _) => Some(job.progress()),
+            (None, Some(o)) => {
+                let mut p = o.progress.clone();
+                p.text = format!("{}: {}", o.what, p.text);
+                Some(p)
+            }
+            _ => None,
+        };
+        if let Some(p) = shown {
             sf.text(
                 font,
                 8,
@@ -432,6 +452,20 @@ impl Lib {
                 self.pressed == Some(i),
                 t,
             );
+            if self.busy() {
+                // Greyed: the label redrawn in the disabled colour.
+                let tw = text_width(label);
+                sf.fill_rect(b.x + 4, b.y + 4, (b.w - 8) as u32, (b.h - 8) as u32, t.face);
+                sf.text(
+                    font,
+                    b.x + (b.w - tw) / 2,
+                    b.y + 6,
+                    1,
+                    t.disabled,
+                    None,
+                    label,
+                );
+            }
         }
     }
 
@@ -474,7 +508,21 @@ impl Lib {
 
     /// Run `op`, asking for the password first while sudo needs it.
     fn begin(&mut self, ui: &mut Ui, op: Op, done: Vec<String>) {
-        if self.job.is_some() {
+        if self.job.is_some() || self.ask.is_some() {
+            return;
+        }
+        if let Some(o) = self.other.clone().or_else(software::running) {
+            // One at a time: wait for the other, then start this one.
+            self.message(
+                ui,
+                vec![
+                    format!("{} is still running.", o.what),
+                    "This starts when it has finished.".into(),
+                ],
+            );
+            self.other = Some(o);
+            self.queued = Some((op, done));
+            ui.timer(TIMER_JOB, Duration::from_millis(500));
             return;
         }
         if software::needs_password() {
@@ -507,7 +555,7 @@ impl Lib {
     }
 
     fn press(&mut self, ui: &mut Ui, i: usize) {
-        if self.job.is_some() {
+        if self.busy() {
             return;
         }
         match (i, self.rows.get(self.sel).cloned()) {
@@ -818,6 +866,11 @@ impl Program for Lib {
             return;
         }
         self.win = Some(ui.window(TITLE, "retroos.software-library", (W, H), true));
+        // An installation started from another window: show it.
+        self.other = software::running();
+        if self.other.is_some() {
+            ui.timer(TIMER_JOB, Duration::from_millis(500));
+        }
         if let Some(s) = self.start.take() {
             if let Some(i) = self.cats.iter().position(|c| c.eq_ignore_ascii_case(&s)) {
                 self.choose_cat(i);
@@ -857,7 +910,7 @@ impl Program for Lib {
                 if let Some(m) = self.message.take() {
                     ui.close(m.surface);
                 }
-                if self.direct.is_some() && self.job.is_none() {
+                if self.direct.is_some() && !self.busy() && self.queued.is_none() {
                     ui.quit();
                 }
             }
@@ -873,6 +926,24 @@ impl Program for Lib {
 
     fn timer(&mut self, ui: &mut Ui, token: u32) {
         if token != TIMER_JOB {
+            return;
+        }
+        if self.job.is_none() && self.other.is_some() {
+            self.other = software::running();
+            if self.other.is_some() {
+                ui.timer(TIMER_JOB, Duration::from_millis(500));
+            } else {
+                // It has finished: what is installed now, then ours.
+                self.installed = software::installed_catalog();
+                self.icons.clear();
+                self.load();
+                if let Some((op, done)) = self.queued.take() {
+                    self.begin(ui, op, done);
+                }
+            }
+            if let Some(w) = self.win {
+                ui.redraw(w);
+            }
             return;
         }
         let finished = self.job.as_ref().and_then(|(j, _)| j.finished());
@@ -911,6 +982,8 @@ fn main() {
         focus: 0,
         pressed: None,
         job: None,
+        other: None,
+        queued: None,
         ask: None,
         message: None,
         icons: HashMap::new(),

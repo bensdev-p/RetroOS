@@ -11,6 +11,8 @@ Conflicts=shutdown.target
 Type=oneshot
 ExecStart=/usr/libexec/retroos/retro-post
 TimeoutStartSec=120
+# The startup chime (aplay) rings on after the POST screen has gone (D-059).
+KillMode=process
 # Hardening: it only needs the display, input devices, sound and /run/retroos.
 ProtectSystem=strict
 ReadWritePaths=/run /etc/retroos

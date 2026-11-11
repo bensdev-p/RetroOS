@@ -297,3 +297,32 @@ which, and is needed before the 60 MB line is crossed. The boot time was
 started from the power button rather than from plugging in, so it is not
 yet comparable with M3; the firmware and journal breakdown (4.58) splits it.
 
+### Boot breakdown and text-mode processes (2026-11-11, CI run 94, HW_CHECKLIST 4.58/4.59)
+
+Stopwatch from plugging in: **10 s to the POST screen, 14 s to `C:\>`**.
+`boot-times` (firmware clock, then seconds since the kernel started):
+
+| Stage | Time | Note |
+|---|---:|---|
+| Bootloader done | 4.67 s | was 14.48 s before the bootloader settings card (run 49) |
+| Linux starts | 6.96 s | firmware 2.3 s: device tree, the DSI panel's overlay (display_auto_detect), kernel |
+| POST screen shown | +2.95 s | kernel 0.76 s; retro-post runs right after udev |
+| POST screen done | +5.56 s | 2.6 s on screen: Fast POST's HDMI minimum (D-034) and the chime (2.2 s from +0.8 s) — on the critical path, Station waits for it |
+| Session ready | +6.17 s | |
+| **Total** | **13.13 s** | systemd: 0.76 s kernel + 5.33 s userspace |
+
+So ≈ 7 s is before Linux (firmware, two displays) and the POST holds the
+screen 2.6 s. D-059 shortens the POST on a DSI panel to ≈ 1.2 s and lets
+the chime ring on behind the session (≈ 1.4 s less); 4.62 measures it and
+the firmware time without the HDMI monitor. The 10 s target needs the
+firmware part to shrink too.
+
+At `C:\>` (RSS, MB; shared libraries counted in each): station 51.8,
+wireplumber 18.4, systemd 14.4, systemd-resolved 14.3, systemd (user)
+13.0, pipewire 12.3, systemd-networkd 11.0, udevd 10.7, journald 9.2,
+greetd 9.1, logind 8.9, retro-console 8.4, pipewire-pulse 8.4, timesyncd
+8.2. The sound server (pipewire, wireplumber, pipewire-pulse: 39 MB RSS)
+was running at the prompt: it starts with the first sound (the console's
+beep, D-047) and stays. That is most of text mode's 13.6 MB over M2; 4.61
+measures before any sound.
+

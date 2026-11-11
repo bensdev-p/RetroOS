@@ -13,29 +13,63 @@
 # /var/log/retroos-software.log, errors also to standard error. The
 # Software Library, LIBRARY and INSTALL run this through sudo with the
 # administrator's password; the daily check (retroos-updates.timer) as root.
+#
+# One job at a time, as dpkg's own lock and Windows Installer's "another
+# installation is in progress": flock(1) on $RUN/lock, released by the
+# kernel if we die. $RUN/job holds our pid and what we do, $RUN/progress
+# apt's status lines, so any window can show a job another one started
+# (retro_sys::software::running) — as GNOME Software shows PackageKit's.
+# The window that started a job may close: the job carries on (SIGPIPE and
+# SIGHUP ignored, so apt and dpkg are never stopped half way; HW 4.52).
 set -eu
 export DEBIAN_FRONTEND=noninteractive LC_ALL=C
 LOG=/var/log/retroos-software.log
 STATE=/var/lib/retroos/updates
 CONF=/etc/retroos/updates.conf
+RUN=/run/retroos-software
 ERR=$(mktemp)
 trap 'rm -f "$ERR"' EXIT
+trap '' PIPE HUP
 
-step() { echo "step:$*"; }
+# Our standard output and error may be gone: never let that stop us.
+say() { printf '%s\n' "$*" || true; }
+step() { say "step:$*"; printf 'step:%s\n' "$*" >>"$RUN/progress" 2>/dev/null || true; }
 
-# apt-get with progress on fd 3 (our stdout), its chatter in the log.
+# apt-get with progress on fd 3 (to our stdout and $RUN/progress), its
+# chatter in the log. Short network timeouts: offline fails in seconds.
 apt() {
-    if apt-get -q -y -o APT::Status-Fd=3 \
+    rm -f "$RUN/failed"
+    { apt-get -q -y -o APT::Status-Fd=3 \
+        -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 \
         -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-        "$@" 3>&1 >>"$LOG" 2>"$ERR"; then
-        cat "$ERR" >>"$LOG"; return 0
+        "$@" 3>&1 >>"$LOG" 2>"$ERR" || : >"$RUN/failed"; } | tee -p -a "$RUN/progress" || true
+    cat "$ERR" >>"$LOG"
+    if [ -e "$RUN/failed" ]; then
+        cat "$ERR" >&2 || true
+        return 1
     fi
-    cat "$ERR" >>"$LOG"; cat "$ERR" >&2; return 1
+}
+
+# Is the machine online? systemd-networkd's own answer (OnlineState), as
+# GNOME Software asks NetworkManager; without networkd, let apt try.
+online() {
+    st=$(busctl get-property org.freedesktop.network1 /org/freedesktop/network1 \
+        org.freedesktop.network1.Manager OnlineState 2>/dev/null) || return 0
+    [ "$st" != 's "offline"' ]
+}
+offline() {
+    echo "No internet connection. Connect to a network (NET, or Control Panel, Network) and try again." >&2 || true
+    exit 4
+}
+
+# Are the package lists missing or older than a day?
+stale() {
+    [ -z "$(find /var/lib/apt/lists -maxdepth 1 -name '*_Packages' -mtime -1 2>/dev/null | head -1)" ]
 }
 
 # The package lists: fetched when missing or older than a day.
 fresh() {
-    if [ -z "$(find /var/lib/apt/lists -maxdepth 1 -name '*_Packages' -mtime -1 2>/dev/null | head -1)" ]; then
+    if stale; then
         step "Reading the package lists from the internet"
         apt update
     fi
@@ -76,13 +110,38 @@ valid() {
     done
 }
 
-echo "$(date '+%F %T') software $*" >>"$LOG"
 cmd=${1:-}
 [ $# -gt 0 ] && shift
+
+# Take the lock (flock holds it while we run; sudo's env_reset keeps
+# callers from setting the variable themselves).
+if [ -z "${RETROOS_SOFTWARE_LOCKED:-}" ]; then
+    mkdir -p "$RUN"
+    chmod 755 "$RUN"
+    rc=0
+    RETROOS_SOFTWARE_LOCKED=1 flock -n -E 75 "$RUN/lock" "$0" "$cmd" "$@" || rc=$?
+    if [ "$rc" -eq 75 ]; then
+        echo "Another installation is running ($(sed -n 2p "$RUN/job" 2>/dev/null)). Wait for it to finish." >&2 || true
+        exit 3
+    fi
+    exit "$rc"
+fi
+echo "$(date '+%F %T') software $cmd $*" >>"$LOG"
+printf '%s\n%s\n' "$$" "$cmd $*" >"$RUN/job"
+: >"$RUN/progress"
+chmod 644 "$RUN/job" "$RUN/progress"
+trap 'rm -f "$ERR" "$RUN/job" "$RUN/failed"' EXIT
+
 case $cmd in
     install)
         [ $# -gt 0 ] || { echo "Nothing to install" >&2; exit 2; }
-        valid "$@"; fresh
+        valid "$@"
+        if stale; then online || offline; fi
+        fresh
+        # Anything to download? Then the archive must be reachable.
+        if apt-get install -qq --print-uris -- "$@" 2>/dev/null | grep -q "^'"; then
+            online || offline
+        fi
         step "Installing"
         apt install -- "$@"; count ;;
     remove)
@@ -91,6 +150,7 @@ case $cmd in
         step "Removing"
         apt remove --autoremove -- "$@"; count ;;
     upgrade)
+        online || offline
         step "Reading the package lists from the internet"
         apt update
         step "Installing updates"

@@ -14,7 +14,9 @@ volt_ms=$(grep -m1 -i 'initial voltage' <<<"$fw" | grep -o -m1 '[0-9][0-9]*' | h
 drm=$(mono '\[drm\] Initialized vc4')
 post_start=$(mono 'RETRO-POST: start')
 post_done=$(mono 'RETRO-POST: done')
-setup=$(mono 'retro-setup.service')
+# Only a real start: systemd logs "…skipped because of an unmet condition"
+# on every later boot.
+setup=$(mono '(Starting|Started) retro-setup\.service')
 station=$(mono 'RETRO-STATION: ready')
 # The session's own output may not reach the journal: logind's line for the
 # user's session (not the login screen's or Setup's) is a few ms earlier.

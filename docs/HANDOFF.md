@@ -123,7 +123,7 @@ make test-qemu             # M1–M3 QEMU tests on a built image
 - Rust for our components; match the surrounding code and comment density.
   No Electron, no GNOME/KDE/Xfce components.
 - Every deviation from DESIGN.md gets a `docs/DECISIONS.md` entry
-  (**next: D-058**).
+  (**next: D-060**).
 - Small, descriptive commits; push to the session's designated branch; no PR
   unless the user asks. Keep model names out of the repo.
 - Keep M1–M3 tests passing; add host scenarios and QEMU checks for new work.
@@ -253,14 +253,15 @@ Suggested order, each step leaving a working image:
   `systems.rs`, games in ~/Games/<console>), Software Library
   `--install PKG…` mode, mpv + Geany in the image; host test
   `media.steps`; HW 4.49–4.53.
-- **Step 8, acceptance — in progress** (run 93, HW_CHECKLIST results
-  2026-11-10): install and remove from both front-ends ✅ (4.54),
-  Bluetooth audio ✅ (4.35, run 89), memory ✅ (text 58.0 MB, Desktop
-  66.7 MB; BUDGET.md). Still open: a game pad (4.36, none to hand), the
-  game full screen (4.52, fixed after run 93: Station's `SCREENS`, Arcade
-  sets RetroArch's size), and boot time — 13 s to `C:\>` from the power
-  button against ≤ 10 s; 4.58 asks for the breakdown, 4.59 for text-mode
-  memory by process.
+- **Step 8, acceptance — in progress** (runs 93–94, HW_CHECKLIST results
+  2026-11-10/11): install and remove from both front-ends ✅ (4.54),
+  Bluetooth audio ✅ (4.35, run 89), the game full screen ✅ (4.52, run
+  94), memory ✅ (text 58.0 MB with the sound server running, Desktop
+  66.7 MB; BUDGET.md). Still open: a game pad (4.36, none to hand);
+  software jobs after D-058 (4.60); text-mode memory before any sound
+  (4.61); boot time — 14 s to `C:\>` from plugging in against ≤ 10 s:
+  ≈ 7 s is firmware with two displays, D-059 trims ≈ 1.4 s of POST, 4.62
+  measures it with and without the HDMI monitor.
 
 ## 8. Open items carried over
 

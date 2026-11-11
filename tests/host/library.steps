@@ -88,3 +88,20 @@ key escape
 wait 500
 key alt+f4
 wait 800
+# An installation started elsewhere (another window, INSTALL, the daily
+# check; its job file in RETROOS_SOFTWARE_RUN, pid 1 = alive): the Library
+# shows it with its progress and greys its buttons; a new install waits
+# for it (queued, as PackageKit does) and starts when it has finished
+# (HW 4.52, 4.41).
+write run/job 1\ninstall retroarch libretro-nestopia\n
+write run/progress step:Installing\ndlstatus:1:40:Retrieving file 2 of 5\n
+type START software-library --install cowsay
+key enter
+wait 2500
+expect WINDOWS => Software Library
+shot 15-gui-other-running
+write run/job finished
+wait 1500
+shot 16-gui-queued-started
+wait 2500
+shot 17-gui-queued-done

@@ -438,14 +438,7 @@ fn boot() {
         h
     ));
 
-    // Fast POST still lasts ~2.5 s: monitors go blank for 1-2 s while they
-    // re-sync to the display driver's mode, which would hide a shorter one
-    // (D-034).
-    let (count_ms, line_ms, hold_ms) = if cfg.fast_post {
-        (900u64, 150u64, 1000u64)
-    } else {
-        (1600, 180, 1200)
-    };
+    let (count_ms, line_ms, hold_ms) = post_timing(cfg.fast_post, &d.connector_name);
     let lines = device_lines(&info).len();
     let total = count_ms + line_ms * lines as u64 + hold_ms;
     let mut wanted: Option<Key> = None;
@@ -494,14 +487,30 @@ fn boot() {
         Some(Key::Delete) => run_setup(&mut d, &mut kb, &mut c, scale, &mut cfg),
         _ => {}
     }
-    // Let the chime ring out (systemd ends what a finished service left).
+    // The chime rings on while the session starts, as a PC's startup sound
+    // plays while the desktop loads (KillMode=process keeps it; D-059). One
+    // whose card is still coming up gets a moment to start.
     if let Some(ch) = chime {
-        ch.finish(Duration::from_secs(3), &log);
+        ch.detach(Duration::from_millis(1500), &log);
     }
     // Leave the screen black for the session's compositor.
     c.surface().clear(0);
     let _ = d.present(&c);
     marker(&format!("RETRO-POST: done t={}", uptime_ms()));
+}
+
+/// How long the POST's parts last (memory count, each device line, the
+/// hold at the end), in ms. Fast POST on an HDMI monitor still lasts
+/// ~2.5 s: monitors go blank for 1-2 s while they re-sync to the display
+/// driver's mode, which would hide a shorter one (D-034). A built-in panel
+/// (DSI) shows the picture at once, so there it is as short as a real
+/// BIOS's: it does not hold up the boot (DESIGN.md §4.2, D-059).
+fn post_timing(fast: bool, connector: &str) -> (u64, u64, u64) {
+    match (fast, connector.starts_with("DSI")) {
+        (true, true) => (400, 60, 300),
+        (true, false) => (900, 150, 1000),
+        (false, _) => (1600, 180, 1200),
+    }
 }
 
 fn main() {
@@ -536,4 +545,20 @@ fn main() {
         return;
     }
     boot();
+}
+
+#[cfg(test)]
+mod timing_tests {
+    use super::post_timing;
+
+    #[test]
+    fn fast_post_is_short_on_a_panel_only() {
+        let total = |(c, l, h): (u64, u64, u64)| c + 8 * l + h;
+        assert!(total(post_timing(true, "DSI-2")) <= 1300);
+        assert!(
+            total(post_timing(true, "HDMI-A-1")) >= 2500,
+            "monitors re-sync (D-034)"
+        );
+        assert!(total(post_timing(false, "DSI-2")) > total(post_timing(true, "HDMI-A-1")));
+    }
 }

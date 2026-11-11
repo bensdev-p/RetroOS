@@ -8,9 +8,9 @@
 //! HDMI-A-2; `sysdefault:` lets alsa-lib's card file convert to the IEC958
 //! samples those cards take). With no HDMI port in use (a Touch Display 2,
 //! which has no sound) it plays on the first sound card that is not HDMI: a
-//! USB speaker or sound card, or an I2S amplifier board. The POST screen
-//! waits for it to finish before it exits, since systemd ends whatever a
-//! finished service left running.
+//! USB speaker or sound card, or an I2S amplifier board. It rings on after
+//! the POST screen has gone (retro-post.service has KillMode=process, so
+//! systemd leaves it; D-059).
 
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -135,6 +135,21 @@ impl Chime {
                 self.given_up = true;
                 log(&format!("RETRO-POST: chime: cannot run aplay: {e}"));
             }
+        }
+    }
+
+    /// Leave the chime playing on its own: wait up to `start` for one whose
+    /// card is still coming up to begin, then let it go (it ends by itself).
+    pub fn detach(mut self, start: Duration, log: &dyn Fn(&str)) {
+        let until = Instant::now() + start;
+        while !self.started() && Instant::now() < until {
+            self.poll(log);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if let Some(mut c) = self.child.take() {
+            // Its error output would have nobody to read it.
+            drop(c.stderr.take());
+            std::mem::forget(c);
         }
     }
 

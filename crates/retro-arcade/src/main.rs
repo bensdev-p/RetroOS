@@ -61,6 +61,8 @@ struct Arcade {
     pressed: Option<usize>,
     note: Option<String>,
     last_click: Option<(usize, std::time::Instant)>,
+    /// When Install Emulator opened the Software Library.
+    install_at: Option<std::time::Instant>,
 }
 
 impl Arcade {
@@ -195,7 +197,10 @@ impl Arcade {
                 let mut argv = vec!["software-library".to_string(), "--install".to_string()];
                 argv.extend(s.packages.iter().map(|p| p.to_string()));
                 self.note = match station::launch("LIBRARY", &argv) {
-                    Ok(_) => Some(format!("Installing {}...", s.emulator())),
+                    Ok(_) => {
+                        self.install_at = Some(std::time::Instant::now());
+                        Some(format!("Installing {}...", s.emulator()))
+                    }
                     Err(e) => Some(format!("Cannot start the Software Library: {e}")),
                 };
             }
@@ -324,6 +329,21 @@ impl Program for Arcade {
     /// New games copied in, an emulator installed: show them.
     fn timer(&mut self, ui: &mut Ui, token: u32) {
         if token == REFRESH {
+            // "Installing …" lasts while the Software Library is open; then
+            // the status says whether it worked (HW 4.52).
+            if self
+                .note
+                .as_deref()
+                .is_some_and(|n| n.starts_with("Installing"))
+                && self
+                    .install_at
+                    .is_some_and(|t| t.elapsed() > Duration::from_secs(8))
+                && !station::windows()
+                    .iter()
+                    .any(|w| w.title == "Software Library")
+            {
+                self.note = None;
+            }
             self.load();
             if let Some(w) = self.win {
                 ui.redraw(w);
@@ -346,6 +366,7 @@ fn main() {
         pressed: None,
         note: None,
         last_click: None,
+        install_at: None,
     };
     a.load();
     if let Err(e) = retro_ui::run(Box::new(a)) {
