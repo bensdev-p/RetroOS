@@ -50,12 +50,15 @@ apt() {
     fi
 }
 
-# Is the machine online? systemd-networkd's own answer (OnlineState), as
-# GNOME Software asks NetworkManager; without networkd, let apt try.
+# Is the machine online? A default route on any interface, IPv4 or IPv6:
+# PackageKit's own test when no network manager answers (its "unix"
+# backend reads /proc/net/route). Wi-Fi is set up by iwd and the wire by
+# networkd, so neither alone knows (networkd said "offline" on Wi-Fi,
+# HW 4.60).
 online() {
-    st=$(busctl get-property org.freedesktop.network1 /org/freedesktop/network1 \
-        org.freedesktop.network1.Manager OnlineState 2>/dev/null) || return 0
-    [ "$st" != 's "offline"' ]
+    awk 'NR > 1 && $2 == "00000000" { f = 1 } END { exit !f }' "${ROUTE4:-/proc/net/route}" 2>/dev/null ||
+        awk '$1 == "00000000000000000000000000000000" && $2 == "00" && $10 != "lo" { f = 1 } END { exit !f }' \
+            "${ROUTE6:-/proc/net/ipv6_route}" 2>/dev/null
 }
 offline() {
     echo "No internet connection. Connect to a network (NET, or Control Panel, Network) and try again." >&2 || true
