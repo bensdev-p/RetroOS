@@ -15,6 +15,7 @@ use retro_sys::catalog::catalog;
 use retro_sys::software::{self, Op};
 use retro_tui::{keys, read_key, Screen};
 use std::io::{BufRead, Write};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 /// Read a line from the terminal without showing it.
@@ -78,11 +79,43 @@ fn authorize() -> Result<(), String> {
 }
 
 /// Run a job, drawing a progress bar on one line.
+/// Ctrl+C presses while a job runs (the helper itself ignores them).
+static INTERRUPTS: AtomicUsize = AtomicUsize::new(0);
+
+extern "C" fn on_interrupt(_: libc::c_int) {
+    INTERRUPTS.fetch_add(1, Ordering::SeqCst);
+}
+
 fn run(op: Op) -> Result<(), String> {
     authorize()?;
     let job = software::start(op)?;
+    // Ctrl+C: Cancel; again: Force Stop (D-058).
+    INTERRUPTS.store(0, Ordering::SeqCst);
+    // SAFETY: the handler only touches an atomic.
+    let old = unsafe {
+        libc::signal(
+            libc::SIGINT,
+            on_interrupt as *const () as libc::sighandler_t,
+        )
+    };
+    let mut seen = 0;
+    let mut cancel: Option<software::Cancel> = None;
     let mut last = String::new();
-    loop {
+    let result = loop {
+        let n = INTERRUPTS.load(Ordering::SeqCst);
+        if n > seen {
+            seen = n;
+            let c = software::cancel(n >= 2).unwrap_or(software::Cancel::Nothing);
+            cancel = Some(c);
+            println!();
+            println!("{}", c.say());
+            if n == 1 && c != software::Cancel::Nothing {
+                println!(
+                    "Ctrl+C again: Force Stop (a program being set up may be left half installed; it is finished before the next installation)."
+                );
+            }
+            last.clear();
+        }
         let p = job.progress();
         let filled = (p.percent.min(100) * 30 / 100) as usize;
         let line = format!(
@@ -99,10 +132,19 @@ fn run(op: Op) -> Result<(), String> {
         }
         if let Some(r) = job.finished() {
             println!();
-            return r;
+            break match (cancel, r) {
+                (Some(software::Cancel::Stopped), _) => Err(
+                    "Stopped. Anything left half installed is finished before the next installation."
+                        .into(),
+                ),
+                (_, r) => r,
+            };
         }
         std::thread::sleep(Duration::from_millis(100));
-    }
+    };
+    // SAFETY: restores the handler that was there.
+    unsafe { libc::signal(libc::SIGINT, old) };
+    result
 }
 
 /// What INSTALL / UNINSTALL was given: catalog programs by name, else

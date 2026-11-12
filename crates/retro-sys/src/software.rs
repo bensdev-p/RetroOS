@@ -197,6 +197,68 @@ pub fn running() -> Option<Running> {
     })
 }
 
+/// What cancelling did (D-058).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cancel {
+    /// No job was running.
+    Nothing,
+    /// It was downloading: it stops now and nothing has changed.
+    Stopping,
+    /// dpkg was installing: the step under way finishes, then what it
+    /// installed is removed again.
+    Undoing,
+    /// dpkg was removing or updating: too late, it finishes.
+    Finishing,
+    /// Force Stop: ended at once; the next job repairs what was left.
+    Stopped,
+}
+
+impl Cancel {
+    /// What to tell the person.
+    pub fn say(self) -> &'static str {
+        match self {
+            Cancel::Nothing => "Nothing is being installed.",
+            Cancel::Stopping => "Cancelling...",
+            Cancel::Undoing => {
+                "Cancelling: finishing the step under way, then removing it again..."
+            }
+            Cancel::Finishing => "Too late to cancel: it is finishing.",
+            Cancel::Stopped => "Stopped.",
+        }
+    }
+}
+
+/// Stop the running job, wherever it was started: Cancel (`force` false)
+/// or Force Stop. No password: the sudoers rule allows it.
+pub fn cancel(force: bool) -> Result<Cancel, String> {
+    if fake() {
+        return Ok(fakesys::cancel(force));
+    }
+    let helper = format!("{}/{HELPER}", admin::LIBEXEC);
+    let mut args = vec!["cancel"];
+    if force {
+        args.push("force");
+    }
+    // SAFETY: geteuid has no preconditions.
+    let out = if unsafe { libc::geteuid() } == 0 {
+        Command::new(&helper).args(&args).output()
+    } else {
+        Command::new("sudo")
+            .args(["-n", "--", &helper])
+            .args(&args)
+            .output()
+    }
+    .map_err(|e| format!("Cannot run the software helper: {e}"))?;
+    match String::from_utf8_lossy(&out.stdout).trim() {
+        "nothing" => Ok(Cancel::Nothing),
+        "stopping" => Ok(Cancel::Stopping),
+        "undoing" => Ok(Cancel::Undoing),
+        "finishing" => Ok(Cancel::Finishing),
+        "stopped" => Ok(Cancel::Stopped),
+        _ => Err(friendly_error(&String::from_utf8_lossy(&out.stderr))),
+    }
+}
+
 /// Does changing software need the administrator's password now? (False
 /// while sudo still remembers it, or for root.)
 pub fn needs_password() -> bool {
@@ -582,12 +644,63 @@ mod fakesys {
         ]
     }
 
+    fn busy() -> std::path::PathBuf {
+        file().with_extension("busy")
+    }
+
+    /// Cancel the pretend job: a request file the job looks at each step.
+    pub fn cancel(force: bool) -> Cancel {
+        let Ok(stage) = std::fs::read_to_string(busy()) else {
+            return Cancel::Nothing;
+        };
+        let _ = std::fs::write(
+            file().with_extension("cancel"),
+            if force { "force" } else { "cancel" },
+        );
+        match (force, stage.trim()) {
+            (true, _) => Cancel::Stopped,
+            (false, "install") => Cancel::Undoing,
+            (false, "change") => Cancel::Finishing,
+            _ => Cancel::Stopping,
+        }
+    }
+
     pub fn run(op: Op, shared: Shared) {
+        // RETROOS_TEST_SOFTWARE_STEP_MS: slower, to cancel in a test.
+        let step: u64 = std::env::var("RETROOS_TEST_SOFTWARE_STEP_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(150);
+        let cancel_file = file().with_extension("cancel");
+        let _ = std::fs::remove_file(&cancel_file);
         std::thread::spawn(move || {
+            let finish = |r: Result<(), String>| {
+                let _ = std::fs::remove_file(busy());
+                let _ = std::fs::remove_file(file().with_extension("cancel"));
+                if let Ok(mut g) = shared.lock() {
+                    g.1 = Some(r);
+                }
+            };
+            let mut undo = false;
             for i in 1..=10 {
-                std::thread::sleep(Duration::from_millis(150));
+                let stage = match (&op, i <= 5) {
+                    (Op::Install(_), true) | (Op::Check, _) => "download",
+                    (Op::Install(_), false) => "install",
+                    _ => "change",
+                };
+                let _ = std::fs::write(busy(), stage);
+                std::thread::sleep(Duration::from_millis(step));
+                match std::fs::read_to_string(&cancel_file).as_deref() {
+                    Ok("force") => return finish(Err("".into())),
+                    Ok(_) if stage == "download" => {
+                        return finish(Err("Cancelled. Nothing was changed.".into()))
+                    }
+                    Ok(_) if stage == "install" => undo = true,
+                    _ => {}
+                }
                 let text = match &op {
-                    Op::Install(p) if i <= 5 => format!("Downloading {} of 5", i),
+                    Op::Install(_) if undo => "Cancelling: removing what was installed".into(),
+                    Op::Install(_) if i <= 5 => format!("Downloading {} of 5", i),
                     Op::Install(p) => format!("Installing {}", p[0]),
                     Op::Remove(p) => format!("Removing {}", p[0]),
                     Op::UpgradeAll => "Installing updates".into(),
@@ -599,6 +712,11 @@ mod fakesys {
                         text,
                     };
                 }
+            }
+            if undo {
+                return finish(Err(
+                    "Cancelled. What was installed has been removed again.".into()
+                ));
             }
             let mut set = installed();
             match &op {
@@ -614,9 +732,7 @@ mod fakesys {
                 Op::Check => {}
             }
             save(&set);
-            if let Ok(mut g) = shared.lock() {
-                g.1 = Some(Ok(()));
-            }
+            finish(Ok(()));
         });
     }
 }

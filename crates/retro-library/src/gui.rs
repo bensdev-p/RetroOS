@@ -84,7 +84,23 @@ const ASK_H: i32 = 120;
 struct Message {
     surface: SurfaceId,
     lines: Vec<String>,
-    pressed: bool,
+    pressed: Option<usize>,
+    /// Force Stop's question: "Force Stop" and "Keep Going" (the default).
+    confirm: bool,
+    /// The button Enter presses (Tab and the arrows move it).
+    focus: usize,
+}
+
+const MSG_BTN_W: i32 = 96;
+
+/// A message box's buttons: OK, or Force Stop / Keep Going.
+fn msg_button(w: i32, h: i32, i: usize, confirm: bool) -> Rect {
+    if confirm {
+        let x = w / 2 - MSG_BTN_W - 6 + i as i32 * (MSG_BTN_W + 12);
+        Rect::new(x, h - BTN_H - 10, MSG_BTN_W, BTN_H)
+    } else {
+        Rect::new((w - 76) / 2, h - BTN_H - 10, 76, BTN_H)
+    }
 }
 
 struct Lib {
@@ -106,6 +122,8 @@ struct Lib {
     /// Asked for while `other` ran: starts when it has finished (a queue,
     /// as PackageKit's).
     queued: Option<(Op, Vec<String>)>,
+    /// Cancel was pressed: what it is doing (Force Stop is offered next).
+    cancelling: Option<software::Cancel>,
     ask: Option<Ask>,
     message: Option<Message>,
     icons: HashMap<String, Option<Icon>>,
@@ -361,7 +379,12 @@ impl Lib {
             }
             _ => None,
         };
-        if let Some(p) = shown {
+        if let Some(mut p) = shown {
+            if let Some(c) = self.cancelling {
+                if c != software::Cancel::Undoing || !p.text.starts_with("Cancelling") {
+                    p.text = c.say().into();
+                }
+            }
             sf.text(
                 font,
                 8,
@@ -452,7 +475,7 @@ impl Lib {
                 self.pressed == Some(i),
                 t,
             );
-            if self.busy() {
+            if self.busy() && !(i == 0 && self.running() && self.ask.is_none()) {
                 // Greyed: the label redrawn in the disabled colour.
                 let tw = text_width(label);
                 sf.fill_rect(b.x + 4, b.y + 4, (b.w - 8) as u32, (b.h - 8) as u32, t.face);
@@ -471,6 +494,13 @@ impl Lib {
 
     /// Buttons: the chosen program's action, Run, Update All.
     fn button_label(&self, i: usize) -> &'static str {
+        if self.running() {
+            return match (i, self.cancelling) {
+                (0, None) => "Cancel",
+                (0, Some(_)) => "Force Stop",
+                _ => "",
+            };
+        }
         match i {
             0 => match self.rows.get(self.sel) {
                 Some(Row::App(a)) if self.is_installed(a) => "Remove",
@@ -486,6 +516,10 @@ impl Lib {
     }
 
     fn message(&mut self, ui: &mut Ui, lines: Vec<String>) {
+        self.dialog(ui, lines, false);
+    }
+
+    fn dialog(&mut self, ui: &mut Ui, lines: Vec<String>, confirm: bool) {
         let Some(win) = self.win else { return };
         if let Some(m) = self.message.take() {
             ui.close(m.surface);
@@ -502,8 +536,61 @@ impl Lib {
         self.message = Some(Message {
             surface,
             lines,
-            pressed: false,
+            pressed: None,
+            confirm,
+            focus: if confirm { 1 } else { 0 },
         });
+    }
+
+    /// A job is running (here or elsewhere): Cancel / Force Stop apply.
+    fn running(&self) -> bool {
+        self.job.is_some() || self.other.is_some()
+    }
+
+    /// Cancel, then (once asked) Force Stop after a question — as
+    /// installers on other systems offer, and End Task (D-058).
+    fn cancel_pressed(&mut self, ui: &mut Ui) {
+        if self.cancelling.is_none() {
+            match software::cancel(false) {
+                Ok(c) => self.cancelling = Some(c),
+                Err(e) => self.message(ui, vec![e]),
+            }
+        } else {
+            self.dialog(
+                ui,
+                vec![
+                    "Force Stop ends the installation now.".into(),
+                    "A program being set up may be left half installed;".into(),
+                    "RetroOS finishes it before the next installation.".into(),
+                ],
+                true,
+            );
+        }
+        if let Some(w) = self.win {
+            ui.redraw(w);
+        }
+    }
+
+    fn force_stop(&mut self, ui: &mut Ui) {
+        match software::cancel(true) {
+            Ok(c) => self.cancelling = Some(c),
+            Err(e) => self.message(ui, vec![e]),
+        }
+        if let Some(w) = self.win {
+            ui.redraw(w);
+        }
+    }
+
+    /// What to say when a job ends after Cancel / Force Stop.
+    fn after_cancel(&mut self, outcome: Result<(), String>) -> Vec<String> {
+        match (self.cancelling.take(), outcome) {
+            (Some(software::Cancel::Stopped), _) => vec![
+                "Stopped.".into(),
+                "Anything left half installed is finished before the next installation.".into(),
+            ],
+            (_, Err(e)) => vec![e],
+            (_, Ok(())) => vec!["It had already finished.".into()],
+        }
     }
 
     /// Run `op`, asking for the password first while sudo needs it.
@@ -555,6 +642,9 @@ impl Lib {
     }
 
     fn press(&mut self, ui: &mut Ui, i: usize) {
+        if self.running() && self.ask.is_none() && i == 0 {
+            return self.cancel_pressed(ui);
+        }
         if self.busy() {
             return;
         }
@@ -675,6 +765,9 @@ impl Lib {
                 shift,
                 ..
             } => match (self.focus, sym) {
+                // Esc is Cancel while a job runs (the close box still
+                // closes the window; the job carries on).
+                (_, ESCAPE) if self.running() => self.press(ui, 0),
                 (_, ESCAPE) => return ui.quit(),
                 (_, TAB) => self.focus = (self.focus + 1) % 3,
                 (_, ISO_LEFT_TAB) => self.focus = (self.focus + 2) % 3,
@@ -831,18 +924,28 @@ impl Lib {
         for (i, l) in m.lines.iter().enumerate() {
             sf.text(lantern_12(), 20, 14 + i as i32 * 16, 1, t.text, None, l);
         }
-        push_button(
-            &mut sf,
-            (w - 76) / 2,
-            h - BTN_H - 10,
-            76,
-            BTN_H,
-            1,
-            "OK",
-            true,
-            m.pressed,
-            t,
-        );
+        let labels: &[&str] = if m.confirm {
+            &["Force Stop", "Keep Going"]
+        } else {
+            &["OK"]
+        };
+        for (i, l) in labels.iter().enumerate() {
+            let b = msg_button(w, h, i, m.confirm);
+            // The default: OK, or Keep Going (the safe choice) until Tab moves it.
+            let default = i == m.focus;
+            push_button(
+                &mut sf,
+                b.x,
+                b.y,
+                b.w,
+                b.h,
+                1,
+                l,
+                default,
+                m.pressed == Some(i),
+                t,
+            );
+        }
     }
 }
 
@@ -892,25 +995,61 @@ impl Program for Lib {
 
     fn event(&mut self, ui: &mut Ui, id: SurfaceId, ev: Event) {
         if let Some(m) = self.message.as_mut().filter(|m| m.surface == id) {
-            let close = match ev {
-                Event::Close => true,
-                Event::Key { sym, .. } => matches!(sym, RETURN | KP_ENTER | ESCAPE | SPACE),
+            let (w, h) = ui.size(m.surface);
+            let n = if m.confirm { 2 } else { 1 };
+            let hit =
+                |x: i32, y: i32| (0..n).find(|i| msg_button(w, h, *i, m.confirm).contains(x, y));
+            // Some(true): Force Stop chosen; Some(false): closed.
+            let chosen = match ev {
+                Event::Close => Some(false),
+                Event::Key {
+                    sym: TAB | ISO_LEFT_TAB | LEFT | RIGHT,
+                    ..
+                } if m.confirm => {
+                    m.focus = 1 - m.focus;
+                    ui.redraw(m.surface);
+                    None
+                }
+                Event::Key {
+                    sym: RETURN | KP_ENTER | SPACE,
+                    ..
+                } => Some(m.confirm && m.focus == 0),
+                Event::Key { sym: ESCAPE, .. } => Some(false),
                 Event::Button {
                     button: LEFT_BUTTON,
-                    pressed,
-                    ..
+                    pressed: true,
+                    x,
+                    y,
                 } => {
-                    m.pressed = pressed;
+                    m.pressed = hit(x, y);
                     ui.redraw(m.surface);
-                    !pressed
+                    None
                 }
-                _ => false,
+                Event::Button {
+                    button: LEFT_BUTTON,
+                    pressed: false,
+                    x,
+                    y,
+                } => {
+                    let was = m.pressed.take();
+                    ui.redraw(m.surface);
+                    match (m.confirm, was.filter(|b| hit(x, y) == Some(*b))) {
+                        (true, Some(0)) => Some(true),
+                        (true, Some(_)) => Some(false),
+                        (true, None) => None,
+                        // OK: a click anywhere on the box closes it.
+                        (false, _) => Some(false),
+                    }
+                }
+                _ => None,
             };
-            if close {
+            if let Some(force) = chosen {
                 if let Some(m) = self.message.take() {
                     ui.close(m.surface);
                 }
-                if self.direct.is_some() && !self.busy() && self.queued.is_none() {
+                if force {
+                    self.force_stop(ui);
+                } else if self.direct.is_some() && !self.busy() && self.queued.is_none() {
                     ui.quit();
                 }
             }
@@ -937,6 +1076,20 @@ impl Program for Lib {
                 self.installed = software::installed_catalog();
                 self.icons.clear();
                 self.load();
+                if let Some(c) = self.cancelling {
+                    let lines = match c {
+                        software::Cancel::Finishing | software::Cancel::Nothing => {
+                            self.cancelling = None;
+                            vec!["It had already finished.".to_string()]
+                        }
+                        software::Cancel::Stopped => self.after_cancel(Ok(())),
+                        _ => {
+                            self.cancelling = None;
+                            vec!["The installation was cancelled.".to_string()]
+                        }
+                    };
+                    self.message(ui, lines);
+                }
                 if let Some((op, done)) = self.queued.take() {
                     self.begin(ui, op, done);
                 }
@@ -955,9 +1108,14 @@ impl Program for Lib {
                 self.installed = software::installed_catalog();
                 self.icons.clear();
                 self.load();
-                match r {
-                    Ok(()) => self.message(ui, done),
-                    Err(e) => self.message(ui, vec![e]),
+                if self.cancelling.is_some() {
+                    let lines = self.after_cancel(r);
+                    self.message(ui, lines);
+                } else {
+                    match r {
+                        Ok(()) => self.message(ui, done),
+                        Err(e) => self.message(ui, vec![e]),
+                    }
                 }
             }
         }
@@ -984,6 +1142,7 @@ fn main() {
         job: None,
         other: None,
         queued: None,
+        cancelling: None,
         ask: None,
         message: None,
         icons: HashMap::new(),

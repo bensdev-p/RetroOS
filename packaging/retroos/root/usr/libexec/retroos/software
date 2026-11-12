@@ -7,6 +7,13 @@
 #   software check            fetch the lists; security updates by themselves
 #                             unless turned off; count what is left
 #   software security         install only the security updates
+#   software cancel [force]   stop the running job (D-058): while it is
+#                             downloading, at once (nothing has changed);
+#                             while dpkg installs, after the step under way,
+#                             then remove what it installed (Windows
+#                             Installer's roll-back); "force" ends it now,
+#                             as End Task does — the next job first repairs
+#                             what was left half installed (dpkg --configure -a)
 #
 # apt's progress goes to standard output as its status lines (dlstatus:…,
 # pmstatus:…) plus "step:" lines of our own; its messages go to
@@ -29,7 +36,8 @@ CONF=/etc/retroos/updates.conf
 RUN=/run/retroos-software
 ERR=$(mktemp)
 trap 'rm -f "$ERR"' EXIT
-trap '' PIPE HUP
+# Ctrl+C in a DOS Prompt must not cut dpkg off: only "cancel" stops a job.
+trap '' PIPE HUP INT
 
 # Our standard output and error may be gone: never let that stop us.
 say() { printf '%s\n' "$*" || true; }
@@ -45,8 +53,27 @@ apt() {
         "$@" 3>&1 >>"$LOG" 2>"$ERR" || : >"$RUN/failed"; } | tee -p -a "$RUN/progress" || true
     cat "$ERR" >>"$LOG"
     if [ -e "$RUN/failed" ]; then
+        stop_if_cancelled
         cat "$ERR" >&2 || true
         return 1
+    fi
+}
+
+# "cancel" asked for while nothing had changed yet: stop here.
+stop_if_cancelled() {
+    if [ -e "$RUN/cancel" ]; then
+        echo "Cancelled. Nothing was changed." >&2 || true
+        exit 5
+    fi
+}
+
+# A job ended by force (or a power cut) may have left packages half
+# installed: finish them first, as apt itself asks ("dpkg was interrupted").
+repair() {
+    if [ -n "$(ls -A /var/lib/dpkg/updates 2>/dev/null)" ] || [ -n "$(dpkg --audit 2>/dev/null)" ]; then
+        step "Finishing an interrupted installation"
+        dpkg --force-confdef --force-confold --configure -a >>"$LOG" 2>&1 || true
+        apt -f install || true
     fi
 }
 
@@ -116,13 +143,42 @@ valid() {
 cmd=${1:-}
 [ $# -gt 0 ] && shift
 
+# Stop the running job (needs no lock: it is the job that holds it).
+if [ "$cmd" = cancel ]; then
+    pid=$(head -1 "$RUN/job" 2>/dev/null || true)
+    if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+        echo nothing
+        exit 0
+    fi
+    what=$(sed -n 2p "$RUN/job")
+    if [ "${1:-}" = force ]; then
+        echo "$(date '+%F %T') software: force stop ($what)" >>"$LOG"
+        pkill -KILL -s "$pid" || true
+        echo stopped
+        exit 0
+    fi
+    echo "$(date '+%F %T') software: cancel ($what)" >>"$LOG"
+    : >"$RUN/cancel"
+    if grep -q '^pmstatus:' "$RUN/progress" 2>/dev/null; then
+        # dpkg is at work: never cut it off. An install is removed again
+        # once the step under way is done; anything else just finishes.
+        case $what in install*) echo undoing ;; *) echo finishing ;; esac
+    else
+        # Fetching lists or packages: stop apt now (dpkg has not started).
+        pkill -TERM -s "$pid" -x apt-get || true
+        echo stopping
+    fi
+    exit 0
+fi
+
 # Take the lock (flock holds it while we run; sudo's env_reset keeps
-# callers from setting the variable themselves).
+# callers from setting the variable themselves). Each job is a session of
+# its own, so "cancel" reaches exactly its processes.
 if [ -z "${RETROOS_SOFTWARE_LOCKED:-}" ]; then
     mkdir -p "$RUN"
     chmod 755 "$RUN"
     rc=0
-    RETROOS_SOFTWARE_LOCKED=1 flock -n -E 75 "$RUN/lock" "$0" "$cmd" "$@" || rc=$?
+    RETROOS_SOFTWARE_LOCKED=1 flock -n -E 75 "$RUN/lock" setsid -w "$0" "$cmd" "$@" || rc=$?
     if [ "$rc" -eq 75 ]; then
         echo "Another installation is running ($(sed -n 2p "$RUN/job" 2>/dev/null)). Wait for it to finish." >&2 || true
         exit 3
@@ -132,30 +188,54 @@ fi
 echo "$(date '+%F %T') software $cmd $*" >>"$LOG"
 printf '%s\n%s\n' "$$" "$cmd $*" >"$RUN/job"
 : >"$RUN/progress"
+rm -f "$RUN/cancel"
 chmod 644 "$RUN/job" "$RUN/progress"
-trap 'rm -f "$ERR" "$RUN/job" "$RUN/failed"' EXIT
+# "cancel" sends apt-get SIGTERM; we carry on to say so.
+trap 'true' TERM
+trap 'rm -f "$ERR" "$RUN/job" "$RUN/failed" "$RUN/cancel"' EXIT
 
 case $cmd in
     install)
         [ $# -gt 0 ] || { echo "Nothing to install" >&2; exit 2; }
         valid "$@"
+        repair
         if stale; then online || offline; fi
         fresh
+        stop_if_cancelled
         # Anything to download? Then the archive must be reachable.
         if apt-get install -qq --print-uris -- "$@" 2>/dev/null | grep -q "^'"; then
             online || offline
         fi
+        # What is new, to remove again if this is cancelled while dpkg works.
+        new=""
+        for p in "$@"; do
+            dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null | grep -qx installed || new="$new $p"
+        done
+        stop_if_cancelled
         step "Installing"
-        apt install -- "$@"; count ;;
+        apt install -- "$@"
+        if [ -e "$RUN/cancel" ] && [ -n "$new" ]; then
+            rm -f "$RUN/cancel"
+            step "Cancelling: removing what was installed"
+            # shellcheck disable=SC2086 # package names, checked by valid()
+            apt remove --autoremove -- $new || true
+            count
+            echo "Cancelled. What was installed has been removed again." >&2 || true
+            exit 5
+        fi
+        count ;;
     remove)
         [ $# -gt 0 ] || { echo "Nothing to remove" >&2; exit 2; }
         valid "$@"
+        repair
         step "Removing"
         apt remove --autoremove -- "$@"; count ;;
     upgrade)
         online || offline
+        repair
         step "Reading the package lists from the internet"
         apt update
+        stop_if_cancelled
         step "Installing updates"
         apt upgrade --with-new-pkgs; count ;;
     check)
@@ -166,5 +246,5 @@ case $cmd in
         count ;;
     security)
         security; count ;;
-    *) echo "usage: software install|remove PKG... | upgrade | check | security" >&2; exit 2 ;;
+    *) echo "usage: software install|remove PKG... | upgrade | check | security | cancel [force]" >&2; exit 2 ;;
 esac

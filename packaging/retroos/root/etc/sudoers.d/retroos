@@ -14,3 +14,6 @@
 # (/usr/libexec/retroos/software) needs the administrator's password: the
 # %admin ALL rule above, no NOPASSWD.
 %admin ALL=(root) NOPASSWD: /usr/libexec/retroos/set-updates
+# Cancelling or force-stopping a running install needs no password again
+# (D-058): the administrator already gave it to start the job.
+%admin ALL=(root) NOPASSWD: /usr/libexec/retroos/software cancel, /usr/libexec/retroos/software cancel force

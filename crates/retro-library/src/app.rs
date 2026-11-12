@@ -45,8 +45,11 @@ pub enum Modal {
     Confirm(Vec<String>, Op, String),
     /// Typing the search word.
     Search(Field),
-    /// apt at work: the job and what to say when it is done.
-    Busy(Job, String),
+    /// apt at work: the job, what to say when it is done, and what Esc
+    /// (Cancel) has done so far.
+    Busy(Job, String, Option<software::Cancel>),
+    /// "Force Stop?" (Y/N) over a running job (D-058).
+    ForceAsk(Job, String, software::Cancel),
     /// A message; any key closes it.
     Message(Vec<String>),
 }
@@ -313,10 +316,38 @@ impl App {
                 let cx = f.draw(s, x + 9, y + 2, w - 12, WHITE, BLACK);
                 s.cursor = Some((cx, y + 2));
             }
-            Modal::Busy(job, _) => {
+            Modal::ForceAsk(..) => {
+                let lines = [
+                    "Force Stop ends the installation now.",
+                    "A program being set up may be left half installed;",
+                    "RetroOS finishes it before the next installation.",
+                ];
+                let (x, y, w) = box_at(s, 7, "Force Stop");
+                for (i, l) in lines.iter().enumerate() {
+                    s.text(
+                        x + 3,
+                        y + 2 + i as u16,
+                        &clip(l, w as usize - 6),
+                        BLACK,
+                        SILVER,
+                    );
+                }
+                s.text(x + 3, y + 5, "Y Force Stop    N Keep going", BLACK, SILVER);
+            }
+            Modal::Busy(job, _, cancel) => {
                 let p = job.progress();
                 let (x, y, w) = box_at(s, 7, "Please wait");
-                s.text(x + 3, y + 2, &clip(&p.text, w as usize - 6), BLACK, SILVER);
+                let text = match cancel {
+                    Some(c) if !p.text.starts_with("Cancelling") => c.say().to_string(),
+                    _ => p.text.clone(),
+                };
+                s.text(x + 3, y + 2, &clip(&text, w as usize - 6), BLACK, SILVER);
+                let hint = if cancel.is_some() {
+                    "Esc Force Stop"
+                } else {
+                    "Esc Cancel"
+                };
+                s.text(x + 3, y + 5, hint, SLATE, SILVER);
                 let bw = (w - 6) as u32;
                 let filled = (bw * p.percent.min(100) / 100) as u16;
                 s.fill(x + 3, y + 4, bw as u16, 1, '\u{2591}', SLATE, SILVER);
@@ -360,7 +391,7 @@ impl App {
 
     fn run(&mut self, op: Op, done: String) {
         self.modal = match software::start(op) {
-            Ok(j) => Modal::Busy(j, done),
+            Ok(j) => Modal::Busy(j, done, None),
             Err(e) => Modal::Message(vec![e]),
         };
     }
@@ -418,13 +449,21 @@ impl App {
 
     /// Call often: notices a finished job.
     pub fn tick(&mut self) {
-        let Modal::Busy(job, done) = &self.modal else {
-            return;
+        let (job, done, cancel) = match &self.modal {
+            Modal::Busy(j, d, c) => (j, d, *c),
+            Modal::ForceAsk(j, d, c) => (j, d, Some(*c)),
+            _ => return,
         };
         if let Some(r) = job.finished() {
-            let lines = match r {
-                Ok(()) => done.lines().map(String::from).collect(),
-                Err(e) => vec![e],
+            let lines = match (cancel, r) {
+                (Some(software::Cancel::Stopped), _) => vec![
+                    "Stopped.".to_string(),
+                    "Anything left half installed is finished before the next installation."
+                        .to_string(),
+                ],
+                (Some(_), Ok(())) => vec!["It had already finished.".to_string()],
+                (None, Ok(())) => done.lines().map(String::from).collect(),
+                (_, Err(e)) => vec![e],
             };
             self.modal = Modal::Message(lines);
             self.refresh_installed();
@@ -435,9 +474,28 @@ impl App {
         match std::mem::replace(&mut self.modal, Modal::None) {
             Modal::None => {}
             Modal::Message(_) => return,
-            Modal::Busy(j, d) => {
-                // apt cannot be stopped half-way; wait.
-                self.modal = Modal::Busy(j, d);
+            Modal::Busy(j, d, c) => {
+                // Esc: Cancel, then Force Stop after asking (D-058).
+                self.modal = match (k, c) {
+                    (Key::Esc, None) => match software::cancel(false) {
+                        Ok(c) => Modal::Busy(j, d, Some(c)),
+                        Err(_) => Modal::Busy(j, d, None),
+                    },
+                    (Key::Esc, Some(software::Cancel::Stopped)) => Modal::Busy(j, d, c),
+                    (Key::Esc, Some(c)) => Modal::ForceAsk(j, d, c),
+                    _ => Modal::Busy(j, d, c),
+                };
+                return;
+            }
+            Modal::ForceAsk(j, d, before) => {
+                self.modal = match k {
+                    Key::Char('y' | 'Y') => {
+                        let c = software::cancel(true).unwrap_or(software::Cancel::Stopped);
+                        Modal::Busy(j, d, Some(c))
+                    }
+                    Key::Char('n' | 'N') | Key::Esc | Key::Enter => Modal::Busy(j, d, Some(before)),
+                    _ => Modal::ForceAsk(j, d, before),
+                };
                 return;
             }
             Modal::Confirm(l, op, done) => {

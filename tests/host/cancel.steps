@@ -1,0 +1,56 @@
+# Cancel and Force Stop (D-058), with a slow pretend installer
+# (RETROOS_TEST_SOFTWARE_STEP_MS=600: 3 s downloading, 3 s installing;
+# the Library window takes ~0.2 s to start its job after START).
+wait 1500
+type DESKTOP
+key enter
+wait 1500
+# 1. Cancel while downloading: stops, nothing changed.
+type START software-library --install cowsay
+key enter
+wait 2500
+type retro
+key enter
+wait 1200
+shot 01-downloading
+key escape
+wait 300
+shot 02-cancelling
+wait 1500
+shot 03-cancelled
+key enter
+wait 1200
+# 2. Cancel while installing: the step under way finishes, then it is
+# removed again.
+type START software-library --install sl
+key enter
+wait 2500
+shot 04-again
+wait 1200
+key escape
+wait 300
+shot 05-undoing
+wait 3500
+shot 06-undone
+key enter
+wait 1200
+# 3. Force Stop: Cancel while installing (the undo keeps it running), then
+# Esc again asks — Keep Going is the default, Tab moves to Force Stop —
+# and Enter stops it at once: "Stopped."
+type START software-library --install gimp
+key enter
+wait 3400
+key escape
+wait 200
+key escape
+wait 300
+shot 07-force-ask
+key tab
+wait 100
+key enter
+wait 1000
+expect WINDOWS => Software Library
+shot 09-stopped
+key enter
+wait 1200
+expect WINDOWS => DOS Prompt
